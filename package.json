@@ -1,0 +1,10 @@
+{
+  "name": "scales-heard",
+  "version": "0.1.0",
+  "description": "Fretboard scale guide that listens to your real guitar and checks if the note is in the scale.",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "npx serve ."
+  }
+}

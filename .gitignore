@@ -1,0 +1,29 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+*.swp
+
+# Node (only if you add a dev server later)
+node_modules/
+npm-debug.log*
+
+# Misc
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# PyInstaller / Build
+build/
+dist/
+*.spec
+
+# Scratch / Temp
+extract.py
+guide_text.txt
