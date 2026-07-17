@@ -198,6 +198,11 @@
         <input type="range" id="stab" min="2" max="10" step="1" value="4"><span id="stabVal">4</span><span
           data-i18n="lblFrames">frames</span>
       </label>
+      <label class="tooltip-container">
+        <span data-i18n="lblRefPitch" class="tooltip-trigger">Reference Pitch</span>
+        <span class="tooltip-text" data-i18n="descRefPitch">A4 reference frequency. Default is 440Hz. Adjust between 425Hz and 455Hz.</span>
+        <input type="range" id="refPitch" min="425" max="455" step="1" value="440"><span id="refPitchVal">440</span><span>Hz</span>
+      </label>
     </div>
     <div class="err" id="err"></div>
     <div class="note">

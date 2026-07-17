@@ -36,27 +36,55 @@ def list_devices():
             print(f"  Device #{idx}: {asio_tag}{d['name']} (API: {api_name}, Input Ch: {d['max_input_channels']}, Default SR: {int(d['default_samplerate'])}Hz)")
     print("=========================================================\n")
 
-def parabolic_interpolation(mags, idx):
-    """Refines peak index using parabolic interpolation on magnitude spectrum."""
-    if idx <= 0 or idx >= len(mags) - 1:
-        return idx
-    alpha = mags[idx - 1]
-    beta = mags[idx]
-    gamma = mags[idx + 1]
-    
-    denom = 2.0 * beta - alpha - gamma
-    if abs(denom) < 1e-9:
-        return idx
-        
-    return idx + 0.5 * (alpha - gamma) / denom
+def nnls_coordinate_descent(A, y, max_iter=15):
+    """NumPy-only Coordinate Descent solver for Non-negative Least Squares."""
+    N = A.shape[1]
+    x = np.zeros(N, dtype=np.float32)
+    # Precompute A.T * A and A.T * y
+    AtA = A.T @ A
+    Aty = A.T @ y
+    for _ in range(max_iter):
+        for j in range(N):
+            # Compute step
+            grad = Aty[j] - AtA[j] @ x + AtA[j, j] * x[j]
+            x[j] = max(0.0, grad / AtA[j, j]) if AtA[j, j] > 0 else 0.0
+    return x
 
-def detect_pitches(audio_chunk, sr, min_freq=70.0, max_freq=1000.0, max_notes=5, sens_threshold=0.012):
-    """
-    Detects multiple pitches in a windowed audio block using Successive Harmonic Cancellation.
-    """
+def precompute_A(sample_rate, buffer_size, ref_pitch):
+    """Precomputes the dictionary matrix A for a given reference pitch frequency."""
+    bin_width = sample_rate / buffer_size
+    min_freq = 70.0
+    max_freq = 1200.0
+    idx_min = int(round(min_freq / bin_width))
+    idx_max = int(round(max_freq / bin_width))
+    M = idx_max - idx_min
+    notes_range = range(40, 89) # E2 to E6 (49 notes)
+    N = len(notes_range)
+    A = np.zeros((M, N), dtype=np.float32)
+    
+    for j, midi in enumerate(notes_range):
+        f0 = ref_pitch * (2.0 ** ((midi - 69.0) / 12.0))
+        for h in range(1, 5): # Fundamental + 3 harmonics
+            fh = f0 * h
+            weight = 1.0 / h
+            bin_idx = int(round(fh / bin_width)) - idx_min
+            for offset in [-1, 0, 1]:
+                target_bin = bin_idx + offset
+                if 0 <= target_bin < M:
+                    spread = 1.0 if offset == 0 else 0.5
+                    A[target_bin, j] += weight * spread
+                    
+        norm = np.linalg.norm(A[:, j])
+        if norm > 0:
+            A[:, j] /= norm
+            
+    return A
+
+def detect_pitches_nnls(audio_chunk, sr, A, idx_min, idx_max, ref_pitch=440.0, sens_threshold=0.012):
+    """Detects multiple pitches and extracts 12D Chroma using HPS + NNLS."""
     rms = np.sqrt(np.mean(audio_chunk ** 2))
     if rms < sens_threshold:
-        return [], rms
+        return [], np.zeros(12, dtype=np.float32), rms
         
     n_fft = len(audio_chunk)
     # Apply Hanning window
@@ -66,94 +94,55 @@ def detect_pitches(audio_chunk, sr, min_freq=70.0, max_freq=1000.0, max_notes=5,
     fft_vals = np.fft.rfft(windowed)
     mags = np.abs(fft_vals)
     
-    # Frequency mapping
-    freqs = np.fft.rfftfreq(n_fft, 1.0 / sr)
-    bin_width = sr / n_fft
+    # 1. HPS (Harmonic Product Spectrum) - Downsample by 2 and 3 and multiply
+    hps = np.copy(mags)
+    L2 = len(mags[::2])
+    hps[:L2] *= mags[::2]
+    L3 = len(mags[::3])
+    hps[:L3] *= mags[::3]
     
-    # Find bin range for guitar frequencies
-    idx_min = np.searchsorted(freqs, min_freq)
-    idx_max = np.searchsorted(freqs, max_freq)
+    # Normalize HPS slice
+    hps_max = np.max(hps[idx_min:idx_max]) if len(hps[idx_min:idx_max]) > 0 else 0.0
+    if hps_max > 0:
+        hps /= hps_max
+        
+    y = hps[idx_min:idx_max]
     
-    work_mags = np.copy(mags)
+    # 2. NNLS
+    x = nnls_coordinate_descent(A, y)
+    
+    # 3. Extract detected notes and chroma
     detected = []
+    chroma = np.zeros(12, dtype=np.float32)
     
-    max_initial_peak = np.max(work_mags[idx_min:idx_max])
-    if max_initial_peak < 0.001:  # silence guard
-        return [], rms
+    for j in range(len(x)):
+        midi = 40 + j
+        chroma[midi % 12] += x[j]
         
-    # Minimum peak threshold (8% of main peak, or absolute threshold)
-    peak_threshold = max(max_initial_peak * 0.08, 0.003)
-    
-    for _ in range(max_notes):
-        # Search for highest peak in range
-        sub_slice = work_mags[idx_min:idx_max]
-        if len(sub_slice) == 0:
-            break
-            
-        max_idx_sub = np.argmax(sub_slice)
-        peak_val = sub_slice[max_idx_sub]
-        
-        if peak_val < peak_threshold:
-            break
-            
-        peak_idx = idx_min + max_idx_sub
-        
-        # Verify it's a local maximum
-        if peak_idx <= 0 or peak_idx >= len(work_mags) - 1:
-            # Not a valid peak center, suppress and continue
-            work_mags[peak_idx] = 0
-            continue
-            
-        if work_mags[peak_idx] < work_mags[peak_idx - 1] or work_mags[peak_idx] < work_mags[peak_idx + 1]:
-            # Suppress non-peaks in range
-            work_mags[peak_idx] = 0
-            continue
-            
-        # Parabolic interpolation
-        refined_bin = parabolic_interpolation(work_mags, peak_idx)
-        freq_est = refined_bin * bin_width
-        
-        # MIDI note conversion
-        if freq_est > 0:
-            midi = 69.0 + 12.0 * math.log2(freq_est / 440.0)
-            midi_rounded = int(round(midi))
-            
-            # Guitar range guard: midi note E2 (40) to E6 (88)
-            if 36 <= midi_rounded <= 96:
-                note_name = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][midi_rounded % 12]
-                octave = (midi_rounded // 12) - 1
+        # Note activation threshold
+        if x[j] > 0.018:
+            # Local max filter to avoid adjacent bleed triggers
+            is_local_max = True
+            if j > 0 and x[j] < x[j - 1]:
+                is_local_max = False
+            if j < len(x) - 1 and x[j] < x[j + 1]:
+                is_local_max = False
+            if is_local_max:
+                note_name = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][midi % 12]
+                octave = (midi // 12) - 1
+                freq_est = ref_pitch * (2.0 ** ((midi - 69.0) / 12.0))
+                detected.append({
+                    "f": float(round(freq_est, 1)),
+                    "midi": int(midi),
+                    "name": f"{note_name}{octave}"
+                })
                 
-                # Check for duplicate MIDI note in currently detected notes
-                # (Allow octaves, but prevent duplicated note triggers)
-                if not any(n['midi'] == midi_rounded for n in detected):
-                    detected.append({
-                        "f": float(round(freq_est, 1)),
-                        "midi": midi_rounded,
-                        "name": f"{note_name}{octave}"
-                    })
+    # Normalize chroma
+    c_sum = np.sum(chroma)
+    if c_sum > 0:
+        chroma /= c_sum
         
-        # --- SUCCESSIVE HARMONIC CANCELLATION ---
-        # Zero out the fundamental bin region (approx +/- 15 Hz)
-        cancel_bins_half = max(1, int(round(15.0 / bin_width)))
-        
-        # Fundamental range
-        f_start = max(0, peak_idx - cancel_bins_half)
-        f_end = min(len(work_mags), peak_idx + cancel_bins_half + 1)
-        work_mags[f_start:f_end] = 0.0
-        
-        # Cancel Harmonics (2x, 3x, 4x, 5x, 6x)
-        for h in range(2, 7):
-            h_freq = freq_est * h
-            if h_freq > sr / 2:
-                break
-            h_bin = int(round(h_freq / bin_width))
-            h_start = max(0, h_bin - cancel_bins_half)
-            h_end = min(len(work_mags), h_bin + cancel_bins_half + 1)
-            # Attenuate magnitudes of harmonics instead of completely zeroing them.
-            # This allows real octaves in chords to still be detected.
-            work_mags[h_start:h_end] *= 0.15
-
-    return detected, rms
+    return detected, chroma, rms
 
 async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, sens_thr):
     """Captures audio from ASIO device and broadcasts detected pitches over WebSockets."""
@@ -167,13 +156,32 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
         # Send data buffer to asyncio loop
         loop.call_soon_threadsafe(audio_queue.put_nowait, indata.copy()[:, 0])
 
+    ref_pitch_val = 440.0
+    bin_width = sample_rate / buffer_size
+    min_freq = 70.0
+    max_freq = 1200.0
+    idx_min = int(round(min_freq / bin_width))
+    idx_max = int(round(max_freq / bin_width))
+    
+    # Precompute initial matrix A
+    A_matrix = precompute_A(sample_rate, buffer_size, ref_pitch_val)
+
     async def ws_handler(websocket):
+        nonlocal A_matrix, ref_pitch_val
         logger.info(f"Client connected from {websocket.remote_address}")
         connected_clients.add(websocket)
         try:
-            async for _ in websocket:
-                # Do nothing, just keep connection open
-                pass
+            async for message in websocket:
+                try:
+                    data = json.loads(message)
+                    if data.get("type") == "set_ref_pitch":
+                        val = float(data.get("value", 440.0))
+                        if 425.0 <= val <= 455.0:
+                            logger.info(f"Updating reference pitch to {val}Hz")
+                            ref_pitch_val = val
+                            A_matrix = precompute_A(sample_rate, buffer_size, val)
+                except Exception as e:
+                    logger.error(f"Error handling websocket message: {e}")
         except websockets.exceptions.ConnectionClosed:
             pass
         finally:
@@ -188,7 +196,7 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
     # This delivers updates every ~46ms while having frequency resolution of an 8192 FFT.
     hop_size = 2048
     sliding_buf = np.zeros(buffer_size, dtype=np.float32)
-    
+            
     # Select audio stream
     try:
         device_info = sd.query_devices(device_idx)
@@ -208,6 +216,7 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
             logger.info(f"ASIO recording started successfully at {sample_rate}Hz.")
             prev_rms = 0.0
             prev_notes = []
+            prev_chroma = np.zeros(12, dtype=np.float32).tolist()
             
             while True:
                 # Wait for next audio chunk from sounddevice thread
@@ -225,26 +234,32 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                 # we bypass new detection and hold the previous frame's notes.
                 is_transient = (rms > 2.0 * prev_rms) and (rms > 0.005) and (prev_rms > 0.001)
                 
+                chroma = np.zeros(12, dtype=np.float32).tolist()
                 if is_transient:
                     notes = prev_notes
+                    chroma = prev_chroma
                 else:
-                    # Detect pitches
-                    notes, rms = detect_pitches(
+                    # Detect pitches using HPS + NNLS
+                    notes, chroma_arr, rms = detect_pitches_nnls(
                         sliding_buf, 
                         sample_rate, 
-                        min_freq=70.0, 
-                        max_freq=1000.0,
-                        max_notes=5,
+                        A_matrix,
+                        idx_min,
+                        idx_max,
+                        ref_pitch=ref_pitch_val,
                         sens_threshold=sens_thr
                     )
+                    chroma = chroma_arr.tolist()
                     prev_notes = notes
+                    prev_chroma = chroma
                     
                 prev_rms = rms
                 
                 # Prepare JSON response
                 payload = json.dumps({
                     "notes": notes,
-                    "rms": float(rms)
+                    "rms": float(rms),
+                    "chroma": chroma
                 })
                 
                 # Broadcast payload to all connected clients

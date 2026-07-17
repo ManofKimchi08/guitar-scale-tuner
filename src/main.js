@@ -51,8 +51,8 @@ const FRETS = 12;
 // ---------- helpers ----------
 const $ = id => document.getElementById(id);
 const pc = m => ((m % 12) + 12) % 12;
-const freqToMidi = f => Math.round(12 * Math.log2(f / 440) + 69);
-const midiToFreq = m => 440 * Math.pow(2, (m - 69) / 12);
+const freqToMidi = f => Math.round(12 * Math.log2(f / refPitch) + 69);
+const midiToFreq = m => refPitch * Math.pow(2, (m - 69) / 12);
 const centsOff = (f, m) => Math.floor(1200 * Math.log2(f / midiToFreq(m)));
 const getMidiName = m => NOTE[pc(m)] + (Math.floor(m / 12) - 1);
 
@@ -122,11 +122,133 @@ let handMode = "right";        // "right" | "left"
 let quizMode = false;
 let score = 0, streak = 0, history = [], lock = false, targetInterval = null, litPcs = [];
 let sensitivity = 0.015, stabNeeded = 4;
+let refPitch = 440;
 let pcScores = Array(12).fill(0);
 let targetChordName = "";
 let targetChordPcs = [];
 let detectedPcs = [];
 let ws = null;
+
+// ---------- 25-State HMM Viterbi Filter ----------
+const HMM_STATES = 25; // 0..11: Major, 12..23: minor, 24: No Chord
+let hmmLogProbs = Array(HMM_STATES).fill(-Math.log(HMM_STATES));
+let HMM_TEMPLATES = [];
+let HMM_TRANSITION = [];
+
+function initHMM() {
+  HMM_TEMPLATES = [];
+  // 1. Build Chord Templates
+  for (let s = 0; s < 24; s++) {
+    const isMajor = s < 12;
+    const root = s % 12;
+    const template = Array(12).fill(0.02); // background noise floor
+    const intervals = isMajor ? [0, 4, 7] : [0, 3, 7];
+    intervals.forEach(interval => {
+      template[(root + interval) % 12] = 1.0;
+    });
+    // Normalize template
+    const sum = template.reduce((a, b) => a + b, 0);
+    HMM_TEMPLATES.push(template.map(v => v / sum));
+  }
+
+  // 2. Build HMM Transition Matrix
+  HMM_TRANSITION = [];
+  for (let i = 0; i < HMM_STATES; i++) {
+    const row = Array(HMM_STATES).fill(0);
+    if (i === 24) {
+      // Silence state: high self-persistence
+      row[24] = 0.85;
+      for (let j = 0; j < 24; j++) row[j] = 0.15 / 24;
+    } else {
+      // Chord state: high self-persistence
+      row[i] = 0.95;
+      row[24] = 0.02; // Transition to silence
+      
+      const iRoot = i % 12;
+      const iIsMajor = i < 12;
+      let chordSum = 0;
+      
+      for (let j = 0; j < 24; j++) {
+        if (j === i) continue;
+        const jRoot = j % 12;
+        const jIsMajor = j < 12;
+        const diff = (jRoot - iRoot + 12) % 12;
+        
+        // Music theory transition helpers (Circle of Fifths, relative Major/minor)
+        let isRelated = false;
+        if (diff === 5 || diff === 7) isRelated = true;
+        if (iIsMajor && !jIsMajor && diff === 9) isRelated = true;
+        if (!iIsMajor && jIsMajor && diff === 3) isRelated = true;
+        
+        row[j] = isRelated ? 0.025 : 0.001;
+        chordSum += row[j];
+      }
+      
+      // Normalize remaining transitions to sum to 0.03
+      const norm = 0.03 / chordSum;
+      for (let j = 0; j < 24; j++) {
+        if (j !== i) row[j] *= norm;
+      }
+    }
+    
+    // Normalize row to sum to 1.0
+    const rowSum = row.reduce((a, b) => a + b, 0);
+    HMM_TRANSITION.push(row.map(v => v / rowSum));
+  }
+}
+
+function runHMM(chroma, rms) {
+  const isSilence = rms < sensitivity;
+  const emission = Array(HMM_STATES).fill(0);
+  
+  if (isSilence) {
+    emission[24] = 0.95;
+    for (let j = 0; j < 24; j++) emission[j] = 0.05 / 24;
+  } else {
+    let maxSim = -1;
+    for (let s = 0; s < 24; s++) {
+      const temp = HMM_TEMPLATES[s];
+      let dot = 0, normC = 0, normT = 0;
+      for (let i = 0; i < 12; i++) {
+        dot += chroma[i] * temp[i];
+        normC += chroma[i] * chroma[i];
+        normT += temp[i] * temp[i];
+      }
+      const sim = (normC > 0 && normT > 0) ? (dot / (Math.sqrt(normC) * Math.sqrt(normT))) : 0;
+      emission[s] = Math.max(0.001, sim);
+      if (sim > maxSim) maxSim = sim;
+    }
+    emission[24] = Math.max(0.001, 1.0 - maxSim);
+    
+    // Normalize emission vector
+    const sum = emission.reduce((a, b) => a + b, 0);
+    for (let j = 0; j < HMM_STATES; j++) emission[j] /= sum;
+  }
+  
+  // Viterbi Trellis Update Step
+  const nextLogProbs = Array(HMM_STATES).fill(-Infinity);
+  for (let j = 0; j < HMM_STATES; j++) {
+    let maxVal = -Infinity;
+    for (let i = 0; i < HMM_STATES; i++) {
+      const val = hmmLogProbs[i] + Math.log(HMM_TRANSITION[i][j]);
+      if (val > maxVal) maxVal = val;
+    }
+    nextLogProbs[j] = maxVal + Math.log(emission[j]);
+  }
+  hmmLogProbs = nextLogProbs;
+  
+  // Find maximum likelihood state
+  let maxIdx = 0, maxVal = -Infinity;
+  for (let s = 0; s < HMM_STATES; s++) {
+    if (hmmLogProbs[s] > maxVal) {
+      maxVal = hmmLogProbs[s];
+      maxIdx = s;
+    }
+  }
+  return maxIdx;
+}
+
+initHMM();
 
 const scaleSet = () => SCALES[scaleId];
 
@@ -680,6 +802,12 @@ function handleNoteClick(midi) {
   }
 }
 
+function sendRefPitch() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "set_ref_pitch", value: refPitch }));
+  }
+}
+
 function connectAsioWs() {
   return new Promise((resolve, reject) => {
     if (ws) {
@@ -696,6 +824,7 @@ function connectAsioWs() {
       $("verdict").textContent = t("verdictAsioConnected");
       $("verdict").className = "verdict ok";
       $("err").textContent = "";
+      sendRefPitch();
       resolve();
     };
 
@@ -745,41 +874,73 @@ function updatePoly(res) {
       drawFB();
     }
     pcScores.fill(0);
+    hmmLogProbs.fill(-Math.log(HMM_STATES));
     updateTunerUI([]);
     return;
   }
 
-  const activeNotes = (guideMode === "chord") ? res.notes : [res.notes[0]];
+  let newLitPcs = [];
+  const isChordModeHMM = (guideMode === "chord") && (res.chroma !== undefined);
+  let hmmState = 24;
 
-  const freqStr = activeNotes.map(n => n.f.toFixed(1) + " Hz").join(" · ");
-  const noteNames = activeNotes.map(n => n.name).join(" · ");
-  $("hz").textContent = freqStr;
-  $("bigNote").textContent = noteNames;
-
-  // Tuner cents feedback on the first note
-  const firstMidi = activeNotes[0].midi;
-  const firstFreq = activeNotes[0].f;
-  const cents = centsOff(firstFreq, firstMidi);
-  const cl = Math.max(-50, Math.min(50, cents));
-  $("needle").style.left = (50 + cl) + "%";
-  $("needle").className = "needle" + (Math.abs(cents) < 10 ? " ok" : "");
-
-  // Update pitch class scores with hysteresis (Temporal Smoothing)
-  const currentPcs = activeNotes.map(n => pc(n.midi));
-  for (let i = 0; i < 12; i++) {
-    if (currentPcs.includes(i)) {
-      pcScores[i] = Math.min(stabNeeded, pcScores[i] + 1);
+  if (isChordModeHMM) {
+    // Run HMM Viterbi Filter on 12D Chroma vector
+    hmmState = runHMM(res.chroma, res.rms);
+    if (hmmState < 24) {
+      const root = hmmState % 12;
+      const isMajor = hmmState < 12;
+      const intervals = isMajor ? [0, 4, 7] : [0, 3, 7];
+      newLitPcs = intervals.map(d => (root + d) % 12);
+      
+      const rootName = NOTE[root];
+      const typeLabel = t("chord_" + (isMajor ? "major" : "minor"));
+      if (!quizMode) {
+        $("bigNote").textContent = `${rootName} ${typeLabel}`;
+        $("hz").textContent = "";
+        $("degTxt").textContent = "";
+        v.textContent = t("verdictInChord");
+        v.className = "verdict ok";
+      }
     } else {
-      pcScores[i] = Math.max(0, pcScores[i] - 1);
+      newLitPcs = [];
+      if (!quizMode) {
+        $("bigNote").textContent = "––";
+        $("hz").textContent = "";
+        $("degTxt").textContent = "";
+        v.textContent = t("verdictNoSignal");
+        v.className = "verdict idle";
+      }
     }
-  }
+  } else {
+    // Scale Mode (or fallback): single note processing
+    const activeNotes = [res.notes[0]];
+    const freqStr = activeNotes[0].f.toFixed(1) + " Hz";
+    const noteNames = activeNotes[0].name;
+    $("hz").textContent = freqStr;
+    $("bigNote").textContent = noteNames;
 
-  // Active threshold: must be active for at least half of stabNeeded (min 1 frame)
-  const threshold = Math.max(1, Math.ceil(stabNeeded / 2));
-  const newLitPcs = [];
-  for (let i = 0; i < 12; i++) {
-    if (pcScores[i] >= threshold) {
-      newLitPcs.push(i);
+    // Tuner cents feedback on the first note
+    const firstMidi = activeNotes[0].midi;
+    const firstFreq = activeNotes[0].f;
+    const cents = centsOff(firstFreq, firstMidi);
+    const cl = Math.max(-50, Math.min(50, cents));
+    $("needle").style.left = (50 + cl) + "%";
+    $("needle").className = "needle" + (Math.abs(cents) < 10 ? " ok" : "");
+
+    // Hysteresis note smoothing
+    const currentPcs = activeNotes.map(n => pc(n.midi));
+    for (let i = 0; i < 12; i++) {
+      if (currentPcs.includes(i)) {
+        pcScores[i] = Math.min(stabNeeded, pcScores[i] + 1);
+      } else {
+        pcScores[i] = Math.max(0, pcScores[i] - 1);
+      }
+    }
+    const threshold = Math.max(1, Math.ceil(stabNeeded / 2));
+    for (let i = 0; i < 12; i++) {
+      if (pcScores[i] >= threshold) {
+        newLitPcs.push(i);
+      }
     }
   }
 
@@ -789,12 +950,14 @@ function updatePoly(res) {
     drawFB();
   }
 
+  const activeNotes = (guideMode === "chord") ? res.notes : [res.notes[0]];
   const detected = activeNotes.map(n => ({ midi: n.midi, f: n.f }));
   updateTunerUI(detected);
 
   if (quizMode) {
     if (guideMode === "chord") {
       if (!lock) {
+        // 1. Arpeggio accumulation
         let changed = false;
         newLitPcs.forEach(p => {
           if (targetChordPcs.includes(p) && !detectedPcs.includes(p)) {
@@ -805,12 +968,25 @@ function updatePoly(res) {
         if (changed) {
           updateChordQuizPrompt();
         }
-        if (detectedPcs.length === targetChordPcs.length) {
+        
+        // 2. HMM direct chord match
+        let isCorrectChord = false;
+        if (isChordModeHMM && hmmState < 24) {
+          const rootName = NOTE[hmmState % 12];
+          const typeLabel = t("chord_" + (hmmState < 12 ? "major" : "minor"));
+          const detectedChordName = `${rootName} ${typeLabel}`;
+          if (detectedChordName === targetChordName) {
+            isCorrectChord = true;
+          }
+        }
+
+        if (detectedPcs.length === targetChordPcs.length || isCorrectChord) {
+          detectedPcs = [...targetChordPcs];
+          updateChordQuizPrompt();
           quizSolved();
         }
       }
     } else {
-      const p = pc(firstMidi);
       $("bigNote").textContent = labelMode === "deg" ? DEG[targetInterval] : NOTE[pc(rootPc + targetInterval)];
       const hit = (pc(firstMidi - rootPc) === targetInterval);
       if (!lock && hit && Math.abs(cents) < 40) {
@@ -1029,6 +1205,7 @@ function bindEvents() {
     if (quizMode) newQuiz();
   };
   $("stab").oninput = e => { stabNeeded = parseInt(e.target.value); $("stabVal").textContent = stabNeeded; };
+  $("refPitch").oninput = e => { refPitch = parseInt(e.target.value); $("refPitchVal").textContent = refPitch; sendRefPitch(); };
   $("fb").onclick = e => {
     const dot = e.target.closest(".note-dot");
     if (dot) {
