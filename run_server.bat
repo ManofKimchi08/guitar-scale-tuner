@@ -23,6 +23,9 @@ set /p DEVICE_ID="Enter your input device index number (e.g. 46): "
 
 echo.
 echo [INFO] Starting ASIO WebSocket Server on device #%DEVICE_ID%...
-python asio_server.py --device %DEVICE_ID%
+start "ASIO WebSocket Server" python asio_server.py --device %DEVICE_ID%
+
+echo [INFO] Starting HTTPS Local Web Server...
+python run_https_server.py
 
 pause

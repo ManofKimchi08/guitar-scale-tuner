@@ -27,3 +27,5 @@ dist/
 # Scratch / Temp
 extract.py
 guide_text.txt
+cert.pem
+key.pem
