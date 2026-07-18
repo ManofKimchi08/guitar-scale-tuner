@@ -794,3 +794,9 @@ input[type=range] {
   border-color: #ff99aa;
   box-shadow: 0 0 10px rgba(255, 51, 68, 0.6);
 }
+
+/* Scale Scanner Results Styling */
+.scan-result-item:hover {
+  background: var(--line) !important;
+  color: var(--tone) !important;
+}

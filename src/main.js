@@ -124,6 +124,11 @@ let score = 0, streak = 0, history = [], lock = false, targetInterval = null, li
 let sensitivity = 0.015, stabNeeded = 4;
 let refPitch = 440;
 let pcScores = Array(12).fill(0);
+let isScanning = false;
+let scanInterval = null;
+let scanDuration = 12000;
+let scanTimeElapsed = 0;
+let scanChromaHistory = Array(12).fill(0);
 let targetChordName = "";
 let targetChordPcs = [];
 let detectedPcs = [];
@@ -668,6 +673,12 @@ function update(res) {
       v.textContent = (guideMode === "chord") ? t("verdictOutChord") : t("verdictOutScale"); v.className = "verdict no";
     }
   }
+
+  if (isScanning && litPcs.length > 0) {
+    litPcs.forEach(note => {
+      scanChromaHistory[note] += 1;
+    });
+  }
 }
 function loop() {
   if (!running) return;
@@ -1006,8 +1017,13 @@ function updatePoly(res) {
     } else {
       $("degTxt").textContent = degrees ? (t("degPrefix") + degrees) : "";
       v.textContent = (guideMode === "chord") ? t("verdictOutChord") : t("verdictOutScale");
-      v.className = "verdict no";
     }
+  }
+
+  if (isScanning && litPcs.length > 0) {
+    litPcs.forEach(note => {
+      scanChromaHistory[note] += 1;
+    });
   }
 }
 
@@ -1165,7 +1181,132 @@ function setLabel(m) {
   if (quizMode) newQuiz();
 }
 
+// ---------- Scale Scanner Logic ----------
+function startScan() {
+  if (!running) {
+    alert(t("errScanMic"));
+    return;
+  }
+  isScanning = true;
+  scanTimeElapsed = 0;
+  scanChromaHistory.fill(0);
+  
+  $("btnScan").textContent = t("btnScanStop");
+  $("btnScan").className = "ghost act"; // glowing active state
+  $("scanProgressContainer").style.display = "flex";
+  $("scanProgressFill").style.width = "0%";
+  $("scanResults").style.display = "none";
+  
+  const tickMs = 100;
+  scanInterval = setInterval(() => {
+    scanTimeElapsed += tickMs;
+    const pct = Math.min(100, (scanTimeElapsed / scanDuration) * 100);
+    $("scanProgressFill").style.width = pct + "%";
+    
+    if (scanTimeElapsed >= scanDuration) {
+      stopScan(true);
+    }
+  }, tickMs);
+}
+
+function stopScan(completed) {
+  isScanning = false;
+  if (scanInterval) {
+    clearInterval(scanInterval);
+    scanInterval = null;
+  }
+  
+  $("btnScan").textContent = t("btnScanStart");
+  $("btnScan").className = "ghost";
+  $("scanProgressContainer").style.display = "none";
+  
+  if (completed) {
+    calculateScanResults();
+  }
+}
+
+function calculateScanResults() {
+  const sum = scanChromaHistory.reduce((a, b) => a + b, 0);
+  if (sum === 0) {
+    $("scanResults").innerHTML = `<div style="color:var(--muted)">No notes detected during scan. Try playing again.</div>`;
+    $("scanResults").style.display = "block";
+    return;
+  }
+  
+  // Normalize user chroma history
+  const userChroma = scanChromaHistory.map(v => v / sum);
+  const results = [];
+  
+  // Calculate Cosine Similarity to all scale templates
+  for (let root = 0; root < 12; root++) {
+    SCALE_IDS.forEach(scaleId => {
+      const template = Array(12).fill(0);
+      SCALES[scaleId].forEach(interval => {
+        template[(root + interval) % 12] = 1;
+      });
+      // Normalize template
+      const tempSum = template.reduce((a, b) => a + b, 0);
+      const normalizedTemplate = template.map(v => v / tempSum);
+      
+      // Calculate dot product and norms
+      let dot = 0, normUser = 0, normTemp = 0;
+      for (let i = 0; i < 12; i++) {
+        dot += userChroma[i] * normalizedTemplate[i];
+        normUser += userChroma[i] * userChroma[i];
+        normTemp += normalizedTemplate[i] * normalizedTemplate[i];
+      }
+      const similarity = (normUser > 0 && normTemp > 0) ? (dot / Math.sqrt(normUser * normTemp)) : 0;
+      results.push({ root, scaleId, similarity });
+    });
+  }
+  
+  // Sort and pick top 5
+  const sorted = results.sort((a, b) => b.similarity - a.similarity).slice(0, 5);
+  
+  let html = `<b style="font-size:12px; color:var(--tone); display:block; margin-bottom:8px;">${t("scanResultsTitle")}</b>`;
+  sorted.forEach(res => {
+    const rootName = NOTE[res.root];
+    const scaleName = t("scale_" + res.scaleId);
+    const percentage = Math.round(res.similarity * 100);
+    html += `<div class="scan-result-item" data-root="${res.root}" data-scale="${res.scaleId}" style="display:flex; justify-content:space-between; margin-bottom:6px; cursor:pointer; padding:6px 8px; border-radius:6px; background:#161b22; border:1px solid var(--line); transition:all 0.1s ease;">
+      <span><b>${rootName} ${scaleName}</b></span>
+      <span style="color:var(--ok); font-weight:bold;">${percentage}%</span>
+    </div>`;
+  });
+  
+  $("scanResults").innerHTML = html;
+  $("scanResults").style.display = "block";
+}
+
 function bindEvents() {
+  $("btnScan").onclick = () => {
+    if (isScanning) {
+      stopScan(false);
+    } else {
+      startScan();
+    }
+  };
+  
+  $("scanResults").onclick = e => {
+    const item = e.target.closest(".scan-result-item");
+    if (item) {
+      const root = parseInt(item.getAttribute("data-root"), 10);
+      const scale = item.getAttribute("data-scale");
+      rootPc = root;
+      scaleId = scale;
+      $("keySel").value = root;
+      $("scaleSel").value = scale;
+      drawFB();
+      if (quizMode) newQuiz();
+      
+      // Visual feedback: briefly highlight the selected item
+      item.style.borderColor = "var(--tone)";
+      setTimeout(() => {
+        item.style.borderColor = "var(--line)";
+      }, 500);
+    }
+  };
+
   $("startBtn").onclick = () => running ? stop() : start();
   $("deviceSel").onchange = async e => { if (running) { try { await connect(e.target.value); } catch (err) { $("err").textContent = "Device switch failed: " + err.message; } } };
   $("keySel").onchange = e => { rootPc = parseInt(e.target.value); drawFB(); if (quizMode) newQuiz(); };

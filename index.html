@@ -122,6 +122,18 @@
             <span class="toggle-label right" id="toggleRight" data-i18n="handRight">Right hand</span>
           </div>
         </div>
+        <div class="field" style="margin-top:20px; border-top:1px dashed var(--line); padding-top:16px;">
+          <div class="card-h" data-i18n="cardScanner">Scale Scanner</div>
+          <div class="card-sub" data-i18n="subScanner">Play for 10-15 seconds to auto-detect your scale.</div>
+          <div style="display: flex; gap: 10px; align-items: center; margin-top: 10px;">
+            <button id="btnScan" class="ghost" style="padding: 8px 14px; font-size: 12px;" data-i18n="btnScanStart">Start Scan</button>
+            <div id="scanProgressContainer" style="display: none; flex-grow: 1; height: 8px; background: #222; border-radius: 4px; overflow: hidden; border: 1px solid var(--line);">
+              <div id="scanProgressFill" style="height: 100%; width: 0%; background: var(--tone); transition: width 0.1s linear;"></div>
+            </div>
+          </div>
+          <div id="scanResults" style="display: none; margin-top: 12px; font-size: 11px; line-height: 1.5; color: var(--ink); background: #0b0d10; border: 1px solid var(--line); padding: 10px; border-radius: 8px;">
+          </div>
+        </div>
       </div>
     </div>
 
