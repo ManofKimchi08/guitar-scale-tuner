@@ -134,6 +134,30 @@ let targetChordPcs = [];
 let detectedPcs = [];
 let ws = null;
 
+// ---------- Pitch Trajectory & Stability Analyzer ----------
+let pitchHistory = []; // { time, cents } ring buffer for last 5 seconds
+
+// ---------- Backing Track Jam Assistant ----------
+let isJamPlaying = false;
+let jamTimer = null;
+let jamBpm = 100;
+let jamProgressionKey = "pop";
+let jamChordIndex = 0;
+let jamBarCount = 1;
+let jamTargetChordPcs = [];
+let jamCurrentChordName = "––";
+
+// ---------- Smart Speed-up Metronome ----------
+let isMetroPlaying = false;
+let metroTimer = null;
+let metroBpm = 100;
+let metroBeat = 0;
+let metroBarCount = 0;
+
+// ---------- Circle of Fifths Data ----------
+const CIRCLE_MAJOR = ["C", "G", "D", "A", "E", "B", "F#", "Db", "Ab", "Eb", "Bb", "F"];
+const CIRCLE_MINOR = ["Am", "Em", "Bm", "F#m", "C#m", "G#m", "D#m", "Bbm", "Fm", "Cm", "Gm", "Dm"];
+
 // ---------- 25-State HMM Viterbi Filter ----------
 const HMM_STATES = 25; // 0..11: Major, 12..23: minor, 24: No Chord
 let hmmLogProbs = Array(HMM_STATES).fill(-Math.log(HMM_STATES));
@@ -539,8 +563,18 @@ function drawFB() {
       const x = xOf(f), y = padT + si * sh;
       const isRoot = pc(p - rootPc) === 0;
       const isLit = litPcs.includes(pc(p));
-      const fill = isLit ? "var(--hit)" : (isRoot ? "var(--root)" : "var(--tone)");
-      const extra = isLit ? 'stroke="#fff" stroke-width="2" filter="url(#g)"' : "";
+      const isJamTone = isJamPlaying && jamTargetChordPcs.includes(pc(p));
+      
+      let fill = isLit ? "var(--hit)" : (isRoot ? "var(--root)" : "var(--tone)");
+      if (!isLit && isJamTone) {
+        fill = "#ffaa00"; // Glowing Gold for Jam Track Target Chord Tones
+      }
+      
+      let extra = isLit ? 'stroke="#fff" stroke-width="2" filter="url(#g)"' : "";
+      if (!isLit && isJamTone) {
+        extra = 'stroke="#ffd880" stroke-width="1.8" filter="url(#g)"';
+      }
+      
       s += `<g class="note-dot" data-midi="${p}" style="cursor: pointer;">`;
       s += `<circle cx="${x}" cy="${y}" r="10.5" fill="${fill}" ${extra}/>`;
       s += `<text x="${x}" y="${y}" class="dot-text">${labelFor(p)}</text>`;
@@ -635,6 +669,8 @@ function update(res) {
   $("needle").className = "needle" + (Math.abs(cents) < 10 ? " ok" : "");
   if (litPcs.length !== 1 || litPcs[0] !== p) { litPcs = [p]; drawFB(); }
   updateTunerUI([{ midi: m, f: res.f }]);
+  updatePitchTracker(cents);
+  drawPitchCanvas();
 
   if (quizMode) {
     if (guideMode === "chord") {
@@ -937,6 +973,8 @@ function updatePoly(res) {
     const cl = Math.max(-50, Math.min(50, cents));
     $("needle").style.left = (50 + cl) + "%";
     $("needle").className = "needle" + (Math.abs(cents) < 10 ? " ok" : "");
+    updatePitchTracker(cents);
+    drawPitchCanvas();
 
     // Hysteresis note smoothing
     const currentPcs = activeNotes.map(n => pc(n.midi));
@@ -1278,6 +1316,323 @@ function calculateScanResults() {
   $("scanResults").style.display = "block";
 }
 
+// ---------- Pitch Trajectory & Bending Analyzer ----------
+function updatePitchTracker(cents) {
+  const now = performance.now();
+  pitchHistory.push({ time: now, cents: cents });
+  pitchHistory = pitchHistory.filter(item => now - item.time <= 5000);
+  
+  if (pitchHistory.length > 5) {
+    const values = pitchHistory.map(item => item.cents);
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length;
+    const stdDev = Math.sqrt(variance);
+    const score = Math.max(0, Math.min(100, Math.round(100 - stdDev * 2.5)));
+    const el = $("stabilityVal");
+    if (el) el.textContent = score + "%";
+  }
+}
+
+function drawPitchCanvas() {
+  const canvas = $("pitchCanvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width;
+  const H = canvas.height;
+  
+  ctx.clearRect(0, 0, W, H);
+  
+  const centerY = H / 2;
+  const centsToY = c => centerY - (c / 200) * (H / 2 - 6);
+  
+  // Center 0 cent line
+  ctx.strokeStyle = "rgba(76, 208, 125, 0.4)";
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(0, centerY);
+  ctx.lineTo(W, centerY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  
+  // Bending +100c line
+  ctx.strokeStyle = "rgba(255, 170, 0, 0.25)";
+  ctx.beginPath();
+  ctx.moveTo(0, centsToY(100));
+  ctx.lineTo(W, centsToY(100));
+  ctx.stroke();
+  ctx.fillStyle = "rgba(255, 170, 0, 0.5)";
+  ctx.font = "8px monospace";
+  ctx.fillText("+100c (1/2)", 4, centsToY(100) - 2);
+  
+  // Bending +200c line
+  ctx.strokeStyle = "rgba(255, 68, 68, 0.25)";
+  ctx.beginPath();
+  ctx.moveTo(0, centsToY(200));
+  ctx.lineTo(W, centsToY(200));
+  ctx.stroke();
+  ctx.fillStyle = "rgba(255, 68, 68, 0.5)";
+  ctx.fillText("+200c (Full)", 4, centsToY(200) - 2);
+  
+  if (pitchHistory.length < 2) return;
+  
+  const now = performance.now();
+  ctx.strokeStyle = "#4ca6ff";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  
+  for (let i = 0; i < pitchHistory.length; i++) {
+    const item = pitchHistory[i];
+    const age = now - item.time;
+    const x = W - (age / 5000) * W;
+    const y = Math.max(4, Math.min(H - 4, centsToY(item.cents)));
+    
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+}
+
+// ---------- Circle of Fifths Visualizer ----------
+function renderCircleOfFifths() {
+  const svg = $("circleSvg");
+  if (!svg) return;
+  svg.innerHTML = "";
+  
+  const cx = 160, cy = 160, outerR = 140, midR = 95, innerR = 55;
+  const numSectors = 12;
+  const anglePerSector = (2 * Math.PI) / numSectors;
+  
+  const activeMajorRoot = NOTE[rootPc];
+  const relativeMinorPc = (rootPc + 9) % 12;
+  const relativeMinorRoot = NOTE[relativeMinorPc] + "m";
+  const fourthPc = (rootPc + 5) % 12;
+  const fifthPc = (rootPc + 7) % 12;
+  
+  let s = "";
+  for (let i = 0; i < 12; i++) {
+    const startAngle = i * anglePerSector - Math.PI / 2 - anglePerSector / 2;
+    const endAngle = startAngle + anglePerSector;
+    
+    // Outer Major Sector
+    const x1 = cx + outerR * Math.cos(startAngle);
+    const y1 = cy + outerR * Math.sin(startAngle);
+    const x2 = cx + outerR * Math.cos(endAngle);
+    const y2 = cy + outerR * Math.sin(endAngle);
+    const x3 = cx + midR * Math.cos(endAngle);
+    const y3 = cy + midR * Math.sin(endAngle);
+    const x4 = cx + midR * Math.cos(startAngle);
+    const y4 = cy + midR * Math.sin(startAngle);
+    
+    const majorKey = CIRCLE_MAJOR[i];
+    const majorPc = NOTE.indexOf(majorKey.replace("b", "#"));
+    const isMajorActive = NOTE[rootPc] === NOTE[pc(majorPc)];
+    const isMajorRelative = (NOTE[fourthPc] === NOTE[pc(majorPc)]) || (NOTE[fifthPc] === NOTE[pc(majorPc)]);
+    
+    let majorCls = "circle-sector";
+    if (isMajorActive) majorCls += " active-root";
+    else if (isMajorRelative) majorCls += " related-key";
+    
+    const dOuter = `M ${x1} ${y1} A ${outerR} ${outerR} 0 0 1 ${x2} ${y2} L ${x3} ${y3} A ${midR} ${midR} 0 0 0 ${x4} ${y4} Z`;
+    s += `<path d="${dOuter}" class="${majorCls}" data-pc="${pc(majorPc)}" data-type="major"/>`;
+    
+    // Outer Text
+    const textAngle = startAngle + anglePerSector / 2;
+    const textR = (outerR + midR) / 2;
+    const tx = cx + textR * Math.cos(textAngle);
+    const ty = cy + textR * Math.sin(textAngle);
+    s += `<text x="${tx}" y="${ty}" class="circle-text ${isMajorActive ? 'active-root' : ''}">${majorKey}</text>`;
+    
+    // Inner minor Sector
+    const mx1 = cx + midR * Math.cos(startAngle);
+    const my1 = cy + midR * Math.sin(startAngle);
+    const mx2 = cx + midR * Math.cos(endAngle);
+    const my2 = cy + midR * Math.sin(endAngle);
+    const mx3 = cx + innerR * Math.cos(endAngle);
+    const my3 = cy + innerR * Math.sin(endAngle);
+    const mx4 = cx + innerR * Math.cos(startAngle);
+    const my4 = cy + innerR * Math.sin(startAngle);
+    
+    const minorKey = CIRCLE_MINOR[i];
+    const minorPc = NOTE.indexOf(minorKey.replace('m','').replace("b", "#"));
+    const isMinorActive = NOTE[relativeMinorPc] === NOTE[pc(minorPc)];
+    
+    let minorCls = "circle-sector";
+    if (isMinorActive) minorCls += " relative-key";
+    
+    const dInner = `M ${mx1} ${my1} A ${midR} ${midR} 0 0 1 ${mx2} ${my2} L ${mx3} ${my3} A ${innerR} ${innerR} 0 0 0 ${mx4} ${my4} Z`;
+    s += `<path d="${dInner}" class="${minorCls}" data-pc="${pc(minorPc)}" data-type="minor"/>`;
+    
+    // Inner Text
+    const textInnerR = (midR + innerR) / 2;
+    const itx = cx + textInnerR * Math.cos(textAngle);
+    const ity = cy + textInnerR * Math.sin(textAngle);
+    s += `<text x="${itx}" y="${ity}" class="circle-text" style="font-size:10px; fill:${isMinorActive ? '#ffaa00' : 'var(--muted)'}">${minorKey}</text>`;
+  }
+  
+  svg.innerHTML = s;
+}
+
+// ---------- Backing Track Jam Assistant ----------
+const JAM_PROGRESSIONS = {
+  pop: [0, 7, 9, 5],      // I - V - vi - IV
+  jazz: [2, 7, 0, 9],     // ii - V - I - VI
+  blues: [0, 5, 0, 7],    // I - IV - I - V
+  sad: [0, 8, 3, 10]      // i - VI - III - VII
+};
+
+function playJamSynthChord(rootPcVal, isMinor, durationSec) {
+  try {
+    ensureAudioCtx();
+    const now = audioCtx.currentTime;
+    const chordIntervals = isMinor ? [0, 3, 7] : [0, 4, 7];
+    const rootMidi = 48 + rootPcVal; // C3 octave area
+    
+    chordIntervals.forEach(interval => {
+      const midi = rootMidi + interval;
+      const freq = midiToFreq(midi);
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, now);
+      
+      gain.gain.setValueAtTime(0.01, now);
+      gain.gain.linearRampToValueAtTime(0.12, now + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + durationSec);
+      
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      
+      osc.start(now);
+      osc.stop(now + durationSec);
+    });
+  } catch (e) {
+    console.error("Jam synth play error:", e);
+  }
+}
+
+function startJamTrack() {
+  isJamPlaying = true;
+  jamChordIndex = 0;
+  jamBarCount = 1;
+  $("btnJam").textContent = t("btnJamStop");
+  $("btnJam").className = "ghost act";
+  
+  stepJamTrack();
+}
+
+function stopJamTrack() {
+  isJamPlaying = false;
+  if (jamTimer) {
+    clearTimeout(jamTimer);
+    jamTimer = null;
+  }
+  jamTargetChordPcs = [];
+  $("btnJam").textContent = t("btnJamPlay");
+  $("btnJam").className = "ghost";
+  $("jamCurrentChord").textContent = "––";
+  $("jamBarCounter").textContent = "Bar 1/4";
+  drawFB();
+}
+
+function stepJamTrack() {
+  if (!isJamPlaying) return;
+  
+  const progPattern = JAM_PROGRESSIONS[jamProgressionKey] || JAM_PROGRESSIONS.pop;
+  const currentInterval = progPattern[jamChordIndex % progPattern.length];
+  const chordRootPc = (rootPc + currentInterval) % 12;
+  const isMinorChord = (jamProgressionKey === "sad" && (jamChordIndex % 4 === 0)) || (jamProgressionKey === "pop" && jamChordIndex % 4 === 2) || (jamProgressionKey === "jazz" && jamChordIndex % 4 === 0);
+  
+  const chordIntervals = isMinorChord ? [0, 3, 7] : [0, 4, 7];
+  jamTargetChordPcs = chordIntervals.map(i => (chordRootPc + i) % 12);
+  jamCurrentChordName = NOTE[chordRootPc] + (isMinorChord ? "m" : "");
+  
+  $("jamCurrentChord").textContent = jamCurrentChordName;
+  $("jamBarCounter").textContent = `Bar ${jamChordIndex + 1}/${progPattern.length}`;
+  
+  const secondsPerBar = (60 / jamBpm) * 4;
+  playJamSynthChord(chordRootPc, isMinorChord, secondsPerBar);
+  drawFB();
+  
+  jamChordIndex = (jamChordIndex + 1) % progPattern.length;
+  jamTimer = setTimeout(stepJamTrack, secondsPerBar * 1000);
+}
+
+// ---------- Smart Speed-up Metronome ----------
+function playMetronomeClick(isDownbeat) {
+  try {
+    ensureAudioCtx();
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(isDownbeat ? 1200 : 800, now);
+    
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+    
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    
+    osc.start(now);
+    osc.stop(now + 0.05);
+  } catch (e) {
+    console.error("Click error:", e);
+  }
+}
+
+function startMetronome() {
+  isMetroPlaying = true;
+  metroBeat = 0;
+  metroBarCount = 0;
+  $("btnMetro").textContent = t("btnMetroStop");
+  $("btnMetro").className = "ghost act";
+  stepMetronome();
+}
+
+function stopMetronome() {
+  isMetroPlaying = false;
+  if (metroTimer) {
+    clearTimeout(metroTimer);
+    metroTimer = null;
+  }
+  $("btnMetro").textContent = t("btnMetroStart");
+  $("btnMetro").className = "ghost";
+  const dots = document.querySelectorAll("#metroBeatDots .metro-dot");
+  dots.forEach(d => d.className = "metro-dot");
+}
+
+function stepMetronome() {
+  if (!isMetroPlaying) return;
+  
+  const isDownbeat = (metroBeat === 0);
+  playMetronomeClick(isDownbeat);
+  
+  const dots = document.querySelectorAll("#metroBeatDots .metro-dot");
+  dots.forEach((d, idx) => {
+    if (idx === metroBeat) {
+      d.className = isDownbeat ? "metro-dot downbeat" : "metro-dot active";
+    } else {
+      d.className = "metro-dot";
+    }
+  });
+  
+  metroBeat = (metroBeat + 1) % 4;
+  if (metroBeat === 0) {
+    metroBarCount++;
+    const autoSpeed = $("metroAutoSpeed")?.checked;
+    if (autoSpeed && metroBarCount > 0 && metroBarCount % 4 === 0) {
+      metroBpm = Math.min(220, metroBpm + 5);
+      $("metroBpm").value = metroBpm;
+      $("metroBpmVal").textContent = metroBpm;
+    }
+  }
+  
+  const intervalMs = (60 / metroBpm) * 1000;
+  metroTimer = setTimeout(stepMetronome, intervalMs);
+}
+
 function bindEvents() {
   $("btnScan").onclick = () => {
     if (isScanning) {
@@ -1347,6 +1702,65 @@ function bindEvents() {
   };
   $("stab").oninput = e => { stabNeeded = parseInt(e.target.value); $("stabVal").textContent = stabNeeded; };
   $("refPitch").oninput = e => { refPitch = parseInt(e.target.value); $("refPitchVal").textContent = refPitch; sendRefPitch(); };
+
+  // Circle of Fifths Event Listeners
+  if ($("btnCircleModal")) {
+    $("btnCircleModal").onclick = () => {
+      renderCircleOfFifths();
+      $("circleModal").style.display = "flex";
+    };
+  }
+  if ($("btnCloseCircle")) {
+    $("btnCloseCircle").onclick = () => {
+      $("circleModal").style.display = "none";
+    };
+  }
+  if ($("circleSvg")) {
+    $("circleSvg").onclick = e => {
+      const sector = e.target.closest(".circle-sector");
+      if (sector) {
+        const pcVal = parseInt(sector.getAttribute("data-pc"), 10);
+        if (!isNaN(pcVal)) {
+          rootPc = pcVal;
+          $("keySel").value = pcVal;
+          drawFB();
+          renderCircleOfFifths();
+          if (quizMode) newQuiz();
+        }
+      }
+    };
+  }
+
+  // Jam Track Assistant Event Listeners
+  if ($("btnJam")) {
+    $("btnJam").onclick = () => isJamPlaying ? stopJamTrack() : startJamTrack();
+  }
+  if ($("jamProgSel")) {
+    $("jamProgSel").onchange = e => {
+      jamProgressionKey = e.target.value;
+      if (isJamPlaying) {
+        stopJamTrack();
+        startJamTrack();
+      }
+    };
+  }
+  if ($("jamBpm")) {
+    $("jamBpm").oninput = e => {
+      jamBpm = parseInt(e.target.value, 10);
+      $("jamBpmVal").textContent = jamBpm;
+    };
+  }
+
+  // Smart Speed-up Metronome Event Listeners
+  if ($("btnMetro")) {
+    $("btnMetro").onclick = () => isMetroPlaying ? stopMetronome() : startMetronome();
+  }
+  if ($("metroBpm")) {
+    $("metroBpm").oninput = e => {
+      metroBpm = parseInt(e.target.value, 10);
+      $("metroBpmVal").textContent = metroBpm;
+    };
+  }
   $("fb").onclick = e => {
     const dot = e.target.closest(".note-dot");
     if (dot) {

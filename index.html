@@ -88,6 +88,14 @@
               <div class="tuning-peg"></div>
             </div>
           </div>
+          <!-- Pitch Trajectory & Bending Tracker Canvas -->
+          <div class="pitch-tracker-box" style="margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-size: 11px; font-weight: bold; color: var(--muted);" data-i18n="cardPitchTracker">Pitch Trajectory & Bending Analyzer</span>
+              <span style="font-size: 11px; color: var(--ok);"><span data-i18n="lblStabilityScore">Stability</span>: <b id="stabilityVal">100%</b></span>
+            </div>
+            <canvas id="pitchCanvas" width="260" height="70" style="width: 100%; height: 70px; background: #0b0d10; border: 1px solid var(--line); border-radius: 6px; display: block;"></canvas>
+          </div>
         </div>
       </div>
 
@@ -122,7 +130,7 @@
             <span class="toggle-label right" id="toggleRight" data-i18n="handRight">Right hand</span>
           </div>
         </div>
-        <div class="field" style="margin-top:20px; border-top:1px dashed var(--line); padding-top:16px;">
+        <div class="field" style="margin-top:16px; border-top:1px dashed var(--line); padding-top:14px;">
           <div class="card-h" data-i18n="cardScanner">Scale Scanner</div>
           <div class="card-sub" data-i18n="subScanner">Play for 10-15 seconds to auto-detect your scale.</div>
           <div style="display: flex; gap: 10px; align-items: center; margin-top: 10px;">
@@ -137,7 +145,7 @@
       </div>
     </div>
 
-    <div class="panel">
+    <div class="panel" style="margin-bottom: 16px;">
       <div class="panel-header">
         <div class="card-h" data-i18n="cardFretboard" style="margin-bottom: 0;">Fretboard</div>
         <div class="header-selectors-row1">
@@ -147,6 +155,7 @@
           <div class="field" id="scaleField"><small data-i18n="lblScale">Scale</small>
             <select id="scaleSel"></select>
           </div>
+          <button id="btnCircleModal" class="ghost" style="padding: 6px 10px; font-size: 11px; height: 32px; align-self: flex-end;" data-i18n="btnCircleOfFifths">⭕ Circle of Fifths</button>
           <div class="field" id="chordTypeField" style="display: none;"><small data-i18n="lblChord">Chord</small>
             <select id="chordTypeSel">
               <option value="major" data-i18n="chord_major">Major</option>
@@ -168,7 +177,6 @@
             </select>
           </div>
           <div class="field" id="tuningPresetField">
-            <!-- Will be populated dynamically by rebuildTuningSel() in main.js -->
           </div>
           <div class="field" id="tuningCustomField" style="display: none;"><small data-i18n="lblTuningCustom">Custom
               Strings (1-6)</small>
@@ -189,33 +197,86 @@
           </div>
         </div>
       </div>
+      <svg id="fb" viewBox="0 0 840 250" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="legend" style="margin-top:12px; justify-content: center; margin-bottom: 8px;">
+        <span><i class="d-root"></i><span data-i18n="legendRoot">Root</span></span>
+        <span><i class="d-tone"></i><span data-i18n="legendTone">Scale tone</span></span>
+        <span><i class="d-hit"></i><span data-i18n="legendPlayed">Played note</span></span>
+      </div>
+      <div class="settings">
+        <label class="tooltip-container">
+          <span data-i18n="lblSens" class="tooltip-trigger">Sensitivity</span>
+          <span class="tooltip-text" data-i18n="descSens">Volume threshold. Lower detects quiet plucks but may catch
+            noise. Higher ignores noise but requires stronger plucking.</span>
+          <input type="range" id="sens" min="0.005" max="0.06" step="0.005" value="0.015">
+        </label>
+        <label class="tooltip-container">
+          <span data-i18n="lblStab" class="tooltip-trigger">Stability</span>
+          <span class="tooltip-text" data-i18n="descStab">Confirmation stability. Lower responds faster but is more
+            jittery. Higher is more stable but requires holding the note longer.</span>
+          <input type="range" id="stab" min="2" max="10" step="1" value="4"><span id="stabVal">4</span><span
+            data-i18n="lblFrames">frames</span>
+        </label>
+        <label class="tooltip-container">
+          <span data-i18n="lblRefPitch" class="tooltip-trigger">Reference Pitch</span>
+          <span class="tooltip-text" data-i18n="descRefPitch">A4 reference frequency. Default is 440Hz. Adjust between 425Hz and 455Hz.</span>
+          <input type="range" id="refPitch" min="425" max="455" step="1" value="440"><span id="refPitchVal">440</span><span>Hz</span>
+        </label>
+      </div>
     </div>
-    <svg id="fb" viewBox="0 0 840 250" preserveAspectRatio="xMidYMid meet"></svg>
-    <div class="legend" style="margin-top:12px; justify-content: center; margin-bottom: 8px;">
-      <span><i class="d-root"></i><span data-i18n="legendRoot">Root</span></span>
-      <span><i class="d-tone"></i><span data-i18n="legendTone">Scale tone</span></span>
-      <span><i class="d-hit"></i><span data-i18n="legendPlayed">Played note</span></span>
+
+    <!-- Practice Tools Grid: Jam Assistant & Speed Metronome -->
+    <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+      <!-- Backing Track Jam Assistant -->
+      <div class="panel">
+        <div class="card-h" data-i18n="cardJam">Backing Track Jam Assistant</div>
+        <div class="card-sub" data-i18n="subJam">Real-time backing track & chord target notes guide</div>
+        <div style="display: flex; gap: 12px; align-items: center; margin-top: 14px; flex-wrap: wrap;">
+          <button id="btnJam" class="ghost" style="padding: 9px 16px; font-size: 12px;" data-i18n="btnJamPlay">▶ Play Jam Track</button>
+          <div class="field" style="min-width: 100px;">
+            <small>Progression</small>
+            <select id="jamProgSel">
+              <option value="pop">Pop/Rock (I - V - vi - IV)</option>
+              <option value="jazz">Jazz (ii - V - I - VI)</option>
+              <option value="blues">12-Bar Blues (I - IV - I - V)</option>
+              <option value="sad">Pop Minor (i - VI - III - VII)</option>
+            </select>
+          </div>
+          <div class="field" style="width: 80px;">
+            <small>BPM (<span id="jamBpmVal">100</span>)</small>
+            <input type="range" id="jamBpm" min="60" max="180" value="100" step="2">
+          </div>
+        </div>
+        <div id="jamStatusBox" style="margin-top: 12px; font-size: 12px; color: var(--tone); font-weight: bold; background: #0b0d10; border: 1px solid var(--line); padding: 8px 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+          <span>Current Chord: <span id="jamCurrentChord" style="color: #fff; font-size: 14px;">––</span></span>
+          <span style="font-size: 11px; color: var(--muted);" id="jamBarCounter">Bar 1/4</span>
+        </div>
+      </div>
+
+      <!-- Smart Speed-up Metronome -->
+      <div class="panel">
+        <div class="card-h" data-i18n="cardMetronome">Smart Speed Trainer Metronome</div>
+        <div class="card-sub" data-i18n="subMetronome">Auto speed-up metronome for speed training</div>
+        <div style="display: flex; gap: 12px; align-items: center; margin-top: 14px; flex-wrap: wrap;">
+          <button id="btnMetro" class="ghost" style="padding: 9px 16px; font-size: 12px;" data-i18n="btnMetroStart">▶ Metronome</button>
+          <div class="field" style="width: 90px;">
+            <small>BPM (<span id="metroBpmVal">100</span>)</small>
+            <input type="range" id="metroBpm" min="40" max="220" value="100" step="2">
+          </div>
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); cursor: pointer;">
+            <input type="checkbox" id="metroAutoSpeed" checked>
+            <span data-i18n="lblAutoSpeed">Auto Speed-up (+5 BPM / 4 bars)</span>
+          </label>
+        </div>
+        <div style="display: flex; gap: 6px; margin-top: 12px; justify-content: center;" id="metroBeatDots">
+          <div class="metro-dot" style="width: 12px; height: 12px; border-radius: 50%; background: #222; border: 1px solid var(--line);"></div>
+          <div class="metro-dot" style="width: 12px; height: 12px; border-radius: 50%; background: #222; border: 1px solid var(--line);"></div>
+          <div class="metro-dot" style="width: 12px; height: 12px; border-radius: 50%; background: #222; border: 1px solid var(--line);"></div>
+          <div class="metro-dot" style="width: 12px; height: 12px; border-radius: 50%; background: #222; border: 1px solid var(--line);"></div>
+        </div>
+      </div>
     </div>
-    <div class="settings">
-      <label class="tooltip-container">
-        <span data-i18n="lblSens" class="tooltip-trigger">Sensitivity</span>
-        <span class="tooltip-text" data-i18n="descSens">Volume threshold. Lower detects quiet plucks but may catch
-          noise. Higher ignores noise but requires stronger plucking.</span>
-        <input type="range" id="sens" min="0.005" max="0.06" step="0.005" value="0.015">
-      </label>
-      <label class="tooltip-container">
-        <span data-i18n="lblStab" class="tooltip-trigger">Stability</span>
-        <span class="tooltip-text" data-i18n="descStab">Confirmation stability. Lower responds faster but is more
-          jittery. Higher is more stable but requires holding the note longer.</span>
-        <input type="range" id="stab" min="2" max="10" step="1" value="4"><span id="stabVal">4</span><span
-          data-i18n="lblFrames">frames</span>
-      </label>
-      <label class="tooltip-container">
-        <span data-i18n="lblRefPitch" class="tooltip-trigger">Reference Pitch</span>
-        <span class="tooltip-text" data-i18n="descRefPitch">A4 reference frequency. Default is 440Hz. Adjust between 425Hz and 455Hz.</span>
-        <input type="range" id="refPitch" min="425" max="455" step="1" value="440"><span id="refPitchVal">440</span><span>Hz</span>
-      </label>
-    </div>
+
     <div class="err" id="err"></div>
     <div class="note">
       <b data-i18n="noteAsioTitle">About ASIO.</b>
@@ -224,6 +285,17 @@
         automatically. For electric guitar, raise your interface input gain.</span>
     </div>
   </div>
+
+  <!-- Circle of Fifths Modal -->
+  <div id="circleModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.75); z-index: 1000; backdrop-filter: blur(4px); align-items: center; justify-content: center;">
+    <div class="panel" style="width: 90%; max-width: 440px; background: #12161b; border: 1px solid var(--line); position: relative; padding: 24px;">
+      <button id="btnCloseCircle" class="ghost" style="position: absolute; top: 16px; right: 16px; padding: 4px 10px; font-size: 12px;">✕</button>
+      <div class="card-h" data-i18n="modalCircleTitle">Circle of Fifths Visualizer</div>
+      <div class="card-sub" style="margin-bottom: 16px;" data-i18n="modalCircleSub">Click any key to update fretboard. Relative & related keys are highlighted.</div>
+      <div style="display: flex; justify-content: center; align-items: center;">
+        <svg id="circleSvg" viewBox="0 0 320 320" style="width: 280px; height: 280px;"></svg>
+      </div>
+    </div>
   </div>
 
   <script src="src/i18n.js"></script>
