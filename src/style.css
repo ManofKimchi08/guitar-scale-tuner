@@ -800,3 +800,58 @@ input[type=range] {
   background: var(--line) !important;
   color: var(--tone) !important;
 }
+
+/* Smart Speed Metronome Beats */
+.metro-dot {
+  transition: background-color 0.05s ease, box-shadow 0.05s ease, transform 0.05s ease;
+}
+.metro-dot.active {
+  background: var(--tone) !important;
+  border-color: #fff !important;
+  box-shadow: 0 0 10px var(--tone);
+  transform: scale(1.25);
+}
+.metro-dot.downbeat {
+  background: var(--ok) !important;
+  border-color: #fff !important;
+  box-shadow: 0 0 12px var(--ok);
+  transform: scale(1.35);
+}
+
+/* Circle of Fifths SVG Visualizer */
+.circle-sector {
+  cursor: pointer;
+  stroke: var(--line);
+  stroke-width: 1.5px;
+  transition: all 0.2s ease;
+  fill: #161b22;
+}
+.circle-sector:hover {
+  fill: #222933;
+}
+.circle-sector.active-root {
+  fill: var(--tone) !important;
+  stroke: #fff !important;
+  stroke-width: 2.5px;
+}
+.circle-sector.relative-key {
+  fill: #1e3a5f !important;
+  stroke: var(--tone) !important;
+  stroke-width: 2px;
+}
+.circle-sector.related-key {
+  fill: #1a2a3a !important;
+  stroke: #4ca6ff !important;
+}
+.circle-text {
+  font-family: var(--disp);
+  font-weight: 700;
+  font-size: 13px;
+  fill: var(--ink);
+  pointer-events: none;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.circle-text.active-root {
+  fill: #000;
+}
