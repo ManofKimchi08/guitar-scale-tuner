@@ -150,11 +150,18 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
     audio_queue = asyncio.Queue()
     loop = asyncio.get_running_loop()
     
-    def sd_callback(indata, frames, time_info, status):
+    monitor_enabled = False
+    monitor_volume = 0.7
+
+    def sd_callback(indata, outdata, frames, time_info, status):
         if status:
             logger.warning(f"SoundDevice status warning: {status}")
         # Send data buffer to asyncio loop
         loop.call_soon_threadsafe(audio_queue.put_nowait, indata.copy()[:, 0])
+        if monitor_enabled:
+            outdata[:] = indata * monitor_volume
+        else:
+            outdata.fill(0)
 
     ref_pitch_val = 440.0
     bin_width = sample_rate / buffer_size
@@ -167,7 +174,7 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
     A_matrix = precompute_A(sample_rate, buffer_size, ref_pitch_val)
 
     async def ws_handler(websocket):
-        nonlocal A_matrix, ref_pitch_val
+        nonlocal A_matrix, ref_pitch_val, monitor_enabled, monitor_volume
         logger.info(f"Client connected from {websocket.remote_address}")
         connected_clients.add(websocket)
         try:
@@ -180,6 +187,10 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                             logger.info(f"Updating reference pitch to {val}Hz")
                             ref_pitch_val = val
                             A_matrix = precompute_A(sample_rate, buffer_size, val)
+                    elif data.get("type") == "set_monitoring":
+                        monitor_enabled = bool(data.get("enabled", False))
+                        monitor_volume = float(data.get("volume", 0.7))
+                        logger.info(f"Updated monitoring: enabled={monitor_enabled}, vol={monitor_volume}")
                 except Exception as e:
                     logger.error(f"Error handling websocket message: {e}")
         except websockets.exceptions.ConnectionClosed:
@@ -202,15 +213,31 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
         device_info = sd.query_devices(device_idx)
         logger.info(f"Opening input device #{device_idx}: {device_info['name']}")
         
-        # Start sounddevice input stream
-        stream = sd.InputStream(
-            device=device_idx,
-            channels=1,
-            samplerate=sample_rate,
-            blocksize=hop_size,
-            dtype='float32',
-            callback=sd_callback
-        )
+        # Attempt to open duplex Stream for hardware-level zero latency direct monitoring
+        try:
+            stream = sd.Stream(
+                device=device_idx,
+                channels=(1, 1),
+                samplerate=sample_rate,
+                blocksize=hop_size,
+                dtype='float32',
+                callback=sd_callback
+            )
+        except Exception as duplex_e:
+            logger.info(f"Duplex stream unavailable ({duplex_e}), falling back to InputStream")
+            def input_only_callback(indata, frames, time_info, status):
+                if status:
+                    logger.warning(f"SoundDevice status warning: {status}")
+                loop.call_soon_threadsafe(audio_queue.put_nowait, indata.copy()[:, 0])
+
+            stream = sd.InputStream(
+                device=device_idx,
+                channels=1,
+                samplerate=sample_rate,
+                blocksize=hop_size,
+                dtype='float32',
+                callback=input_only_callback
+            )
         
         with stream:
             logger.info(f"ASIO recording started successfully at {sample_rate}Hz.")

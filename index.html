@@ -222,6 +222,15 @@
           <span class="tooltip-text" data-i18n="descRefPitch">A4 reference frequency. Default is 440Hz. Adjust between 425Hz and 455Hz.</span>
           <input type="range" id="refPitch" min="425" max="455" step="1" value="440"><span id="refPitchVal">440</span><span>Hz</span>
         </label>
+        <label class="tooltip-container">
+          <span data-i18n="lblMonitor" class="tooltip-trigger">Direct Audio Monitoring</span>
+          <span class="tooltip-text" data-i18n="descMonitor">Output live guitar audio to speakers/headphones with ultra-low latency.</span>
+          <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+            <input type="checkbox" id="monitorToggle" style="accent-color: var(--tone); cursor: pointer;">
+            <input type="range" id="monitorVol" min="0" max="1" step="0.05" value="0.7" style="width: 60px;">
+            <span id="monitorVolVal" style="font-size: 11px;">70%</span>
+          </div>
+        </label>
       </div>
     </div>
 

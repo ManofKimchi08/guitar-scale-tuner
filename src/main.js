@@ -133,6 +133,28 @@ let targetChordName = "";
 let targetChordPcs = [];
 let detectedPcs = [];
 let ws = null;
+let monitorGainNode = null;
+let isMonitoringEnabled = false;
+let monitorVolume = 0.7;
+
+function updateMonitoring() {
+  if (monitorGainNode && audioCtx) {
+    monitorGainNode.gain.setValueAtTime(isMonitoringEnabled ? monitorVolume : 0, audioCtx.currentTime);
+  }
+  sendMonitoringState();
+}
+
+function sendMonitoringState() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    try {
+      ws.send(JSON.stringify({
+        type: "set_monitoring",
+        enabled: isMonitoringEnabled,
+        volume: monitorVolume
+      }));
+    } catch (e) {}
+  }
+}
 
 // ---------- Pitch Trajectory & Stability Analyzer ----------
 let pitchHistory = []; // { time, cents } ring buffer for last 5 seconds
@@ -1083,7 +1105,13 @@ async function connect(id) {
   source = audioCtx.createMediaStreamSource(stream);
   analyser = audioCtx.createAnalyser(); analyser.fftSize = 2048;
   buf = new Float32Array(analyser.fftSize);
-  source.connect(analyser); // NOT to destination -> avoids feedback
+  source.connect(analyser);
+  
+  // Direct Audio Monitoring passthrough node (zero processing latency)
+  monitorGainNode = audioCtx.createGain();
+  monitorGainNode.gain.setValueAtTime(isMonitoringEnabled ? monitorVolume : 0, audioCtx.currentTime);
+  source.connect(monitorGainNode);
+  monitorGainNode.connect(audioCtx.destination);
 }
 async function start() {
   $("err").textContent = "";
@@ -1759,6 +1787,23 @@ function bindEvents() {
     $("metroBpm").oninput = e => {
       metroBpm = parseInt(e.target.value, 10);
       $("metroBpmVal").textContent = metroBpm;
+    };
+  }
+
+  // Direct Audio Monitoring Event Listeners
+  if ($("monitorToggle")) {
+    $("monitorToggle").onchange = e => {
+      isMonitoringEnabled = e.target.checked;
+      updateMonitoring();
+    };
+  }
+  if ($("monitorVol")) {
+    $("monitorVol").oninput = e => {
+      monitorVolume = parseFloat(e.target.value);
+      if ($("monitorVolVal")) {
+        $("monitorVolVal").textContent = Math.round(monitorVolume * 100) + "%";
+      }
+      updateMonitoring();
     };
   }
   $("fb").onclick = e => {

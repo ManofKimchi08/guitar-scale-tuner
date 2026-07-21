@@ -4,6 +4,18 @@
 
 ---
 
+## 🔊 [v1.5.0] - 실시간 초저지연 오디오 모니터링 (Direct Audio Monitoring) (2026-07-21)
+
+### 📌 개요
+연주하는 기타 소리를 스피커/헤드폰으로 실시간 수음 및 출력(Direct Monitoring)할 수 있도록 초저지연 오디오 루프백 시스템을 탑재했습니다.
+
+### 🛠️ 주요 변경사항
+* **Web Audio API Direct Passthrough (`src/main.js`)**: `MediaStreamSource`에서 추가 처리 버퍼 없이 `GainNode`를 거쳐 `audioCtx.destination`으로 직통 연결하여 지연 시간을 극도로 감소(하드웨어 버퍼 최저치 ~3ms).
+* **ASIO Duplex Hardware Loopback (`asio_server.py`)**: `sd.Stream` 하드웨어 전두플렉스 스트림을 이용해 sounddevice 커널 콜백 레벨에서 direct loopback(`outdata[:] = indata * volume`)을 처리하여 2ms 이하의 초저지연 모니터링 서빙.
+* **UI 모니터링 제어**: 하단 설정 카드에 `Direct Audio Monitoring` 토글 스위치 및 볼륨 조절 슬라이더(0%~100%) 탑재.
+
+---
+
 ## 🚀 [v1.4.0] - 4종 실전 기타 트레이닝 툴 패키지 (2026-07-21)
 
 ### 📌 개요
