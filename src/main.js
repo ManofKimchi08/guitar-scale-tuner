@@ -751,10 +751,11 @@ function loop() {
 
 // ---------- audio ----------
 async function getStream(id) {
+  const isSpecificId = id && id !== "mic_default" && id !== "asio_ws";
   return navigator.mediaDevices.getUserMedia({
     audio: {
       echoCancellation: false, noiseSuppression: false, autoGainControl: false,
-      ...(id ? { deviceId: { exact: id } } : {})
+      ...(isSpecificId ? { deviceId: { exact: id } } : {})
     }
   });
 }
@@ -777,9 +778,11 @@ async function listDevices() {
     sel.appendChild(o);
   });
 
-  // Preserve value if possible
+  // Preserve selected device ID if available
   if (curVal && Array.from(sel.options).some(o => o.value === curVal)) {
     sel.value = curVal;
+  } else if (ins.length > 0) {
+    sel.value = ins[0].deviceId;
   } else {
     sel.value = "asio_ws";
   }
