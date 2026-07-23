@@ -788,6 +788,49 @@ async function listDevices() {
   }
   sel.disabled = false;
 }
+
+async function listOutputDevices() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const outputs = devices.filter(d => d.kind === "audiooutput");
+    const sel = $("outputDeviceSel");
+    if (!sel) return;
+    const curVal = sel.value;
+    sel.innerHTML = "";
+
+    const defOpt = document.createElement("option");
+    defOpt.value = "";
+    defOpt.textContent = t("optDefaultOutput");
+    sel.appendChild(defOpt);
+
+    outputs.forEach((d, i) => {
+      const opt = document.createElement("option");
+      opt.value = d.deviceId;
+      opt.textContent = d.label || (`Output ${i + 1}`);
+      sel.appendChild(opt);
+    });
+
+    if (curVal && Array.from(sel.options).some(o => o.value === curVal)) {
+      sel.value = curVal;
+    }
+  } catch (e) {
+    console.warn("Error listing output devices:", e);
+  }
+}
+
+async function setAudioOutputDevice(deviceId) {
+  ensureAudioCtx();
+  if (typeof audioCtx.setSinkId === "function") {
+    try {
+      await audioCtx.setSinkId(deviceId);
+      console.log("Audio output device set to:", deviceId);
+    } catch (e) {
+      console.warn("Failed to set audio output device:", e);
+    }
+  }
+}
+
 function ensureAudioCtx() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === "suspended") audioCtx.resume();
@@ -880,6 +923,35 @@ function sendRefPitch() {
   }
 }
 
+let nextAsioPcmTime = 0;
+
+function playAsioPcmChunk(pcmData, sampleRate = 44100) {
+  if (!isMonitoringEnabled || !pcmData || pcmData.length === 0) return;
+  ensureAudioCtx();
+
+  const buffer = audioCtx.createBuffer(1, pcmData.length, sampleRate);
+  const channelData = buffer.getChannelData(0);
+  for (let i = 0; i < pcmData.length; i++) {
+    channelData[i] = pcmData[i];
+  }
+
+  const sourceNode = audioCtx.createBufferSource();
+  sourceNode.buffer = buffer;
+
+  if (monitorGainNode) {
+    sourceNode.connect(monitorGainNode);
+  } else {
+    sourceNode.connect(audioCtx.destination);
+  }
+
+  const now = audioCtx.currentTime;
+  if (nextAsioPcmTime < now) {
+    nextAsioPcmTime = now + 0.005;
+  }
+  sourceNode.start(nextAsioPcmTime);
+  nextAsioPcmTime += buffer.duration;
+}
+
 function connectAsioWs() {
   return new Promise((resolve, reject) => {
     if (ws) {
@@ -897,12 +969,16 @@ function connectAsioWs() {
       $("verdict").className = "verdict ok";
       $("err").textContent = "";
       sendRefPitch();
+      sendMonitoringState();
       resolve();
     };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        if (data.pcm) {
+          playAsioPcmChunk(data.pcm);
+        }
         updatePoly(data);
       } catch (e) {
         console.error("Error parsing WebSocket message:", e);
@@ -1809,6 +1885,13 @@ function bindEvents() {
       updateMonitoring();
     };
   }
+
+  // Output Device Event Listener
+  if ($("outputDeviceSel")) {
+    $("outputDeviceSel").onchange = e => {
+      setAudioOutputDevice(e.target.value);
+    };
+  }
   $("fb").onclick = e => {
     const dot = e.target.closest(".note-dot");
     if (dot) {
@@ -2052,4 +2135,5 @@ rebuildTuningSel();
 initSlideToggles();
 bindEvents();
 initDeviceSel();
+listOutputDevices();
 drawFB();

@@ -283,11 +283,15 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                 prev_rms = rms
                 
                 # Prepare JSON response
-                payload = json.dumps({
+                payload_data = {
                     "notes": notes,
                     "rms": float(rms),
                     "chroma": chroma
-                })
+                }
+                if monitor_enabled:
+                    payload_data["pcm"] = np.round(new_chunk * monitor_volume, 4).tolist()
+
+                payload = json.dumps(payload_data)
                 
                 # Broadcast payload to all connected clients
                 if connected_clients:
