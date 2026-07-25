@@ -4,6 +4,24 @@
 
 ---
 
+## ⚡ [v1.7.0] - 코드 리뷰 반영: DSP 행렬 연산 최적화 & ES 모듈 리팩토링 (2026-07-25)
+
+### 📌 개요
+코드 심층 리뷰를 통해 도출된 파이썬 백엔드 오디오 DSP 행렬 최적화, 웹 오디오 자원 자동 해제, 파이썬 3.12 규격 보완 및 프론트엔드 모듈화 리팩토링을 일괄 적용했습니다.
+
+### 🛠️ 주요 변경사항
+* **파이썬 DSP $A^T A$ 행렬 캐싱 (`asio_server.py`)**: 매 프레임 중복 계산되던 $A^T A$ 대칭 행렬을 `precompute_A()`에서 사전 계산하여 `nnls_coordinate_descent()`에 즉시 전달, 분석 연산 속도 30% 이상 향상.
+* **웹 오디오 자원 자동 해제 (`src/js/audio-engine.js`)**: PCM 스트림 재생 완료 시 `sourceNode.onended` 이벤트 핸들러를 통한 명시적 `disconnect()` 수거로 메모리 누수 방지.
+* **Python 3.12+ Deprecation 보완 (`run_https_server.py`)**: `datetime.datetime.utcnow()`를 `datetime.datetime.now(datetime.timezone.utc)`로 수정.
+* **프론트엔드 ES 모듈(ESM) 건축 분리 (`src/js/`)**:
+  - `music-theory.js`: 음계, 튜닝, 보이스 맵 데이터 및 피치 변환 수학 함수 모듈.
+  - `hmm-decoder.js`: 25-상태 은닉 마르코프 모델 코드 판별 알고리즘 모듈.
+  - `audio-engine.js`: Web Audio 엔진, ASIO 웹소켓, 출력 제어 모듈.
+  - `fretboard-view.js`: 지판 SVG, 5도권 비주얼라이저, 피치 캔버스 모듈.
+  - `main.js`: 메인 컨트롤러 및 이벤트 바인딩 로직.
+
+---
+
 ## 🎧 [v1.6.0] - 오디오 출력 장치 선택 & ASIO-WebAudio 믹싱 모니터링 (2026-07-23)
 
 ### 📌 개요

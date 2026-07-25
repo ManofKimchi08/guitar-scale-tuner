@@ -36,22 +36,19 @@ def list_devices():
             print(f"  Device #{idx}: {asio_tag}{d['name']} (API: {api_name}, Input Ch: {d['max_input_channels']}, Default SR: {int(d['default_samplerate'])}Hz)")
     print("=========================================================\n")
 
-def nnls_coordinate_descent(A, y, max_iter=15):
+def nnls_coordinate_descent(AtA, Aty, max_iter=15):
     """NumPy-only Coordinate Descent solver for Non-negative Least Squares."""
-    N = A.shape[1]
+    N = AtA.shape[1]
     x = np.zeros(N, dtype=np.float32)
-    # Precompute A.T * A and A.T * y
-    AtA = A.T @ A
-    Aty = A.T @ y
     for _ in range(max_iter):
         for j in range(N):
-            # Compute step
+            # Compute step using precomputed AtA and Aty
             grad = Aty[j] - AtA[j] @ x + AtA[j, j] * x[j]
             x[j] = max(0.0, grad / AtA[j, j]) if AtA[j, j] > 0 else 0.0
     return x
 
 def precompute_A(sample_rate, buffer_size, ref_pitch):
-    """Precomputes the dictionary matrix A for a given reference pitch frequency."""
+    """Precomputes dictionary matrix A and AtA for a given reference pitch frequency."""
     bin_width = sample_rate / buffer_size
     min_freq = 70.0
     max_freq = 1200.0
@@ -78,9 +75,10 @@ def precompute_A(sample_rate, buffer_size, ref_pitch):
         if norm > 0:
             A[:, j] /= norm
             
-    return A
+    AtA = A.T @ A
+    return A, AtA
 
-def detect_pitches_nnls(audio_chunk, sr, A, idx_min, idx_max, ref_pitch=440.0, sens_threshold=0.012):
+def detect_pitches_nnls(audio_chunk, sr, A, AtA, idx_min, idx_max, ref_pitch=440.0, sens_threshold=0.012):
     """Detects multiple pitches and extracts 12D Chroma using HPS + NNLS."""
     rms = np.sqrt(np.mean(audio_chunk ** 2))
     if rms < sens_threshold:
@@ -107,9 +105,10 @@ def detect_pitches_nnls(audio_chunk, sr, A, idx_min, idx_max, ref_pitch=440.0, s
         hps /= hps_max
         
     y = hps[idx_min:idx_max]
+    Aty = A.T @ y
     
-    # 2. NNLS
-    x = nnls_coordinate_descent(A, y)
+    # 2. NNLS using precomputed AtA
+    x = nnls_coordinate_descent(AtA, Aty)
     
     # 3. Extract detected notes and chroma
     detected = []
@@ -170,11 +169,11 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
     idx_min = int(round(min_freq / bin_width))
     idx_max = int(round(max_freq / bin_width))
     
-    # Precompute initial matrix A
-    A_matrix = precompute_A(sample_rate, buffer_size, ref_pitch_val)
+    # Precompute initial matrix A and AtA
+    A_matrix, AtA_matrix = precompute_A(sample_rate, buffer_size, ref_pitch_val)
 
     async def ws_handler(websocket):
-        nonlocal A_matrix, ref_pitch_val, monitor_enabled, monitor_volume
+        nonlocal A_matrix, AtA_matrix, ref_pitch_val, monitor_enabled, monitor_volume
         logger.info(f"Client connected from {websocket.remote_address}")
         connected_clients.add(websocket)
         try:
@@ -186,7 +185,7 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                         if 425.0 <= val <= 455.0:
                             logger.info(f"Updating reference pitch to {val}Hz")
                             ref_pitch_val = val
-                            A_matrix = precompute_A(sample_rate, buffer_size, val)
+                            A_matrix, AtA_matrix = precompute_A(sample_rate, buffer_size, val)
                     elif data.get("type") == "set_monitoring":
                         monitor_enabled = bool(data.get("enabled", False))
                         monitor_volume = float(data.get("volume", 0.7))
@@ -271,6 +270,7 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                         sliding_buf, 
                         sample_rate, 
                         A_matrix,
+                        AtA_matrix,
                         idx_min,
                         idx_max,
                         ref_pitch=ref_pitch_val,
