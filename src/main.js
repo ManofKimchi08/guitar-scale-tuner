@@ -609,6 +609,9 @@ function drawFB() {
     fb.appendChild(line);
   }
 
+  const isChordMode = (guideMode === "chord");
+  const currentChordPcs = isChordMode ? getChordPcs(rootPc, chordTypeVal) : [];
+
   for (let s = 0; s < numStrings; s++) {
     const openMidi = strings[s];
     const y = stringY(s);
@@ -618,11 +621,14 @@ function drawFB() {
       const notePc = pc(midi);
       const isRoot = (notePc === rootPc);
       const inCurrentScale = inScale(midi);
+      const inCurrentChord = isChordMode && currentChordPcs.includes(notePc);
 
       const isLit = litPcs.includes(notePc);
       const isJamTarget = isJamPlaying && jamTargetChordPcs.includes(notePc);
 
-      if (!inCurrentScale && !isLit && !voicingMode && !isJamTarget) continue;
+      const isVisibleTone = isChordMode ? inCurrentChord : inCurrentScale;
+
+      if (!isVisibleTone && !isLit && !voicingMode && !isJamTarget) continue;
 
       let isVoicingNote = false;
       if (voicingMode && currentVoicing) {
@@ -1361,6 +1367,8 @@ function initSlideToggles() {
       guideMode = (guideMode === "scale") ? "chord" : "scale";
       updateToggleVisuals(guideT, guideMode === "chord", "toggleScale", "toggleChord");
 
+      const scaleField = $("scaleField");
+      if (scaleField) scaleField.style.display = (guideMode === "chord") ? "none" : "block";
       const chordTypeField = $("chordTypeField");
       if (chordTypeField) chordTypeField.style.display = (guideMode === "chord") ? "block" : "none";
       const voicingField = $("voicingField");
@@ -1391,6 +1399,16 @@ function initSlideToggles() {
       drawFB();
     };
   }
+function getChordPcs(rootPc, chordTypeVal) {
+  const chordIntervalsMap = {
+    major: [0, 4, 7],
+    minor: [0, 3, 7],
+    dom7: [0, 4, 7, 10],
+    maj7: [0, 4, 7, 11],
+    min7: [0, 3, 7, 10]
+  };
+  const intervals = chordIntervalsMap[chordTypeVal] || chordIntervalsMap.major;
+  return intervals.map(i => pc(rootPc + i));
 }
 
 function getChordVoicings(rootPc, chordTypeVal) {
@@ -1495,6 +1513,8 @@ function bindEvents() {
     $("chordTypeSel").onchange = e => {
       chordTypeVal = e.target.value;
       if (voicingMode) updateVoicingGuide();
+      drawFB();
+      if (quizMode) newQuiz();
     };
   }
 
