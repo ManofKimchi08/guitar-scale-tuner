@@ -1497,6 +1497,47 @@ function bindEvents() {
       if (quizMode) newQuiz();
     };
   }
+  if ($("tuningSel")) {
+    $("tuningSel").onchange = e => {
+      currentTuningId = e.target.value;
+      if (TUNINGS[currentTuningId]) {
+        strings = [...TUNINGS[currentTuningId]];
+        for (let s = 0; s < 6; s++) {
+          if ($("strSel_" + s)) $("strSel_" + s).value = strings[s];
+        }
+        updateTunerLabels();
+        drawFB();
+      }
+    };
+  }
+
+  if ($("tuningModeSel")) {
+    $("tuningModeSel").onchange = e => {
+      tuningMode = e.target.value;
+      if ($("tuningPresetField")) $("tuningPresetField").style.display = (tuningMode === "preset") ? "block" : "none";
+      if ($("tuningCustomField")) $("tuningCustomField").style.display = (tuningMode === "custom") ? "block" : "none";
+      if (tuningMode === "preset") {
+        if (TUNINGS[currentTuningId]) strings = [...TUNINGS[currentTuningId]];
+      } else {
+        for (let s = 0; s < 6; s++) {
+          if ($("strSel_" + s)) strings[s] = parseInt($("strSel_" + s).value, 10);
+        }
+      }
+      updateTunerLabels();
+      drawFB();
+    };
+  }
+
+  if ($("voicingSel")) {
+    $("voicingSel").onchange = e => {
+      currentVoicingIdx = parseInt(e.target.value, 10);
+      if (currentVoicingsList[currentVoicingIdx]) {
+        currentVoicing = currentVoicingsList[currentVoicingIdx];
+        drawFB();
+      }
+    };
+  }
+
   if ($("sens")) $("sens").oninput = e => sensitivity = parseFloat(e.target.value);
   if ($("stab")) {
     $("stab").oninput = e => {
@@ -1544,6 +1585,7 @@ function bindEvents() {
           if ($("keySel")) $("keySel").value = pcVal;
           drawFB();
           renderCircleOfFifths();
+          if (voicingMode) updateVoicingGuide();
           if (quizMode) newQuiz();
         }
       }
@@ -1605,6 +1647,27 @@ function bindEvents() {
   }
 }
 
+function initCustomTuningSel() {
+  for (let s = 0; s < 6; s++) {
+    const sel = $("strSel_" + s);
+    if (!sel) continue;
+    sel.innerHTML = "";
+    for (let m = 36; m <= 71; m++) {
+      const o = document.createElement("option");
+      o.value = m;
+      const octave = Math.floor(m / 12) - 1;
+      o.textContent = `${NOTE[pc(m)]}${octave}`;
+      sel.appendChild(o);
+    }
+    sel.value = strings[s];
+    sel.onchange = () => {
+      strings[s] = parseInt(sel.value, 10);
+      updateTunerLabels();
+      drawFB();
+    };
+  }
+}
+
 function initDeviceSel() {
   const sel = $("deviceSel");
   if (!sel) return;
@@ -1631,6 +1694,7 @@ applyStaticI18n();
 buildKeySel();
 rebuildScaleSel();
 rebuildTuningSel();
+initCustomTuningSel();
 initSlideToggles();
 bindEvents();
 initDeviceSel();
