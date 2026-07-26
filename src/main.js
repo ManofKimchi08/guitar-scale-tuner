@@ -261,6 +261,12 @@ function playAsioPcmChunk(pcmData, sampleRate = 44100) {
   if (!isMonitoringEnabled || !pcmData || pcmData.length === 0) return;
   ensureAudioCtx();
 
+  if (!monitorGainNode && audioCtx) {
+    monitorGainNode = audioCtx.createGain();
+    monitorGainNode.gain.setValueAtTime(isMonitoringEnabled ? monitorVolume : 0, audioCtx.currentTime);
+    monitorGainNode.connect(audioCtx.destination);
+  }
+
   const buffer = audioCtx.createBuffer(1, pcmData.length, sampleRate);
   const channelData = buffer.getChannelData(0);
   for (let i = 0; i < pcmData.length; i++) {
@@ -372,6 +378,12 @@ async function listDevices() {
 }
 
 function connectAsioWs() {
+  ensureAudioCtx();
+  if (!monitorGainNode && audioCtx) {
+    monitorGainNode = audioCtx.createGain();
+    monitorGainNode.gain.setValueAtTime(isMonitoringEnabled ? monitorVolume : 0, audioCtx.currentTime);
+    monitorGainNode.connect(audioCtx.destination);
+  }
   return new Promise((resolve, reject) => {
     if (ws) {
       try { ws.close(); } catch (e) { }
@@ -906,6 +918,13 @@ function loop() {
 
 // ---------- Audio Lifecycle ----------
 async function connect(id) {
+  ensureAudioCtx();
+  if (!monitorGainNode && audioCtx) {
+    monitorGainNode = audioCtx.createGain();
+    monitorGainNode.gain.setValueAtTime(isMonitoringEnabled ? monitorVolume : 0, audioCtx.currentTime);
+    monitorGainNode.connect(audioCtx.destination);
+  }
+
   if (ws) {
     try { ws.close(); } catch (e) { }
     ws = null;
@@ -919,16 +938,12 @@ async function connect(id) {
   if (source) source.disconnect();
   if (stream) stream.getTracks().forEach(tk => tk.stop());
   stream = await getStream(id);
-  ensureAudioCtx();
   source = audioCtx.createMediaStreamSource(stream);
   analyser = audioCtx.createAnalyser(); analyser.fftSize = 2048;
   buf = new Float32Array(analyser.fftSize);
   source.connect(analyser);
 
-  monitorGainNode = audioCtx.createGain();
-  monitorGainNode.gain.setValueAtTime(isMonitoringEnabled ? monitorVolume : 0, audioCtx.currentTime);
   source.connect(monitorGainNode);
-  monitorGainNode.connect(audioCtx.destination);
 }
 
 async function start() {
