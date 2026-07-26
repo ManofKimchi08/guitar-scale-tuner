@@ -1375,6 +1375,7 @@ function initSlideToggles() {
       if (voicingField) voicingField.style.display = (guideMode === "chord") ? "block" : "none";
 
       refreshDynamic();
+      rebuildVoicingSel();
       drawFB();
       if (running && quizMode) newQuiz();
     };
@@ -1461,8 +1462,35 @@ function getChordVoicings(rootPc, chordTypeVal) {
   });
 }
 
+function rebuildVoicingSel() {
+  const sel = $("voicingSel");
+  if (!sel) return;
+  sel.innerHTML = "";
+
+  currentVoicingsList = getChordVoicings(rootPc, chordTypeVal);
+
+  const allOpt = document.createElement("option");
+  allOpt.value = "all";
+  allOpt.textContent = `⭐ ${t("optAllChordTones")}`;
+  sel.appendChild(allOpt);
+
+  currentVoicingsList.forEach((v, idx) => {
+    const o = document.createElement("option");
+    o.value = idx;
+    o.textContent = v.name;
+    sel.appendChild(o);
+  });
+
+  if (voicingMode && currentVoicingIdx < currentVoicingsList.length) {
+    sel.value = currentVoicingIdx;
+  } else {
+    sel.value = "all";
+    voicingMode = false;
+    currentVoicing = null;
+  }
+}
+
 function updateVoicingGuide() {
-  if (!voicingMode) return;
   currentVoicingsList = getChordVoicings(rootPc, chordTypeVal);
   if (currentVoicingsList.length === 0) return;
   if (currentVoicingIdx >= currentVoicingsList.length) currentVoicingIdx = 0;
@@ -1484,6 +1512,7 @@ function bindEvents() {
   if ($("keySel")) {
     $("keySel").onchange = e => {
       rootPc = parseInt(e.target.value, 10);
+      rebuildVoicingSel();
       drawFB();
       renderCircleOfFifths();
       if (voicingMode) updateVoicingGuide();
@@ -1530,11 +1559,18 @@ function bindEvents() {
 
   if ($("voicingSel")) {
     $("voicingSel").onchange = e => {
-      currentVoicingIdx = parseInt(e.target.value, 10);
-      if (currentVoicingsList[currentVoicingIdx]) {
-        currentVoicing = currentVoicingsList[currentVoicingIdx];
-        drawFB();
+      const val = e.target.value;
+      if (val === "all") {
+        voicingMode = false;
+        currentVoicing = null;
+      } else {
+        currentVoicingIdx = parseInt(val, 10);
+        if (currentVoicingsList[currentVoicingIdx]) {
+          currentVoicing = currentVoicingsList[currentVoicingIdx];
+          voicingMode = true;
+        }
       }
+      drawFB();
     };
   }
 
@@ -1555,6 +1591,7 @@ function bindEvents() {
   if ($("chordTypeSel")) {
     $("chordTypeSel").onchange = e => {
       chordTypeVal = e.target.value;
+      rebuildVoicingSel();
       if (voicingMode) updateVoicingGuide();
       drawFB();
       if (quizMode) newQuiz();
@@ -1695,6 +1732,7 @@ buildKeySel();
 rebuildScaleSel();
 rebuildTuningSel();
 initCustomTuningSel();
+rebuildVoicingSel();
 initSlideToggles();
 bindEvents();
 initDeviceSel();
