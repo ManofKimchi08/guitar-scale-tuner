@@ -97,7 +97,7 @@
           <div class="pitch-tracker-box" style="margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 10px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
               <span style="font-size: 11px; font-weight: bold; color: var(--muted);" data-i18n="cardPitchTracker">Pitch Trajectory & Bending Analyzer</span>
-              <span style="font-size: 11px; color: var(--ok);"><span data-i18n="lblStabilityScore">Stability</span>: <b id="stabilityVal">100%</b></span>
+              <span style="font-size: 11px; color: var(--ok);"><span data-i18n="lblStabilityScore">Stability</span>: <b id="pitchStabilityVal">100%</b></span>
             </div>
             <canvas id="pitchCanvas" width="260" height="70" style="width: 100%; height: 70px; background: #0b0d10; border: 1px solid var(--line); border-radius: 6px; display: block;"></canvas>
           </div>
@@ -139,9 +139,10 @@
           <div class="card-h" data-i18n="cardScanner">Scale Scanner</div>
           <div class="card-sub" data-i18n="subScanner">Play for 10-15 seconds to auto-detect your scale.</div>
           <div style="display: flex; gap: 10px; align-items: center; margin-top: 10px;">
-            <button id="btnScan" class="ghost" style="padding: 8px 14px; font-size: 12px;" data-i18n="btnScanStart">Start Scan</button>
-            <div id="scanProgressContainer" style="display: none; flex-grow: 1; height: 8px; background: #222; border-radius: 4px; overflow: hidden; border: 1px solid var(--line);">
-              <div id="scanProgressFill" style="height: 100%; width: 0%; background: var(--tone); transition: width 0.1s linear;"></div>
+            <button id="btnScanStart" class="ghost" style="padding: 8px 14px; font-size: 12px;" data-i18n="btnScanStart">Start Scan</button>
+            <button id="btnScanStop" class="btn danger" style="display: none; padding: 8px 14px; font-size: 12px;" data-i18n="btnScanStop">Stop Scan</button>
+            <div id="scanProgress" style="display: none; flex-grow: 1; height: 8px; background: #222; border-radius: 4px; overflow: hidden; border: 1px solid var(--line);">
+              <div id="scanBar" style="height: 100%; width: 0%; background: var(--tone); transition: width 0.1s linear;"></div>
             </div>
           </div>
           <div id="scanResults" style="display: none; margin-top: 12px; font-size: 11px; line-height: 1.5; color: var(--ink); background: #0b0d10; border: 1px solid var(--line); padding: 10px; border-radius: 8px;">
@@ -160,7 +161,7 @@
           <div class="field" id="scaleField"><small data-i18n="lblScale">Scale</small>
             <select id="scaleSel"></select>
           </div>
-          <button id="btnCircleModal" class="ghost" style="padding: 6px 10px; font-size: 11px; height: 32px; align-self: flex-end;" data-i18n="btnCircleOfFifths">⭕ Circle of Fifths</button>
+          <button id="btnCircleOfFifths" class="ghost" style="padding: 6px 10px; font-size: 11px; height: 32px; align-self: flex-end;" data-i18n="btnCircleOfFifths">⭕ Circle of Fifths</button>
           <div class="field" id="chordTypeField" style="display: none;"><small data-i18n="lblChord">Chord</small>
             <select id="chordTypeSel">
               <option value="major" data-i18n="chord_major">Major</option>
@@ -181,7 +182,8 @@
               <option value="custom" data-i18n="optTuningCustom">Custom</option>
             </select>
           </div>
-          <div class="field" id="tuningPresetField">
+          <div class="field" id="tuningPresetField"><small data-i18n="lblTuningPreset">Preset Tuning</small>
+            <select id="tuningSel"></select>
           </div>
           <div class="field" id="tuningCustomField" style="display: none;"><small data-i18n="lblTuningCustom">Custom
               Strings (1-6)</small>

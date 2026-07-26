@@ -1447,33 +1447,43 @@ function updateVoicingGuide() {
 }
 
 function bindEvents() {
-  $("startBtn").onclick = () => running ? stop() : start();
-  $("keySel").onchange = e => {
-    rootPc = parseInt(e.target.value, 10);
-    drawFB();
-    renderCircleOfFifths();
-    if (voicingMode) updateVoicingGuide();
-    if (quizMode) newQuiz();
-  };
-  $("scaleSel").onchange = e => {
-    scaleId = e.target.value;
-    drawFB();
-    if (quizMode) newQuiz();
-  };
-  $("sens").oninput = e => sensitivity = parseFloat(e.target.value);
-  $("stab").oninput = e => {
-    stabNeeded = parseInt(e.target.value, 10);
-    $("stabVal").textContent = stabNeeded;
-  };
-  $("refPitch").oninput = e => {
-    refPitch = parseInt(e.target.value, 10);
-    $("refPitchVal").textContent = refPitch;
-    sendRefPitch();
-  };
-  $("chordTypeSel").onchange = e => {
-    chordTypeVal = e.target.value;
-    if (voicingMode) updateVoicingGuide();
-  };
+  if ($("startBtn")) $("startBtn").onclick = () => running ? stop() : start();
+  if ($("keySel")) {
+    $("keySel").onchange = e => {
+      rootPc = parseInt(e.target.value, 10);
+      drawFB();
+      renderCircleOfFifths();
+      if (voicingMode) updateVoicingGuide();
+      if (quizMode) newQuiz();
+    };
+  }
+  if ($("scaleSel")) {
+    $("scaleSel").onchange = e => {
+      scaleId = e.target.value;
+      drawFB();
+      if (quizMode) newQuiz();
+    };
+  }
+  if ($("sens")) $("sens").oninput = e => sensitivity = parseFloat(e.target.value);
+  if ($("stab")) {
+    $("stab").oninput = e => {
+      stabNeeded = parseInt(e.target.value, 10);
+      if ($("stabVal")) $("stabVal").textContent = stabNeeded;
+    };
+  }
+  if ($("refPitch")) {
+    $("refPitch").oninput = e => {
+      refPitch = parseInt(e.target.value, 10);
+      if ($("refPitchVal")) $("refPitchVal").textContent = refPitch;
+      sendRefPitch();
+    };
+  }
+  if ($("chordTypeSel")) {
+    $("chordTypeSel").onchange = e => {
+      chordTypeVal = e.target.value;
+      if (voicingMode) updateVoicingGuide();
+    };
+  }
 
   if ($("btnScanStart")) $("btnScanStart").onclick = startScan;
   if ($("btnScanStop")) $("btnScanStop").onclick = stopScan;
@@ -1481,12 +1491,12 @@ function bindEvents() {
   if ($("btnCircleOfFifths")) {
     $("btnCircleOfFifths").onclick = () => {
       renderCircleOfFifths();
-      $("circleModal").style.display = "flex";
+      if ($("circleModal")) $("circleModal").style.display = "flex";
     };
   }
   if ($("btnCloseCircle")) {
     $("btnCloseCircle").onclick = () => {
-      $("circleModal").style.display = "none";
+      if ($("circleModal")) $("circleModal").style.display = "none";
     };
   }
   if ($("circleSvg")) {
@@ -1496,7 +1506,7 @@ function bindEvents() {
         const pcVal = parseInt(sector.getAttribute("data-pc"), 10);
         if (!isNaN(pcVal)) {
           rootPc = pcVal;
-          $("keySel").value = pcVal;
+          if ($("keySel")) $("keySel").value = pcVal;
           drawFB();
           renderCircleOfFifths();
           if (quizMode) newQuiz();
@@ -1515,7 +1525,7 @@ function bindEvents() {
   if ($("jamBpm")) {
     $("jamBpm").oninput = e => {
       jamBpm = parseInt(e.target.value, 10);
-      $("jamBpmVal").textContent = jamBpm;
+      if ($("jamBpmVal")) $("jamBpmVal").textContent = jamBpm;
     };
   }
 
@@ -1523,7 +1533,7 @@ function bindEvents() {
   if ($("metroBpm")) {
     $("metroBpm").oninput = e => {
       metroBpm = parseInt(e.target.value, 10);
-      $("metroBpmVal").textContent = metroBpm;
+      if ($("metroBpmVal")) $("metroBpmVal").textContent = metroBpm;
     };
   }
 
@@ -1549,13 +1559,15 @@ function bindEvents() {
     };
   }
 
-  $("fb").onclick = e => {
-    const dot = e.target.closest(".note-dot");
-    if (dot) {
-      const midi = parseInt(dot.getAttribute("data-midi"), 10);
-      playMidiNote(midi);
-    }
-  };
+  if ($("fb")) {
+    $("fb").onclick = e => {
+      const dot = e.target.closest(".note-dot");
+      if (dot) {
+        const midi = parseInt(dot.getAttribute("data-midi"), 10);
+        playMidiNote(midi);
+      }
+    };
+  }
 }
 
 function initDeviceSel() {
