@@ -984,9 +984,9 @@ function stop() {
 }
 
 function refreshDynamic() {
-  $("powerTxt").textContent = running ? t("powerOn") : t("powerOff");
-  $("startBtn").textContent = running ? t("btnStop");
-  $("modeSub").textContent = quizMode ? t("subQuiz") : t("subPractice");
+  if ($("powerTxt")) $("powerTxt").textContent = running ? t("powerOn") : t("powerOff");
+  if ($("startBtn")) $("startBtn").textContent = running ? t("btnStop") : t("btnStart");
+  if ($("modeSub")) $("modeSub").textContent = quizMode ? t("subQuiz") : t("subPractice");
 }
 
 // ---------- Practice Tools & Quiz ----------
@@ -1342,7 +1342,7 @@ function initSlideToggles() {
     guideT.onclick = () => {
       guideMode = (guideMode === "scale") ? "chord" : "scale";
       guideT.classList.toggle("active", guideMode === "chord");
-      $("lblGuideMode").textContent = (guideMode === "chord") ? t("lblModeChord") : t("lblModeScale");
+      if ($("lblGuideMode")) $("lblGuideMode").textContent = (guideMode === "chord") ? t("lblModeChord") : t("lblModeScale");
 
       const chordControlPanel = $("chordControlPanel");
       if (chordControlPanel) chordControlPanel.style.display = (guideMode === "chord") ? "flex" : "none";

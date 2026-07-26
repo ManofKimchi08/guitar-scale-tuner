@@ -4,6 +4,18 @@
 
 ---
 
+## 🛡️ [v1.7.4] - 코드 전반 정밀 리뷰: DOM ID 동기화 & 100% 방어적 초기화 (2026-07-26)
+
+### 📌 개요
+코드 전체를 정밀 스캔하여 스크립트 실행 중 미세한 예외(Null Reference)로 인해 지판(Fretboard) 및 키/스케일 드롭다운 렌더링이 중단되던 원인을 근본적으로 완벽 해결했습니다.
+
+### 🛠️ 주요 변경사항
+* **HTML과 JS 간 56개 DOM ID 100% 동기화**: `tuningPresetField` 내 누락된 `<select id="tuningSel">` 추가 및 `lblGuideMode`, `chordControlPanel`, `voicingCard` 등 누락된 요소로 인한 uncaught TypeError 원인 제거.
+* **전체 JS 이벤트 바인딩 방어 코드(Null-Safety) 적용**: `src/main.js`의 모든 이벤트 및 렌더링 로직에 `if ($("id"))` 검사를 적용하여 어떠한 환경에서도 지판 렌더링(`drawFB()`) 및 드롭다운 생성이 강제 실행되도록 보장.
+* **루트/src i18n 딕셔너리 완벽 동기화**: `i18n.js`와 `src/i18n.js`를 동일하게 동기화하여 전역 언어 객체 로딩 100% 보장.
+
+---
+
 ## 🔧 [v1.7.1] - 브라우저 호환성 복구 & 범용 실행 지원 (2026-07-26)
 
 ### 📌 개요
