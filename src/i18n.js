@@ -326,3 +326,6 @@ const I18N = {
     tuning_cat_other: "オープン / その他"
   }
 };
+
+window.LANG_NAMES = LANG_NAMES;
+window.I18N = I18N;

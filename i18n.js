@@ -227,3 +227,6 @@ const I18N = {
     scale_mixolydian: "ミクソリディアン"
   }
 };
+
+window.LANG_NAMES = LANG_NAMES;
+window.I18N = I18N;
