@@ -1399,6 +1399,8 @@ function initSlideToggles() {
       drawFB();
     };
   }
+}
+
 function getChordPcs(rootPc, chordTypeVal) {
   const chordIntervalsMap = {
     major: [0, 4, 7],
