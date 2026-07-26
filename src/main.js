@@ -49,6 +49,7 @@ let strings = [...TUNINGS[currentTuningId]];
 let tuningMode = "preset"; // "preset" | "custom"
 let guideMode = "scale"; // "scale" | "chord"
 let chordTypeVal = "major"; // "major" | "minor" | "dom7" | "maj7" | "min7"
+let isLeftHand = false;
 
 // ---------- DOM & Math Helpers ----------
 const $ = id => document.getElementById(id);
@@ -537,9 +538,15 @@ function drawFB() {
   const W = 840, H = 250, marginX = 40, marginY = 25;
   const usableW = W - marginX * 2, usableH = H - marginY * 2;
 
-  const fretX = [marginX];
-  for (let i = 1; i <= frets; i++) {
-    fretX.push(marginX + (usableW * (i / frets)));
+  const fretX = [];
+  if (isLeftHand) {
+    for (let i = 0; i <= frets; i++) {
+      fretX.push(W - marginX - (usableW * (i / frets)));
+    }
+  } else {
+    for (let i = 0; i <= frets; i++) {
+      fretX.push(marginX + (usableW * (i / frets)));
+    }
   }
 
   for (let i = 0; i <= frets; i++) {
@@ -596,7 +603,7 @@ function drawFB() {
     const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
     const y = stringY(s);
     line.setAttribute("x1", marginX); line.setAttribute("y1", y);
-    line.setAttribute("x2", fretX[frets]); line.setAttribute("y2", y);
+    line.setAttribute("x2", W - marginX); line.setAttribute("y2", y);
     line.setAttribute("stroke", "#94a3b8");
     line.setAttribute("stroke-width", 1 + s * 0.5);
     fb.appendChild(line);
@@ -627,7 +634,7 @@ function drawFB() {
 
       if (voicingMode && !isVoicingNote && !isLit) continue;
 
-      const cx = f === 0 ? marginX - 15 : (fretX[f - 1] + fretX[f]) / 2;
+      const cx = f === 0 ? (isLeftHand ? W - marginX + 15 : marginX - 15) : (fretX[f - 1] + fretX[f]) / 2;
 
       const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
       g.setAttribute("class", "note-dot");
@@ -1324,31 +1331,40 @@ function buildKeySel() {
   sel.value = rootPc;
 }
 
+function updateToggleVisuals(toggleEl, isRightActive, leftLabelId, rightLabelId) {
+  if (!toggleEl) return;
+  toggleEl.classList.toggle("active-right", isRightActive);
+  const leftL = $(leftLabelId);
+  const rightL = $(rightLabelId);
+  if (leftL) leftL.classList.toggle("active", !isRightActive);
+  if (rightL) rightL.classList.toggle("active", isRightActive);
+}
+
 function initSlideToggles() {
   const modeT = $("modeToggle");
   if (modeT) {
+    updateToggleVisuals(modeT, quizMode, "togglePractice", "toggleQuiz");
     modeT.onclick = () => {
       quizMode = !quizMode;
-      modeT.classList.toggle("active", quizMode);
+      updateToggleVisuals(modeT, quizMode, "togglePractice", "toggleQuiz");
       refreshDynamic();
       if (!running) return;
       if (quizMode) newQuiz();
-      else $("prompt").textContent = (guideMode === "chord") ? t("promptChordHover") : t("promptPlay");
+      else if ($("prompt")) $("prompt").textContent = (guideMode === "chord") ? t("promptChordHover") : t("promptPlay");
     };
   }
 
   const guideT = $("guideToggle");
   if (guideT) {
+    updateToggleVisuals(guideT, guideMode === "chord", "toggleScale", "toggleChord");
     guideT.onclick = () => {
       guideMode = (guideMode === "scale") ? "chord" : "scale";
-      guideT.classList.toggle("active", guideMode === "chord");
-      if ($("lblGuideMode")) $("lblGuideMode").textContent = (guideMode === "chord") ? t("lblModeChord") : t("lblModeScale");
+      updateToggleVisuals(guideT, guideMode === "chord", "toggleScale", "toggleChord");
 
-      const chordControlPanel = $("chordControlPanel");
-      if (chordControlPanel) chordControlPanel.style.display = (guideMode === "chord") ? "flex" : "none";
-
-      const voicingCard = $("voicingCard");
-      if (voicingCard) voicingCard.style.display = (guideMode === "chord" && voicingMode) ? "block" : "none";
+      const chordTypeField = $("chordTypeField");
+      if (chordTypeField) chordTypeField.style.display = (guideMode === "chord") ? "block" : "none";
+      const voicingField = $("voicingField");
+      if (voicingField) voicingField.style.display = (guideMode === "chord") ? "block" : "none";
 
       refreshDynamic();
       drawFB();
@@ -1358,24 +1374,21 @@ function initSlideToggles() {
 
   const labelT = $("labelToggle");
   if (labelT) {
+    updateToggleVisuals(labelT, labelMode === "deg", "toggleName", "toggleDeg");
     labelT.onclick = () => {
       labelMode = (labelMode === "name") ? "deg" : "name";
-      labelT.classList.toggle("active", labelMode === "deg");
+      updateToggleVisuals(labelT, labelMode === "deg", "toggleName", "toggleDeg");
       drawFB();
     };
   }
 
-  const voicingT = $("voicingToggle");
-  if (voicingT) {
-    voicingT.onclick = () => {
-      voicingMode = !voicingMode;
-      voicingT.classList.toggle("active", voicingMode);
-
-      const voicingCard = $("voicingCard");
-      if (voicingCard) voicingCard.style.display = (guideMode === "chord" && voicingMode) ? "block" : "none";
-
-      if (voicingMode) updateVoicingGuide();
-      else { currentVoicing = null; drawFB(); }
+  const handT = $("handToggle");
+  if (handT) {
+    updateToggleVisuals(handT, isLeftHand, "toggleLeft", "toggleRight");
+    handT.onclick = () => {
+      isLeftHand = !isLeftHand;
+      updateToggleVisuals(handT, isLeftHand, "toggleLeft", "toggleRight");
+      drawFB();
     };
   }
 }
