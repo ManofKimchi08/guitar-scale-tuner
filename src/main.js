@@ -289,7 +289,8 @@ function playAsioPcmChunk(pcmData, sampleRate = 44100) {
   }
 
   const now = audioCtx.currentTime;
-  if (nextAsioPcmTime < now) {
+  const MAX_PCM_LATENCY = 0.035; // Maximum 35ms allowed queue latency
+  if (nextAsioPcmTime < now || (nextAsioPcmTime - now) > MAX_PCM_LATENCY) {
     nextAsioPcmTime = now + 0.005;
   }
   sourceNode.start(nextAsioPcmTime);

@@ -4,6 +4,17 @@
 
 ---
 
+## ⚡ [v1.8.0] - 오디오 모니터링 초저지연 버퍼 큐 세척(Flush) & 35ms 레이턴시 캡 적용 (2026-08-06)
+
+### 📌 개요
+ASIO 오디오 인터페이스 입력과 PC 메인보드 리얼텍(Realtek) 출력 혼용 시, 브라우저 Web Audio 버퍼에 오디오 데이터가 누적되어 딜레이가 초 단위로 늘어나던 현상을 방지하도록 실시간 PCM 버퍼 큐 세척(Flush) 알고리즘을 구현했습니다.
+
+### 🛠️ 주요 변경사항
+* **`MAX_PCM_LATENCY = 0.035` 지연 시간 상한선 적용 (`src/main.js`)**: Web Audio 렌더링 스케줄링 시 35ms 이상의 버퍼 백로그가 발생하면 즉시 지연 큐를 세척(Flush)하고 실시간 위치(`now + 0.005`)로 재동기화하도록 조치.
+* **초단위 딜레이 완진 방지**: 오디오 패킷 지연 누적을 원천 제거하여 항상 35ms 이내의 최신 소리만 믹싱 출력되도록 보장.
+
+---
+
 ## 🎼 [v1.7.9] - 코드 보이싱 위치 드롭다운 동적 생성 & 보이싱 폼 하이라이트 복구 (2026-07-26)
 
 ### 📌 개요
@@ -77,6 +88,28 @@ v1.7.6 코드 모드 필터 추가 시 발생했던 `initSlideToggles()` 함수 
 * **HTML과 JS 간 56개 DOM ID 100% 동기화**: `tuningPresetField` 내 누락된 `<select id="tuningSel">` 추가 및 `lblGuideMode`, `chordControlPanel`, `voicingCard` 등 누락된 요소로 인한 uncaught TypeError 원인 제거.
 * **전체 JS 이벤트 바인딩 방어 코드(Null-Safety) 적용**: `src/main.js`의 모든 이벤트 및 렌더링 로직에 `if ($("id"))` 검사를 적용하여 어떠한 환경에서도 지판 렌더링(`drawFB()`) 및 드롭다운 생성이 강제 실행되도록 보장.
 * **루트/src i18n 딕셔너리 완벽 동기화**: `i18n.js`와 `src/i18n.js`를 동일하게 동기화하여 전역 언어 객체 로딩 100% 보장.
+
+---
+
+## 🛠️ [v1.7.3] - HTML DOM 요소 ID 100% 동기화 & 드롭다운 미출력 원천 해결 (2026-07-26)
+
+### 📌 개요
+UI 초기화 시 자바스크립트가 요청하는 HTML 요소 ID 간의 불일치를 전수 조사하여 복구하고, 드롭다운 및 지판이 빈칸으로 나타나던 렌더링 중단 원인을 완벽 해결했습니다.
+
+### 🛠️ 주요 변경사항
+* **HTML 엘리먼트 ID 불일치 수정**: `tuningPresetField` 내 누락된 `<select id="tuningSel">` 신설 및 `pitchStabilityVal`, `btnScanStart`, `btnScanStop`, `scanProgress`, `scanBar` ID 동기화.
+* **지판 SVG 렌더링 정상화**: ID 미스매치로 인한 `TypeError` 예외를 방지하여 `drawFB()` 및 컨트롤 카드 초기화가 강제 실행되도록 보장.
+
+---
+
+## 🎧 [v1.7.2] - ASIO 모드 오디오 컨텍스트(AudioContext) 초기화 보완 (2026-07-26)
+
+### 📌 개요
+ASIO 웹소켓 수신 모드에서 브라우저 오디오 컨텍스트(`AudioContext`)가 일시 정지(Suspended) 상태에 머물러 오디오 출력이 차단되던 현상을 해결했습니다.
+
+### 🛠️ 주요 변경사항
+* **`ensureAudioCtx()` 사용자 제스처 재개가동**: 마이크 또는 ASIO 수신 버튼 클릭 시 `audioCtx.resume()`을 강제 호출하여 브라우저 자동 재생 정책 차단을 완벽 해제.
+* **ASIO PCM 게인 노드 연결 보완**: ASIO 웹소켓 캡처 바이트 데이터를 PCM float32로 변환 후 `monitorGainNode`로 연동 믹싱.
 
 ---
 
