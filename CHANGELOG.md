@@ -4,6 +4,18 @@
 
 ---
 
+## 🖥️ [v1.9.1] - 원클릭 독립 데스크톱 패키징 (GuitarScaleTuner.exe) 구축 (2026-08-08)
+
+### 📌 개요
+콘솔(CMD) 창 노출 없이 더블 클릭 한 번으로 ASIO 오디오 엔진과 HTTPS 웹 서버를 백그라운드에서 동시 기동하고 기본 브라우저를 자동 오픈해주는 무설치 원클릭 실행 패키지(`GuitarScaleTuner.exe`)를 빌드 구축했습니다.
+
+### 🛠️ 주요 변경사항
+* **통합 엔진 엔트리포인트 탑재 (`GuitarScaleTuner.py`)**: ASIO 웹소켓 연산 엔진과 HTTPS 보안 서빙 엔진을 백그라운드 멀티 데몬 쓰레드로 묶어 단일 프로세스로 동작하도록 구조 통합.
+* **PyInstaller 독립 실행 파일 패키징 (`build_exe.py`)**: 콘솔 창 없는 무설치 실행 파일(`dist/GuitarScaleTuner/GuitarScaleTuner.exe`) 생성 자동화.
+* **무소음 런처 지원 (`GuitarScaleTuner.vbs`)**: CMD 창 노출 없는 무소음 원클릭 가동 지원.
+
+---
+
 ## 🎛️ [v1.9.0] - 브라우저 UI 내 ASIO 오디오 인터페이스 동적 선택 & 원클릭 런처 구축 (2026-08-08)
 
 ### 📌 개요
