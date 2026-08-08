@@ -1,7 +1,7 @@
 @echo off
-title ASIO WebSocket Server Launcher
+title ASIO & HTTPS Server Launcher
 echo ===================================================
-echo     ASIO Audio WebSocket Server Quick Launcher
+echo     Guitar Scale Tuner - Automatic Dual Server
 echo ===================================================
 echo.
 
@@ -14,18 +14,15 @@ if %errorlevel% neq 0 (
     exit /b
 )
 
-echo [INFO] Listing available audio input devices...
-echo.
-python asio_server.py --list
-echo.
-echo ===================================================
-set /p DEVICE_ID="Enter your input device index number (e.g. 46): "
-
-echo.
-echo [INFO] Starting ASIO WebSocket Server on device #%DEVICE_ID%...
-start "ASIO WebSocket Server" python asio_server.py --device %DEVICE_ID%
+echo [INFO] Starting ASIO Audio WebSocket Server...
+start "ASIO Audio Server" python asio_server.py
 
 echo [INFO] Starting HTTPS Local Web Server...
-python run_https_server.py
+start "HTTPS Web Server" python run_https_server.py
 
+echo.
+echo [SUCCESS] Both servers are running!
+echo Open your browser at: https://localhost:8000
+echo Select your audio interface directly inside the UI!
+echo.
 pause

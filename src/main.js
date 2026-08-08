@@ -349,34 +349,70 @@ async function getStream(id) {
   });
 }
 
-async function listDevices() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
-  const d = await navigator.mediaDevices.enumerateDevices();
-  const ins = d.filter(x => x.kind === "audioinput"), sel = $("deviceSel");
+let currentAsioDevices = [];
+let currentAsioDeviceId = null;
+
+async function rebuildDeviceDropdown() {
+  const sel = $("deviceSel");
   if (!sel) return;
-  const curVal = sel.value;
+
+  const prevValue = sel.value;
   sel.innerHTML = "";
 
-  const asioOpt = document.createElement("option");
-  asioOpt.value = "asio_ws";
-  asioOpt.textContent = `⚡ ${t("optAsioWebsocket")}`;
-  sel.appendChild(asioOpt);
+  // 1. ASIO Devices (Python Server)
+  if (currentAsioDevices && currentAsioDevices.length > 0) {
+    const asioGroup = document.createElement("optgroup");
+    asioGroup.label = `⚡ ASIO Audio Interfaces`;
 
-  ins.forEach((x, i) => {
-    const o = document.createElement("option");
-    o.value = x.deviceId;
-    o.textContent = x.label || ("Input " + (i + 1));
-    sel.appendChild(o);
-  });
-
-  if (curVal && Array.from(sel.options).some(o => o.value === curVal)) {
-    sel.value = curVal;
-  } else if (ins.length > 0) {
-    sel.value = ins[0].deviceId;
+    currentAsioDevices.forEach(d => {
+      const o = document.createElement("option");
+      o.value = "asio_dev_" + d.id;
+      const isAsioTag = d.is_asio ? "[ASIO] " : "";
+      o.textContent = `⚡ ${isAsioTag}${d.name} (${d.api})`;
+      asioGroup.appendChild(o);
+    });
+    sel.appendChild(asioGroup);
   } else {
-    sel.value = "asio_ws";
+    const asioOpt = document.createElement("option");
+    asioOpt.value = "asio_ws";
+    asioOpt.textContent = `⚡ ${t("optAsioWebsocket")}`;
+    sel.appendChild(asioOpt);
+  }
+
+  // 2. Web Audio Direct Microphones (Browser)
+  let micDevices = [];
+  if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+    try {
+      const d = await navigator.mediaDevices.enumerateDevices();
+      micDevices = d.filter(x => x.kind === "audioinput");
+    } catch (e) { }
+  }
+
+  if (micDevices.length > 0) {
+    const micGroup = document.createElement("optgroup");
+    micGroup.label = `🎙️ Direct Microphones`;
+
+    micDevices.forEach((x, i) => {
+      const o = document.createElement("option");
+      o.value = "mic_dev_" + x.deviceId;
+      o.textContent = `🎙️ ${x.label || ("Microphone " + (i + 1))}`;
+      micGroup.appendChild(o);
+    });
+    sel.appendChild(micGroup);
+  }
+
+  if (currentAsioDeviceId !== null && currentAsioDeviceId !== undefined && (!prevValue || prevValue === "asio_ws" || prevValue.startsWith("asio_dev_"))) {
+    sel.value = "asio_dev_" + currentAsioDeviceId;
+  } else if (prevValue && Array.from(sel.options).some(o => o.value === prevValue)) {
+    sel.value = prevValue;
+  } else if (sel.options.length > 0) {
+    sel.value = sel.options[0].value;
   }
   sel.disabled = false;
+}
+
+async function listDevices() {
+  await rebuildDeviceDropdown();
 }
 
 function connectAsioWs() {
@@ -409,6 +445,11 @@ function connectAsioWs() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        if (data.type === "asio_device_list") {
+          currentAsioDevices = data.devices || [];
+          currentAsioDeviceId = data.current_device_id;
+          rebuildDeviceDropdown();
+        }
         if (data.pcm) {
           playAsioPcmChunk(data.pcm);
         }
@@ -1674,6 +1715,23 @@ function bindEvents() {
     };
   }
 
+  if ($("deviceSel")) {
+    $("deviceSel").onchange = e => {
+      const val = e.target.value;
+      if (val.startsWith("asio_dev_")) {
+        const devId = parseInt(val.replace("asio_dev_", ""), 10);
+        currentAsioDeviceId = devId;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "select_asio_device", device_id: devId }));
+        } else {
+          connectAsioWs();
+        }
+      } else if (val === "asio_ws") {
+        connectAsioWs();
+      }
+    };
+  }
+
   if ($("fb")) {
     $("fb").onclick = e => {
       const dot = e.target.closest(".note-dot");
@@ -1707,23 +1765,7 @@ function initCustomTuningSel() {
 }
 
 function initDeviceSel() {
-  const sel = $("deviceSel");
-  if (!sel) return;
-  sel.innerHTML = "";
-
-  const asioOpt = document.createElement("option");
-  asioOpt.value = "asio_ws";
-  asioOpt.textContent = `⚡ ${t("optAsioWebsocket")}`;
-  sel.appendChild(asioOpt);
-
-  const defaultOpt = document.createElement("option");
-  defaultOpt.value = "mic_default";
-  defaultOpt.setAttribute("data-i18n", "optSelectAfter");
-  defaultOpt.textContent = t("optSelectAfter");
-  sel.appendChild(defaultOpt);
-
-  sel.value = "asio_ws";
-  sel.disabled = false;
+  rebuildDeviceDropdown();
 }
 
 // ---------- Init ----------

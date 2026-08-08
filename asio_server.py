@@ -16,24 +16,32 @@ logging.basicConfig(
 )
 logger = logging.getLogger("ASIOServer")
 
-def list_devices():
-    """Prints list of all audio devices and hosts APIs, highlight ASIO devices."""
-    print("=================== AUDIO DEVICE LIST ===================")
+def get_audio_input_devices():
+    """Returns structured list of all audio input devices and host APIs."""
     devices = sd.query_devices()
     host_apis = sd.query_hostapis()
-    
-    # Print host APIs
-    print("\nAvailable Host APIs:")
-    for i, api in enumerate(host_apis):
-        print(f"  [{i}] {api['name']}")
-        
-    print("\nInput Devices:")
+    result = []
     for idx, d in enumerate(devices):
         if d['max_input_channels'] > 0:
             api_name = host_apis[d['hostapi']]['name']
-            is_asio = "ASIO" in api_name or "ASIO" in d['name']
-            asio_tag = "[ASIO] " if is_asio else ""
-            print(f"  Device #{idx}: {asio_tag}{d['name']} (API: {api_name}, Input Ch: {d['max_input_channels']}, Default SR: {int(d['default_samplerate'])}Hz)")
+            is_asio = "ASIO" in api_name.upper() or "ASIO" in d['name'].upper()
+            result.append({
+                "id": idx,
+                "name": d['name'],
+                "api": api_name,
+                "is_asio": is_asio,
+                "channels": d['max_input_channels'],
+                "default_sr": int(d['default_samplerate'])
+            })
+    return result
+
+def list_devices():
+    """Prints list of all audio devices and host APIs, highlighting ASIO devices."""
+    print("=================== AUDIO DEVICE LIST ===================")
+    input_devs = get_audio_input_devices()
+    for d in input_devs:
+        asio_tag = "[ASIO] " if d['is_asio'] else ""
+        print(f"  Device #{d['id']}: {asio_tag}{d['name']} (API: {d['api']}, Input Ch: {d['channels']}, Default SR: {d['default_sr']}Hz)")
     print("=========================================================\n")
 
 def nnls_coordinate_descent(AtA, Aty, max_iter=15):
@@ -42,7 +50,6 @@ def nnls_coordinate_descent(AtA, Aty, max_iter=15):
     x = np.zeros(N, dtype=np.float32)
     for _ in range(max_iter):
         for j in range(N):
-            # Compute step using precomputed AtA and Aty
             grad = Aty[j] - AtA[j] @ x + AtA[j, j] * x[j]
             x[j] = max(0.0, grad / AtA[j, j]) if AtA[j, j] > 0 else 0.0
     return x
@@ -85,21 +92,17 @@ def detect_pitches_nnls(audio_chunk, sr, A, AtA, idx_min, idx_max, ref_pitch=440
         return [], np.zeros(12, dtype=np.float32), rms
         
     n_fft = len(audio_chunk)
-    # Apply Hanning window
     windowed = audio_chunk * np.hanning(n_fft)
     
-    # Compute FFT
     fft_vals = np.fft.rfft(windowed)
     mags = np.abs(fft_vals)
     
-    # 1. HPS (Harmonic Product Spectrum) - Downsample by 2 and 3 and multiply
     hps = np.copy(mags)
     L2 = len(mags[::2])
     hps[:L2] *= mags[::2]
     L3 = len(mags[::3])
     hps[:L3] *= mags[::3]
     
-    # Normalize HPS slice
     hps_max = np.max(hps[idx_min:idx_max]) if len(hps[idx_min:idx_max]) > 0 else 0.0
     if hps_max > 0:
         hps /= hps_max
@@ -107,10 +110,8 @@ def detect_pitches_nnls(audio_chunk, sr, A, AtA, idx_min, idx_max, ref_pitch=440
     y = hps[idx_min:idx_max]
     Aty = A.T @ y
     
-    # 2. NNLS using precomputed AtA
     x = nnls_coordinate_descent(AtA, Aty)
     
-    # 3. Extract detected notes and chroma
     detected = []
     chroma = np.zeros(12, dtype=np.float32)
     
@@ -118,9 +119,7 @@ def detect_pitches_nnls(audio_chunk, sr, A, AtA, idx_min, idx_max, ref_pitch=440
         midi = 40 + j
         chroma[midi % 12] += x[j]
         
-        # Note activation threshold
         if x[j] > 0.018:
-            # Local max filter to avoid adjacent bleed triggers
             is_local_max = True
             if j > 0 and x[j] < x[j - 1]:
                 is_local_max = False
@@ -136,7 +135,6 @@ def detect_pitches_nnls(audio_chunk, sr, A, AtA, idx_min, idx_max, ref_pitch=440
                     "name": f"{note_name}{octave}"
                 })
                 
-    # Normalize chroma
     c_sum = np.sum(chroma)
     if c_sum > 0:
         chroma /= c_sum
@@ -149,47 +147,81 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
     audio_queue = asyncio.Queue()
     loop = asyncio.get_running_loop()
     
+    input_devs = get_audio_input_devices()
+    current_device_id = device_idx
+
+    if current_device_id is None:
+        asio_devs = [d for d in input_devs if d['is_asio']]
+        if asio_devs:
+            current_device_id = asio_devs[0]['id']
+        elif input_devs:
+            current_device_id = input_devs[0]['id']
+        else:
+            current_device_id = 0
+
     monitor_enabled = False
     monitor_volume = 0.7
+    ref_pitch_val = 440.0
 
     def sd_callback(indata, outdata, frames, time_info, status):
         if status:
             logger.warning(f"SoundDevice status warning: {status}")
-        # Send data buffer to asyncio loop
         loop.call_soon_threadsafe(audio_queue.put_nowait, indata.copy()[:, 0])
         if monitor_enabled:
             outdata[:] = indata * monitor_volume
         else:
             outdata.fill(0)
 
-    ref_pitch_val = 440.0
     bin_width = sample_rate / buffer_size
     min_freq = 70.0
     max_freq = 1200.0
     idx_min = int(round(min_freq / bin_width))
     idx_max = int(round(max_freq / bin_width))
     
-    # Precompute initial matrix A and AtA
     A_matrix, AtA_matrix = precompute_A(sample_rate, buffer_size, ref_pitch_val)
 
+    stream_restart_event = asyncio.Event()
+
+    async def get_device_payload():
+        return json.dumps({
+            "type": "asio_device_list",
+            "devices": get_audio_input_devices(),
+            "current_device_id": current_device_id
+        })
+
     async def ws_handler(websocket):
-        nonlocal A_matrix, AtA_matrix, ref_pitch_val, monitor_enabled, monitor_volume
+        nonlocal A_matrix, AtA_matrix, ref_pitch_val, monitor_enabled, monitor_volume, current_device_id
         logger.info(f"Client connected from {websocket.remote_address}")
         connected_clients.add(websocket)
+
+        try:
+            await websocket.send(await get_device_payload())
+        except Exception as e:
+            logger.error(f"Error sending device payload: {e}")
+
         try:
             async for message in websocket:
                 try:
                     data = json.loads(message)
-                    if data.get("type") == "set_ref_pitch":
+                    msg_type = data.get("type")
+                    if msg_type == "set_ref_pitch":
                         val = float(data.get("value", 440.0))
                         if 425.0 <= val <= 455.0:
                             logger.info(f"Updating reference pitch to {val}Hz")
                             ref_pitch_val = val
                             A_matrix, AtA_matrix = precompute_A(sample_rate, buffer_size, val)
-                    elif data.get("type") == "set_monitoring":
+                    elif msg_type == "set_monitoring":
                         monitor_enabled = bool(data.get("enabled", False))
                         monitor_volume = float(data.get("volume", 0.7))
                         logger.info(f"Updated monitoring: enabled={monitor_enabled}, vol={monitor_volume}")
+                    elif msg_type == "get_asio_devices":
+                        await websocket.send(await get_device_payload())
+                    elif msg_type == "select_asio_device":
+                        new_id = int(data.get("device_id"))
+                        if new_id != current_device_id:
+                            logger.info(f"Switching active audio device to #{new_id}")
+                            current_device_id = new_id
+                            stream_restart_event.set()
                 except Exception as e:
                     logger.error(f"Error handling websocket message: {e}")
         except websockets.exceptions.ConnectionClosed:
@@ -198,27 +230,30 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
             connected_clients.remove(websocket)
             logger.info(f"Client disconnected from {websocket.remote_address}")
 
-    # Start WebSocket Server
     server = await websockets.serve(ws_handler, host, port)
     logger.info(f"WebSocket server started on ws://{host}:{port}")
-    
-    # We maintain a sliding buffer of size `buffer_size` (8192) with a hop size of `hop_size` (2048)
-    # This delivers updates every ~46ms while having frequency resolution of an 8192 FFT.
-    hop_size = 2048
-    sliding_buf = np.zeros(buffer_size, dtype=np.float32)
-            
-    # Select audio stream
-    try:
-        device_info = sd.query_devices(device_idx)
-        logger.info(f"Opening input device #{device_idx}: {device_info['name']}")
-        
-        # Attempt to open duplex Stream for hardware-level zero latency direct monitoring
+
+    while True:
+        stream_restart_event.clear()
+        while not audio_queue.empty():
+            audio_queue.get_nowait()
+
+        try:
+            device_info = sd.query_devices(current_device_id)
+            logger.info(f"Opening audio input device #{current_device_id}: {device_info['name']}")
+        except Exception as dev_e:
+            logger.error(f"Device #{current_device_id} query failed: {dev_e}")
+            input_devs = get_audio_input_devices()
+            if input_devs:
+                current_device_id = input_devs[0]['id']
+                device_info = sd.query_devices(current_device_id)
+
         try:
             stream = sd.Stream(
-                device=device_idx,
+                device=current_device_id,
                 channels=(1, 1),
                 samplerate=sample_rate,
-                blocksize=hop_size,
+                blocksize=2048,
                 dtype='float32',
                 callback=sd_callback
             )
@@ -230,59 +265,56 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                 loop.call_soon_threadsafe(audio_queue.put_nowait, indata.copy()[:, 0])
 
             stream = sd.InputStream(
-                device=device_idx,
+                device=current_device_id,
                 channels=1,
                 samplerate=sample_rate,
-                blocksize=hop_size,
+                blocksize=2048,
                 dtype='float32',
                 callback=input_only_callback
             )
-        
+
+        payload_dev = await get_device_payload()
+        for client in list(connected_clients):
+            try:
+                await client.send(payload_dev)
+            except Exception:
+                pass
+
         with stream:
-            logger.info(f"ASIO recording started successfully at {sample_rate}Hz.")
+            logger.info(f"Audio capture active on device #{current_device_id} ({device_info['name']}).")
+            hop_size = 2048
+            sliding_buf = np.zeros(buffer_size, dtype=np.float32)
             prev_rms = 0.0
             prev_notes = []
             prev_chroma = np.zeros(12, dtype=np.float32).tolist()
-            
-            while True:
-                # Wait for next audio chunk from sounddevice thread
-                new_chunk = await audio_queue.get()
-                
-                # Shift buffer and insert new chunk
+
+            while not stream_restart_event.is_set():
+                try:
+                    new_chunk = await asyncio.wait_for(audio_queue.get(), timeout=0.5)
+                except asyncio.TimeoutError:
+                    continue
+
                 sliding_buf[:-hop_size] = sliding_buf[hop_size:]
                 sliding_buf[-hop_size:] = new_chunk
-                
-                # Measure current RMS
+
                 rms = float(np.sqrt(np.mean(sliding_buf**2)))
-                
-                # Transient Detection:
-                # If RMS rises suddenly by more than 2.0x, and it's above absolute threshold (0.005),
-                # we bypass new detection and hold the previous frame's notes.
                 is_transient = (rms > 2.0 * prev_rms) and (rms > 0.005) and (prev_rms > 0.001)
-                
+
                 chroma = np.zeros(12, dtype=np.float32).tolist()
                 if is_transient:
                     notes = prev_notes
                     chroma = prev_chroma
                 else:
-                    # Detect pitches using HPS + NNLS
                     notes, chroma_arr, rms = detect_pitches_nnls(
-                        sliding_buf, 
-                        sample_rate, 
-                        A_matrix,
-                        AtA_matrix,
-                        idx_min,
-                        idx_max,
-                        ref_pitch=ref_pitch_val,
-                        sens_threshold=sens_thr
+                        sliding_buf, sample_rate, A_matrix, AtA_matrix, idx_min, idx_max,
+                        ref_pitch=ref_pitch_val, sens_threshold=sens_thr
                     )
                     chroma = chroma_arr.tolist()
                     prev_notes = notes
                     prev_chroma = chroma
-                    
+
                 prev_rms = rms
-                
-                # Prepare JSON response
+
                 payload_data = {
                     "notes": notes,
                     "rms": float(rms),
@@ -292,21 +324,17 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                     payload_data["pcm"] = np.round(new_chunk * monitor_volume, 4).tolist()
 
                 payload = json.dumps(payload_data)
-                
-                # Broadcast payload to all connected clients
+
                 if connected_clients:
                     await asyncio.gather(
                         *[asyncio.create_task(client.send(payload)) for client in connected_clients],
                         return_exceptions=True
                     )
-                
+
                 audio_queue.task_done()
-                
-    except Exception as e:
-        logger.error(f"Error running audio stream: {e}", exc_info=True)
-        server.close()
-        await server.wait_closed()
-        raise e
+
+        logger.info(f"Switching audio device #{current_device_id}...")
+        await asyncio.sleep(0.1)
 
 def main():
     parser = argparse.ArgumentParser(description="ASIO to WebSocket Pitch Transceiver for Scale Heard Fretboard Guide")
@@ -320,16 +348,10 @@ def main():
     
     args = parser.parse_args()
     
-    if args.list or args.device is None:
+    if args.list:
         list_devices()
-        if args.list:
-            sys.exit(0)
-        else:
-            print("Please run referencing a specific device, e.g.:")
-            print("  python asio_server.py --device 3")
-            sys.exit(0)
+        sys.exit(0)
             
-    # Run the server loop
     try:
         asyncio.run(audio_broadcaster(
             device_idx=args.device,
