@@ -4,15 +4,16 @@
 
 ---
 
-## 🖥️ [v1.9.1] - 원클릭 독립 데스크톱 패키징 (GuitarScaleTuner.exe) 구축 (2026-08-08)
+## 🖥️ [v1.9.1] - 원클릭 독립 데스크톱 패키징 (GuitarScaleTuner.exe) & 로컬 서버 접속 안정화 (2026-08-08)
 
 ### 📌 개요
-콘솔(CMD) 창 노출 없이 더블 클릭 한 번으로 ASIO 오디오 엔진과 HTTPS 웹 서버를 백그라운드에서 동시 기동하고 기본 브라우저를 자동 오픈해주는 무설치 원클릭 실행 패키지(`GuitarScaleTuner.exe`)를 빌드 구축했습니다.
+콘솔(CMD) 창 노출 없이 더블 클릭 한 번으로 ASIO 오디오 엔진과 웹 서버를 백그라운드에서 동시 기동하고 기본 브라우저를 자동 오픈해주는 무설치 원클릭 실행 패키지(`GuitarScaleTuner.exe`)를 빌드 구축하고, `localhost:8000` 접속 거부(`ERR_CONNECTION_REFUSED`) 예외 현상을 완벽하게 해결했습니다.
 
 ### 🛠️ 주요 변경사항
-* **통합 엔진 엔트리포인트 탑재 (`GuitarScaleTuner.py`)**: ASIO 웹소켓 연산 엔진과 HTTPS 보안 서빙 엔진을 백그라운드 멀티 데몬 쓰레드로 묶어 단일 프로세스로 동작하도록 구조 통합.
-* **PyInstaller 독립 실행 파일 패키징 (`build_exe.py`)**: 콘솔 창 없는 무설치 실행 파일(`dist/GuitarScaleTuner/GuitarScaleTuner.exe`) 생성 자동화.
-* **무소음 런처 지원 (`GuitarScaleTuner.vbs`)**: CMD 창 노출 없는 무소음 원클릭 가동 지원.
+* **SSL/암호화 라이브러리 메소드 오류 수정 (`run_https_server.py`)**: `cryptography` 라이브러리의 `private_bytes()` 호환성 버그를 수정하여 서버 미기동 현상 차단.
+* **로컬 웹 서버 접속 최적화 (`http://localhost:8000`)**: 브라우저 보안 컨텍스트(Secure Context) 표준에 맞추어 SSL 인증서 경고 없이 즉시 마이크/오디오 권한이 승인되는 `http://localhost:8000` 기본 접속 채널 적용.
+* **통합 엔진 엔트리포인트 탑재 (`GuitarScaleTuner.py`)**: ASIO 웹소켓 연산 엔진과 웹 서빙 엔진을 백그라운드 데몬 쓰레드로 묶어 단일 프로세스로 동작하도록 구조 통합.
+* **PyInstaller 독립 실행 파일 패키징 (`build_exe.py`)**: 콘솔 창 없는 무설치 실행 파일(`dist/GuitarScaleTuner/GuitarScaleTuner.exe`) 빌드 완성.
 
 ---
 

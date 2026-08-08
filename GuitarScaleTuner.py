@@ -44,8 +44,8 @@ def main():
     https_thread = threading.Thread(target=start_https_server, daemon=True)
     https_thread.start()
 
-    time.sleep(1.5)
-    url = "https://localhost:8000"
+    time.sleep(1.0)
+    url = "http://localhost:8000"
     logger.info(f"Opening app interface at {url}...")
     webbrowser.open(url)
 
