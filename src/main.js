@@ -359,16 +359,16 @@ async function rebuildDeviceDropdown() {
   const prevValue = sel.value;
   sel.innerHTML = "";
 
-  // 1. ASIO Devices (Python Server)
+  // 1. ASIO & Audio Interfaces (Python Server)
   if (currentAsioDevices && currentAsioDevices.length > 0) {
     const asioGroup = document.createElement("optgroup");
-    asioGroup.label = `⚡ ASIO Audio Interfaces`;
+    asioGroup.label = `⚡ 오디오 인터페이스 & 백엔드 장치 (Python)`;
 
     currentAsioDevices.forEach(d => {
       const o = document.createElement("option");
       o.value = "asio_dev_" + d.id;
-      const isAsioTag = d.is_asio ? "[ASIO] " : "";
-      o.textContent = `⚡ ${isAsioTag}${d.name} (${d.api})`;
+      const isAsioTag = d.is_asio ? "⚡ " : "🎙️ ";
+      o.textContent = `${isAsioTag}${d.name} [${d.api}]`;
       asioGroup.appendChild(o);
     });
     sel.appendChild(asioGroup);
@@ -652,6 +652,10 @@ function drawFB() {
   }
 
   const isChordMode = (guideMode === "chord");
+  if (!isChordMode) {
+    voicingMode = false;
+    currentVoicing = null;
+  }
   const currentChordPcs = isChordMode ? getChordPcs(rootPc, chordTypeVal) : [];
 
   for (let s = 0; s < numStrings; s++) {
@@ -1457,49 +1461,48 @@ function getChordPcs(rootPc, chordTypeVal) {
 }
 
 function getChordVoicings(rootPc, chordTypeVal) {
-  const c = rootPc;
   const voicingsMap = {
     major: [
-      { name: "CAGED - E Shape", frets: [0, 0, 1, 2, 2, 0].map(x => x + c) },
-      { name: "CAGED - A Shape", frets: [0, 2, 2, 2, 0, null].map(x => x !== null ? x + c : null) },
-      { name: "CAGED - C Shape", frets: [0, 1, 0, 2, 3, null].map(x => x !== null ? x + c : null) },
-      { name: "CAGED - D Shape", frets: [2, 3, 2, 0, null, null].map(x => x !== null ? x + c : null) }
+      { name: "CAGED - E Shape", baseRoot: 4, frets: [0, 0, 1, 2, 2, 0] },
+      { name: "CAGED - A Shape", baseRoot: 9, frets: [0, 2, 2, 2, 0, null] },
+      { name: "CAGED - C Shape", baseRoot: 0, frets: [0, 1, 0, 2, 3, null] },
+      { name: "CAGED - D Shape", baseRoot: 2, frets: [2, 3, 2, 0, null, null] }
     ],
     minor: [
-      { name: "E Minor Shape", frets: [0, 0, 0, 2, 2, 0].map(x => x + c) },
-      { name: "A Minor Shape", frets: [0, 1, 2, 2, 0, null].map(x => x !== null ? x + c : null) },
-      { name: "D Minor Shape", frets: [1, 3, 2, 0, null, null].map(x => x !== null ? x + c : null) }
+      { name: "E Minor Shape", baseRoot: 4, frets: [0, 0, 0, 2, 2, 0] },
+      { name: "A Minor Shape", baseRoot: 9, frets: [0, 1, 2, 2, 0, null] },
+      { name: "D Minor Shape", baseRoot: 2, frets: [1, 3, 2, 0, null, null] }
     ],
     dom7: [
-      { name: "E7 Shape", frets: [0, 0, 1, 0, 2, 0].map(x => x + c) },
-      { name: "A7 Shape", frets: [0, 2, 0, 2, 0, null].map(x => x !== null ? x + c : null) }
+      { name: "E7 Shape", baseRoot: 4, frets: [0, 3, 1, 0, 2, 0] },
+      { name: "A7 Shape", baseRoot: 9, frets: [0, 2, 0, 2, 0, null] }
     ],
     maj7: [
-      { name: "EMaj7 Shape", frets: [0, 0, 1, 1, 2, 0].map(x => x + c) },
-      { name: "AMaj7 Shape", frets: [0, 2, 1, 2, 0, null].map(x => x !== null ? x + c : null) }
+      { name: "EMaj7 Shape", baseRoot: 4, frets: [0, 0, 1, 1, 2, 0] },
+      { name: "AMaj7 Shape", baseRoot: 9, frets: [0, 2, 1, 2, 0, null] }
     ],
     min7: [
-      { name: "Em7 Shape", frets: [0, 0, 0, 0, 2, 0].map(x => x + c) },
-      { name: "Am7 Shape", frets: [0, 1, 0, 2, 0, null].map(x => x !== null ? x + c : null) }
+      { name: "Em7 Shape", baseRoot: 4, frets: [0, 3, 0, 0, 2, 0] },
+      { name: "Am7 Shape", baseRoot: 9, frets: [0, 1, 0, 2, 0, null] }
     ]
   };
 
   const list = voicingsMap[chordTypeVal] || voicingsMap.major;
   return list.map(v => {
-    let minF = Infinity;
-    v.frets.forEach(f => {
-      if (f !== null && f < minF) minF = f;
-    });
-    let shift = 0;
-    if (minF < 0) shift = Math.ceil(-minF / 12) * 12;
-    else if (minF > 12) shift = -Math.floor(minF / 12) * 12;
+    const offset = pc(rootPc - v.baseRoot);
+    let shiftedFrets = v.frets.map(f => (f !== null ? f + offset : null));
 
-    const shiftedFrets = v.frets.map(f => {
-      if (f === null) return null;
-      let finalF = (f + shift) % 12;
-      if (finalF < 0) finalF += 12;
-      return finalF;
-    });
+    const validF = shiftedFrets.filter(f => f !== null);
+    if (validF.length > 0) {
+      const maxF = Math.max(...validF);
+      const minF = Math.min(...validF);
+      if (maxF > 14) {
+        shiftedFrets = shiftedFrets.map(f => (f !== null ? f - 12 : null));
+      } else if (minF < 0) {
+        shiftedFrets = shiftedFrets.map(f => (f !== null ? f + 12 : null));
+      }
+    }
+
     return { name: v.name, frets: shiftedFrets };
   });
 }

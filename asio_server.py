@@ -8,6 +8,13 @@ import numpy as np
 import sounddevice as sd
 import websockets
 
+import os
+
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, 'w')
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, 'w')
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -24,10 +31,13 @@ def get_audio_input_devices():
     for idx, d in enumerate(devices):
         if d['max_input_channels'] > 0:
             api_name = host_apis[d['hostapi']]['name']
-            is_asio = "ASIO" in api_name.upper() or "ASIO" in d['name'].upper()
+            if "WDM-KS" in api_name.upper():
+                continue
+            name = d['name']
+            is_asio = "ASIO" in api_name.upper() or "ASIO" in name.upper() or "USB" in name.upper() or "CODEC" in name.upper()
             result.append({
                 "id": idx,
-                "name": d['name'],
+                "name": name,
                 "api": api_name,
                 "is_asio": is_asio,
                 "channels": d['max_input_channels'],
@@ -249,29 +259,43 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                 device_info = sd.query_devices(current_device_id)
 
         try:
-            stream = sd.Stream(
-                device=current_device_id,
-                channels=(1, 1),
-                samplerate=sample_rate,
-                blocksize=2048,
-                dtype='float32',
-                callback=sd_callback
-            )
-        except Exception as duplex_e:
-            logger.info(f"Duplex stream unavailable ({duplex_e}), falling back to InputStream")
-            def input_only_callback(indata, frames, time_info, status):
-                if status:
-                    logger.warning(f"SoundDevice status warning: {status}")
-                loop.call_soon_threadsafe(audio_queue.put_nowait, indata.copy()[:, 0])
+            try:
+                stream = sd.Stream(
+                    device=current_device_id,
+                    channels=(1, 1),
+                    samplerate=sample_rate,
+                    blocksize=2048,
+                    dtype='float32',
+                    callback=sd_callback
+                )
+            except Exception as duplex_e:
+                logger.info(f"Duplex stream unavailable ({duplex_e}), falling back to InputStream")
+                def input_only_callback(indata, frames, time_info, status):
+                    if status:
+                        logger.warning(f"SoundDevice status warning: {status}")
+                    loop.call_soon_threadsafe(audio_queue.put_nowait, indata.copy()[:, 0])
 
-            stream = sd.InputStream(
-                device=current_device_id,
-                channels=1,
-                samplerate=sample_rate,
-                blocksize=2048,
-                dtype='float32',
-                callback=input_only_callback
-            )
+                stream = sd.InputStream(
+                    device=current_device_id,
+                    channels=1,
+                    samplerate=sample_rate,
+                    blocksize=2048,
+                    dtype='float32',
+                    callback=input_only_callback
+                )
+        except Exception as stream_err:
+            logger.error(f"Failed to open stream on device #{current_device_id}: {stream_err}")
+            err_payload = json.dumps({
+                "type": "asio_error",
+                "message": f"선택한 장치를 열 수 없습니다: {stream_err}. 다른 오디오 장치(WASAPI/DirectSound)를 선택해 주세요."
+            })
+            for client in list(connected_clients):
+                try:
+                    await client.send(err_payload)
+                except Exception:
+                    pass
+            await stream_restart_event.wait()
+            continue
 
         payload_dev = await get_device_payload()
         for client in list(connected_clients):
