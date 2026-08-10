@@ -77,7 +77,27 @@ If distributing to non-technical users, you can compile the Python server into a
    ```bash
    pyinstaller --onefile asio_server.py
    ```
-3. The executable will be generated at `dist/asio_server.exe`. Users can run this executable without installing Python or any packages. (You can also update `run_server.bat` to run `dist/asio_server.exe` instead).
+3. The executable will be generated at `dist/GuitarScaleTuner.exe`. Users can run this executable without installing Python or any packages. (You can also update `run_server.bat` to run `dist/GuitarScaleTuner.exe` instead).
+
+---
+
+## 🎧 Voicemeeter & Low-Latency Optimization Guide (보이스미터 & 레이턴시 최적화 가이드)
+
+오디오 인터페이스(기타 입력)와 메인보드 리얼텍(Realtek 헤드셋/스피커 출력) 혼용 시 지연 시간(레이턴시)을 3~5ms 대로 최소화하는 가이드입니다.
+
+### 1. 보이스미터(Voicemeeter) 버퍼 & 드라이버 설정
+- **A1 출력 드라이버 변경**: `MME: Realtek` 대신 **`WDM: Realtek`** 또는 **`KS: Realtek` (Kernel Streaming)** 선택.
+- **버퍼 크기 대폭 축소**: `Menu` ➔ `System Settings / Options` ➔ `Buffering WDM`을 **`128`** 또는 **`256`** samples로 설정 *(128 samples 시 지연 약 2.6ms)*.
+- **샘플 레이트 통일**: `Preferred Sample Rate`를 **`48000 Hz`**로 통일.
+
+### 2. ASIO4ALL / FlexASIO 초저지연 드라이버 활용 (가장 추천 ⚡)
+- [ASIO4ALL 공식 사이트(asio4all.org)](https://asio4all.org/) 무료 설치 후 제어판에서:
+  - **입력(Input)**: 오디오 인터페이스 (`USB Audio CODEC` 등) 활성화
+  - **출력(Output)**: Realtek 헤드셋 활성화
+  - **버퍼 크기**: **`128 Samples`** 이하로 지정하여 3~5ms 초저지연 달성.
+
+### 3. 웹 UI `실시간 모니터링 (소리 출력)` 중복 재생 해제
+- 보이스미터나 오디오 인터페이스로 기타 소리를 이미 직접 듣고 계시다면, **웹 화면 하단 `실시간 모니터링 (소리 출력)` 체크박스를 해제**해 주세요. 중복 오디오 지연 없이 100% 쾌적하게 음정 인식 및 지판 가이드만 수행합니다.
 
 ## How it works
 
