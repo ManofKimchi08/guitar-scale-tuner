@@ -4,12 +4,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Scales, heard.</title>
+  <title>Scales, heard. 🎸</title>
   <meta name="description" content="Fretboard scale guide with live guitar pitch recognition.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
-    href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="src/style.css">
 </head>
@@ -17,299 +17,416 @@
 <body>
   <div class="wrap">
 
-    <div class="head">
-      <div>
+    <!-- Studio Minimal Top Bar -->
+    <header class="studio-header">
+      <div class="brand">
         <h1>Scales, <i>heard.</i></h1>
-        <p data-i18n="tagline">Fretboard scale guide + live guitar pitch recognition</p>
-      </div>
-      <div class="head-right">
-        <select id="langSel" class="lang"></select>
-        <div class="power"><span id="powerTxt">OFF</span>
+        <div class="power">
           <div class="led" id="led"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="row">
-      <button id="startBtn">▶ Start mic</button>
-      <div class="field"><small data-i18n="lblDevice">Input device</small>
-        <select id="deviceSel">
-          <option value="asio_ws">⚡ ASIO (Python Server)</option>
-        </select>
-      </div>
-      <div class="field"><small data-i18n="lblOutputDevice">Output device</small>
-        <select id="outputDeviceSel">
-          <option value="" data-i18n="optDefaultOutput">Default (System Output)</option>
-        </select>
-      </div>
-      <div class="stats">
-        <div class="stat"><b id="scoreEl">0</b><small data-i18n="statScore">Correct</small></div>
-        <div class="stat"><b id="streakEl">0</b><small data-i18n="statStreak">Streak</small></div>
-      </div>
-    </div>
-
-    <div class="grid">
-      <div class="panel">
-        <div class="card-h" data-i18n="cardRecognition">Live recognition</div>
-        <div class="card-sub" id="modeSub" data-i18n="subPractice">Practice — play any note and see if it's in the
-          scale.</div>
-        <div class="vp">
-          <div class="prompt" id="prompt" data-i18n="promptPlay">Play your guitar</div>
-          <div class="big" id="bigNote">––</div>
-          <div class="deg" id="degTxt"></div>
-          <div class="verdict idle" id="verdict" data-i18n="verdictIdle">Idle</div>
-          <div class="hz" id="hz"></div>
-          <div id="chordQuizInfo"
-            style="display: none; font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.4; border-top: 1px dashed var(--line); padding-top: 6px;">
-          </div>
-          <div class="meter">
-            <div class="c"></div>
-            <div class="needle" id="needle"></div>
-          </div>
-          <!-- 6-string tuner indicator block -->
-          <div class="tuner-layout" id="tunerLayout">
-            <div class="tuner-string" data-string-idx="5">
-              <span class="string-label">6E</span>
-              <div class="tuning-peg"></div>
-            </div>
-            <div class="tuner-string" data-string-idx="4">
-              <span class="string-label">5A</span>
-              <div class="tuning-peg"></div>
-            </div>
-            <div class="tuner-string" data-string-idx="3">
-              <span class="string-label">4D</span>
-              <div class="tuning-peg"></div>
-            </div>
-            <div class="tuner-string" data-string-idx="2">
-              <span class="string-label">3G</span>
-              <div class="tuning-peg"></div>
-            </div>
-            <div class="tuner-string" data-string-idx="1">
-              <span class="string-label">2B</span>
-              <div class="tuning-peg"></div>
-            </div>
-            <div class="tuner-string" data-string-idx="0">
-              <span class="string-label">1E</span>
-              <div class="tuning-peg"></div>
-            </div>
-          </div>
-          <!-- Pitch Trajectory & Bending Tracker Canvas -->
-          <div class="pitch-tracker-box" style="margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 10px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <span style="font-size: 11px; font-weight: bold; color: var(--muted);" data-i18n="cardPitchTracker">Pitch Trajectory & Bending Analyzer</span>
-              <span style="font-size: 11px; color: var(--ok);"><span data-i18n="lblStabilityScore">Stability</span>: <b id="pitchStabilityVal">100%</b></span>
-            </div>
-            <canvas id="pitchCanvas" width="260" height="70" style="width: 100%; height: 70px; background: #0b0d10; border: 1px solid var(--line); border-radius: 6px; display: block;"></canvas>
-          </div>
+          <span id="powerTxt">OFF</span>
         </div>
       </div>
 
-      <div class="panel">
-        <div class="card-h" data-i18n="cardOptions">Options</div>
-        <div class="card-sub" data-i18n="subOptions">Ported from the original</div>
-        <div class="field" style="margin-bottom:12px">
-          <div class="slide-toggle" id="modeToggle">
-            <div class="slide-handler" id="modeHandler"></div>
-            <span class="toggle-label left" id="togglePractice" data-i18n="modePractice">Practice</span>
-            <span class="toggle-label right" id="toggleQuiz" data-i18n="modeQuiz">Quiz</span>
-          </div>
+      <div class="studio-actions">
+        <!-- Dynamic Quiz Stats Pill -->
+        <div class="quiz-stats-pill" id="quizStatsPill" style="display: none;">
+          <span class="stat-item"><b id="scoreEl">0</b> <small data-i18n="statScore">Correct</small></span>
+          <span class="stat-divider">/</span>
+          <span class="stat-item"><b id="streakEl">0</b> <small data-i18n="statStreak">Streak</small></span>
         </div>
-        <div class="field" style="margin-bottom:12px">
-          <div class="slide-toggle" id="guideToggle">
-            <div class="slide-handler" id="guideHandler"></div>
-            <span class="toggle-label left" id="toggleScale" data-i18n="guideScale">Scale</span>
-            <span class="toggle-label right" id="toggleChord" data-i18n="guideChord">Chord</span>
-          </div>
-        </div>
-        <div class="field" style="margin-bottom:12px">
-          <div class="slide-toggle" id="labelToggle">
-            <div class="slide-handler" id="labelHandler"></div>
-            <span class="toggle-label left" id="toggleName" data-i18n="labelName">Note name</span>
-            <span class="toggle-label right" id="toggleDeg" data-i18n="labelDegree">Degree</span>
-          </div>
-        </div>
-        <div class="field" style="margin-bottom:12px">
-          <div class="slide-toggle" id="handToggle">
-            <div class="slide-handler" id="handHandler"></div>
-            <span class="toggle-label left" id="toggleLeft" data-i18n="handLeft">Left hand</span>
-            <span class="toggle-label right" id="toggleRight" data-i18n="handRight">Right hand</span>
-          </div>
-        </div>
-        <div class="field" style="margin-top:16px; border-top:1px dashed var(--line); padding-top:14px;">
-          <div class="card-h" data-i18n="cardScanner">Scale Scanner</div>
-          <div class="card-sub" data-i18n="subScanner">Play for 10-15 seconds to auto-detect your scale.</div>
-          <div style="display: flex; gap: 10px; align-items: center; margin-top: 10px;">
-            <button id="btnScanStart" class="ghost" style="padding: 8px 14px; font-size: 12px;" data-i18n="btnScanStart">Start Scan</button>
-            <button id="btnScanStop" class="btn danger" style="display: none; padding: 8px 14px; font-size: 12px;" data-i18n="btnScanStop">Stop Scan</button>
-            <div id="scanProgress" style="display: none; flex-grow: 1; height: 8px; background: #222; border-radius: 4px; overflow: hidden; border: 1px solid var(--line);">
-              <div id="scanBar" style="height: 100%; width: 0%; background: var(--tone); transition: width 0.1s linear;"></div>
-            </div>
-          </div>
-          <div id="scanResults" style="display: none; margin-top: 12px; font-size: 11px; line-height: 1.5; color: var(--ink); background: #0b0d10; border: 1px solid var(--line); padding: 10px; border-radius: 8px;">
-          </div>
-        </div>
-      </div>
-    </div>
 
-    <div class="panel" style="margin-bottom: 16px;">
-      <div class="panel-header">
-        <div class="card-h" data-i18n="cardFretboard" style="margin-bottom: 0;">Fretboard</div>
-        <div class="header-selectors-row1">
-          <div class="field"><small data-i18n="lblKey">Key (root)</small>
-            <select id="keySel"></select>
-          </div>
-          <div class="field" id="scaleField"><small data-i18n="lblScale">Scale</small>
-            <select id="scaleSel"></select>
-          </div>
-          <button id="btnCircleOfFifths" class="ghost" style="padding: 6px 10px; font-size: 11px; height: 32px; align-self: flex-end;" data-i18n="btnCircleOfFifths">⭕ Circle of Fifths</button>
-          <div class="field" id="chordTypeField" style="display: none;"><small data-i18n="lblChord">Chord</small>
-            <select id="chordTypeSel">
-              <option value="major" data-i18n="chord_major">Major</option>
-              <option value="minor" data-i18n="chord_minor">Minor</option>
-              <option value="dom7" data-i18n="chord_dom7">7 (Dom)</option>
-              <option value="maj7" data-i18n="chord_maj7">maj7</option>
-              <option value="min7" data-i18n="chord_min7">min7</option>
-            </select>
-          </div>
-          <div class="field" id="voicingField" style="display: none;"><small data-i18n="lblVoicing">Voicing</small>
-            <select id="voicingSel"></select>
-          </div>
+        <button id="startBtn" class="btn-primary-action">▶ Start mic</button>
+        <div class="compact-field">
+          <select id="deviceSel" class="compact-select">
+            <option value="asio_ws">⚡ ASIO (Python Server)</option>
+          </select>
         </div>
-        <div class="header-selectors-row2">
-          <div class="field"><small data-i18n="lblTuning">Tuning</small>
-            <select id="tuningModeSel">
-              <option value="preset" data-i18n="optTuningPreset">Preset</option>
-              <option value="custom" data-i18n="optTuningCustom">Custom</option>
-            </select>
+        <select id="langSel" class="compact-select lang-select"></select>
+
+        <!-- Prominent Settings Drawer Trigger Button (Matching Screenshot Style) -->
+        <button id="btnToggleSettings" class="btn-settings-prominent">
+          <span class="settings-gear">⚙️</span>
+          <span data-i18n="btnSettings">설정</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ======================================================== -->
+    <!-- 🎸 MAIN PRACTICE HUB (ALWAYS VISIBLE HERO SECTION)       -->
+    <!-- ======================================================== -->
+    <main class="main-fretboard-hub">
+      
+      <!-- Top Control & Live Pitch HUD Grid -->
+      <div class="hud-grid">
+        <!-- Live Pitch Recognition HUD Card -->
+        <div class="panel hud-card">
+          <div class="hud-header">
+            <span class="hud-badge" data-i18n="cardRecognition">LIVE RECOGNITION</span>
+            <div class="verdict idle" id="verdict" data-i18n="verdictIdle">Idle</div>
           </div>
-          <div class="field" id="tuningPresetField"><small data-i18n="lblTuningPreset">Preset Tuning</small>
-            <select id="tuningSel"></select>
-          </div>
-          <div class="field" id="tuningCustomField" style="display: none;"><small data-i18n="lblTuningCustom">Custom
-              Strings (1-6)</small>
-            <div style="display: flex; gap: 4px;">
-              <select id="strSel_0" class="str-sel"
-                style="padding: 6px 4px; font-size: 11px; min-width: 48px;"></select>
-              <select id="strSel_1" class="str-sel"
-                style="padding: 6px 4px; font-size: 11px; min-width: 48px;"></select>
-              <select id="strSel_2" class="str-sel"
-                style="padding: 6px 4px; font-size: 11px; min-width: 48px;"></select>
-              <select id="strSel_3" class="str-sel"
-                style="padding: 6px 4px; font-size: 11px; min-width: 48px;"></select>
-              <select id="strSel_4" class="str-sel"
-                style="padding: 6px 4px; font-size: 11px; min-width: 48px;"></select>
-              <select id="strSel_5" class="str-sel"
-                style="padding: 6px 4px; font-size: 11px; min-width: 48px;"></select>
+
+          <div class="hud-main-display">
+            <div class="hud-left-note">
+              <div class="big-note" id="bigNote">––</div>
+              <div class="note-meta">
+                <div class="deg-tag" id="degTxt"></div>
+                <div class="hz-tag" id="hz"></div>
+              </div>
+            </div>
+
+            <div class="hud-right-meter">
+              <div class="prompt-text" id="prompt" data-i18n="promptPlay">Play your guitar</div>
+              <div class="meter">
+                <div class="c"></div>
+                <div class="needle" id="needle"></div>
+              </div>
+              <div id="chordQuizInfo" style="display: none;" class="chord-quiz-hint"></div>
             </div>
           </div>
         </div>
-      </div>
-      <svg id="fb" viewBox="0 0 840 250" preserveAspectRatio="xMidYMid meet"></svg>
-      <div class="legend" style="margin-top:12px; justify-content: center; margin-bottom: 8px;">
-        <span><i class="d-root"></i><span data-i18n="legendRoot">Root</span></span>
-        <span><i class="d-tone"></i><span data-i18n="legendTone">Scale tone</span></span>
-        <span><i class="d-hit"></i><span data-i18n="legendPlayed">Played note</span></span>
-      </div>
-      <div class="settings">
-        <label class="tooltip-container">
-          <span data-i18n="lblSens" class="tooltip-trigger">Sensitivity</span>
-          <span class="tooltip-text" data-i18n="descSens">Volume threshold. Lower detects quiet plucks but may catch
-            noise. Higher ignores noise but requires stronger plucking.</span>
-          <input type="range" id="sens" min="0.005" max="0.06" step="0.005" value="0.015">
-        </label>
-        <label class="tooltip-container">
-          <span data-i18n="lblStab" class="tooltip-trigger">Stability</span>
-          <span class="tooltip-text" data-i18n="descStab">Confirmation stability. Lower responds faster but is more
-            jittery. Higher is more stable but requires holding the note longer.</span>
-          <input type="range" id="stab" min="2" max="10" step="1" value="4"><span id="stabVal">4</span><span
-            data-i18n="lblFrames">frames</span>
-        </label>
-        <label class="tooltip-container">
-          <span data-i18n="lblRefPitch" class="tooltip-trigger">Reference Pitch</span>
-          <span class="tooltip-text" data-i18n="descRefPitch">A4 reference frequency. Default is 440Hz. Adjust between 425Hz and 455Hz.</span>
-          <input type="range" id="refPitch" min="425" max="455" step="1" value="440"><span id="refPitchVal">440</span><span>Hz</span>
-        </label>
-        <label class="tooltip-container">
-          <span data-i18n="lblMonitor" class="tooltip-trigger">Direct Audio Monitoring</span>
-          <span class="tooltip-text" data-i18n="descMonitor">Output live guitar audio to speakers/headphones with ultra-low latency.</span>
-          <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
-            <input type="checkbox" id="monitorToggle" style="accent-color: var(--tone); cursor: pointer;">
-            <input type="range" id="monitorVol" min="0" max="1" step="0.05" value="0.7" style="width: 60px;">
-            <span id="monitorVolVal" style="font-size: 11px;">70%</span>
-          </div>
-        </label>
-      </div>
-    </div>
 
-    <!-- Practice Tools Grid: Jam Assistant & Speed Metronome -->
-    <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
-      <!-- Backing Track Jam Assistant -->
-      <div class="panel">
-        <div class="card-h" data-i18n="cardJam">Backing Track Jam Assistant</div>
-        <div class="card-sub" data-i18n="subJam">Real-time backing track & chord target notes guide</div>
-        <div style="display: flex; gap: 12px; align-items: center; margin-top: 14px; flex-wrap: wrap;">
-          <button id="btnJam" class="ghost" style="padding: 9px 16px; font-size: 12px;" data-i18n="btnJamPlay">▶ Play Jam Track</button>
-          <div class="field" style="min-width: 100px;">
-            <small>Progression</small>
-            <select id="jamProgSel">
-              <option value="pop">Pop/Rock (I - V - vi - IV)</option>
-              <option value="jazz">Jazz (ii - V - I - VI)</option>
-              <option value="blues">12-Bar Blues (I - IV - I - V)</option>
-              <option value="sad">Pop Minor (i - VI - III - VII)</option>
-            </select>
+        <!-- Fretboard Options & Quick Controls Card -->
+        <div class="panel control-card">
+          <!-- Key / Scale / Chord Primary Selectors -->
+          <div class="fretboard-selectors">
+            <div class="compact-field key-field">
+              <small data-i18n="lblKey">Key</small>
+              <select id="keySel" class="select-styled"></select>
+            </div>
+            <div class="compact-field scale-field" id="scaleField">
+              <small data-i18n="lblScale">Scale</small>
+              <select id="scaleSel" class="select-styled"></select>
+            </div>
+            <button id="btnCircleOfFifths" class="btn-ghost-sm" data-i18n="btnCircleOfFifths">⭕ 5도권 휠</button>
+
+            <div class="compact-field" id="chordTypeField" style="display: none;">
+              <small data-i18n="lblChord">Chord</small>
+              <select id="chordTypeSel" class="select-styled">
+                <option value="major" data-i18n="chord_major">Major</option>
+                <option value="minor" data-i18n="chord_minor">Minor</option>
+                <option value="dom7" data-i18n="chord_dom7">7 (Dom)</option>
+                <option value="maj7" data-i18n="chord_maj7">maj7</option>
+                <option value="min7" data-i18n="chord_min7">min7</option>
+              </select>
+            </div>
+            <div class="compact-field" id="voicingField" style="display: none;">
+              <small data-i18n="lblVoicing">Voicing</small>
+              <select id="voicingSel" class="select-styled"></select>
+            </div>
           </div>
-          <div class="field" style="width: 80px;">
-            <small>BPM (<span id="jamBpmVal">100</span>)</small>
-            <input type="range" id="jamBpm" min="60" max="180" value="100" step="2">
+
+          <!-- Sleek Compact 4-Chip Toggle Controls -->
+          <div class="chip-toggle-grid">
+            <div class="chip-toggle" id="modeToggle">
+              <div class="chip-slider" id="modeHandler"></div>
+              <button type="button" class="chip-btn active" id="togglePractice" data-i18n="modePractice">연습</button>
+              <button type="button" class="chip-btn" id="toggleQuiz" data-i18n="modeQuiz">퀴즈</button>
+            </div>
+
+            <div class="chip-toggle" id="guideToggle">
+              <div class="chip-slider" id="guideHandler"></div>
+              <button type="button" class="chip-btn active" id="toggleScale" data-i18n="guideScale">스케일</button>
+              <button type="button" class="chip-btn" id="toggleChord" data-i18n="guideChord">코드</button>
+            </div>
+
+            <div class="chip-toggle" id="labelToggle">
+              <div class="chip-slider" id="labelHandler"></div>
+              <button type="button" class="chip-btn active" id="toggleName" data-i18n="labelName">음이름</button>
+              <button type="button" class="chip-btn" id="toggleDeg" data-i18n="labelDegree">도수</button>
+            </div>
+
+            <div class="chip-toggle" id="handToggle">
+              <div class="chip-slider" id="handHandler"></div>
+              <button type="button" class="chip-btn" id="toggleLeft" data-i18n="handLeft">왼손</button>
+              <button type="button" class="chip-btn active" id="toggleRight" data-i18n="handRight">오른손</button>
+            </div>
           </div>
-        </div>
-        <div id="jamStatusBox" style="margin-top: 12px; font-size: 12px; color: var(--tone); font-weight: bold; background: #0b0d10; border: 1px solid var(--line); padding: 8px 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
-          <span>Current Chord: <span id="jamCurrentChord" style="color: #fff; font-size: 14px;">––</span></span>
-          <span style="font-size: 11px; color: var(--muted);" id="jamBarCounter">Bar 1/4</span>
         </div>
       </div>
 
-      <!-- Smart Speed-up Metronome -->
-      <div class="panel">
-        <div class="card-h" data-i18n="cardMetronome">Smart Speed Trainer Metronome</div>
-        <div class="card-sub" data-i18n="subMetronome">Auto speed-up metronome for speed training</div>
-        <div style="display: flex; gap: 12px; align-items: center; margin-top: 14px; flex-wrap: wrap;">
-          <button id="btnMetro" class="ghost" style="padding: 9px 16px; font-size: 12px;" data-i18n="btnMetroStart">▶ Metronome</button>
-          <div class="field" style="width: 90px;">
-            <small>BPM (<span id="metroBpmVal">100</span>)</small>
-            <input type="range" id="metroBpm" min="40" max="220" value="100" step="2">
-          </div>
-          <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); cursor: pointer;">
-            <input type="checkbox" id="metroAutoSpeed" checked>
-            <span data-i18n="lblAutoSpeed">Auto Speed-up (+5 BPM / 4 bars)</span>
-          </label>
+      <!-- Hero Fretboard Card -->
+      <div class="panel fretboard-card">
+        <div class="fretboard-wrap">
+          <svg id="fb" viewBox="0 0 840 250" preserveAspectRatio="xMidYMid meet"></svg>
         </div>
-        <div style="display: flex; gap: 6px; margin-top: 12px; justify-content: center;" id="metroBeatDots">
-          <div class="metro-dot" style="width: 12px; height: 12px; border-radius: 50%; background: #222; border: 1px solid var(--line);"></div>
-          <div class="metro-dot" style="width: 12px; height: 12px; border-radius: 50%; background: #222; border: 1px solid var(--line);"></div>
-          <div class="metro-dot" style="width: 12px; height: 12px; border-radius: 50%; background: #222; border: 1px solid var(--line);"></div>
-          <div class="metro-dot" style="width: 12px; height: 12px; border-radius: 50%; background: #222; border: 1px solid var(--line);"></div>
+        
+        <!-- Legend Bar -->
+        <div class="legend">
+          <span><i class="d-root"></i><span data-i18n="legendRoot">Root</span></span>
+          <span><i class="d-tone"></i><span data-i18n="legendTone">Scale tone</span></span>
+          <span><i class="d-hit"></i><span data-i18n="legendPlayed">Played note</span></span>
         </div>
       </div>
-    </div>
+    </main>
 
+    <!-- Global Error Toast -->
     <div class="err" id="err"></div>
-    <div class="note">
-      <b data-i18n="noteAsioTitle">About ASIO.</b>
-      <span data-i18n="noteAsioBody">Browsers can't use ASIO directly. Audio is captured via Web Audio and pitch is
-        detected with autocorrelation. Echo cancellation, noise suppression and auto-gain are turned off
-        automatically. For electric guitar, raise your interface input gain.</span>
+
+    <!-- Minimal About Note -->
+    <div class="studio-footer-note">
+      <span data-i18n="noteAsioTitle" class="note-bold">About ASIO.</span>
+      <span data-i18n="noteAsioBody">Audio is captured via Web Audio and pitch is detected with autocorrelation. Echo cancellation, noise suppression, and auto-gain are turned off automatically.</span>
     </div>
   </div>
 
+  <!-- ======================================================== -->
+  <!-- 📱 SLEEK RIGHT SIDE-DRAWER (MATCHING SCREENSHOT STYLE)    -->
+  <!-- ======================================================== -->
+  <div class="drawer-backdrop" id="sideDrawerBackdrop"></div>
+
+  <aside class="side-drawer" id="sideDrawer">
+    <!-- Drawer Header -->
+    <div class="drawer-header">
+      <div class="drawer-title-box">
+        <span class="drawer-title" data-i18n="drawerTitle">⚙️ 설정 & 보조 도구</span>
+        <span class="drawer-sub" data-i18n="drawerSub">튜너, 백킹 트랙, 스케일 스캐너 및 오디오 세부 설정</span>
+      </div>
+      <button id="btnCloseDrawer" class="btn-close-drawer">✕</button>
+    </div>
+
+    <!-- Drawer Accordion Body -->
+    <div class="drawer-body">
+      <div class="accordion-stack">
+
+        <!-- ACCORDION 1: 6-STRING TUNER & PITCH BENDING ANALYZER -->
+        <div class="accordion-item" id="accItemTuner">
+          <div class="accordion-header" data-target="accContentTuner">
+            <div class="acc-title-group">
+              <span class="acc-icon">🎯</span>
+              <span class="acc-title" data-i18n="accTuner">6줄 튜너 & 피치 궤적 분석기</span>
+            </div>
+            <span class="acc-chevron">▾</span>
+          </div>
+          
+          <div class="accordion-content" id="accContentTuner">
+            <div class="tuner-inner-grid">
+              <div class="tuner-layout" id="tunerLayout">
+                <div class="tuner-string" data-string-idx="5"><span class="string-label">6E</span><div class="tuning-peg"></div></div>
+                <div class="tuner-string" data-string-idx="4"><span class="string-label">5A</span><div class="tuning-peg"></div></div>
+                <div class="tuner-string" data-string-idx="3"><span class="string-label">4D</span><div class="tuning-peg"></div></div>
+                <div class="tuner-string" data-string-idx="2"><span class="string-label">3G</span><div class="tuning-peg"></div></div>
+                <div class="tuner-string" data-string-idx="1"><span class="string-label">2B</span><div class="tuning-peg"></div></div>
+                <div class="tuner-string" data-string-idx="0"><span class="string-label">1E</span><div class="tuning-peg"></div></div>
+              </div>
+              
+              <div class="pitch-tracker-box">
+                <div class="tracker-header">
+                  <span data-i18n="cardPitchTracker">Pitch Trajectory & Bending Analyzer</span>
+                  <span class="stab-score"><span data-i18n="lblStabilityScore">Stability</span>: <b id="pitchStabilityVal">100%</b></span>
+                </div>
+                <canvas id="pitchCanvas" width="380" height="70"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ACCORDION 2: BACKING TRACK JAM ASSISTANT & SPEED METRONOME -->
+        <div class="accordion-item" id="accItemJam">
+          <div class="accordion-header" data-target="accContentJam">
+            <div class="acc-title-group">
+              <span class="acc-icon">🎵</span>
+              <span class="acc-title" data-i18n="accJam">백킹 트랙 잼 어시스턴트 & 메트로놈</span>
+            </div>
+            <span class="acc-chevron">▾</span>
+          </div>
+
+          <div class="accordion-content" id="accContentJam">
+            <div class="jam-metro-vertical">
+              <!-- Backing Track Jam Card -->
+              <div class="studio-tool-card">
+                <div class="card-header">
+                  <div class="card-h" data-i18n="cardJam">Backing Track Jam Assistant</div>
+                  <div class="card-sub" data-i18n="subJam">Real-time backing track & chord target notes guide</div>
+                </div>
+                
+                <div class="tool-controls">
+                  <button id="btnJam" class="btn-primary-action" data-i18n="btnJamPlay">▶ Play Jam Track</button>
+                  <div class="compact-field">
+                    <small>Progression</small>
+                    <select id="jamProgSel" class="select-styled">
+                      <option value="pop">Pop/Rock (I - V - vi - IV)</option>
+                      <option value="jazz">Jazz (ii - V - I - VI)</option>
+                      <option value="blues">12-Bar Blues (I - IV - I - V)</option>
+                      <option value="sad">Pop Minor (i - VI - III - VII)</option>
+                    </select>
+                  </div>
+                  <div class="compact-field bpm-field">
+                    <small>BPM (<span id="jamBpmVal">100</span>)</small>
+                    <input type="range" id="jamBpm" min="60" max="180" value="100" step="2">
+                  </div>
+                </div>
+
+                <div id="jamStatusBox" class="jam-display-box">
+                  <div class="jam-chord-section">
+                    <span class="lbl-dim">CURRENT CHORD</span>
+                    <span id="jamCurrentChord" class="chord-highlight">––</span>
+                  </div>
+                  <span id="jamBarCounter" class="bar-tag">Bar 1/4</span>
+                </div>
+              </div>
+
+              <!-- Speed Trainer Metronome Card -->
+              <div class="studio-tool-card">
+                <div class="card-header">
+                  <div class="card-h" data-i18n="cardMetronome">Smart Speed Trainer Metronome</div>
+                  <div class="card-sub" data-i18n="subMetronome">Auto speed-up metronome for speed training</div>
+                </div>
+
+                <div class="tool-controls">
+                  <button id="btnMetro" class="btn-primary-action" data-i18n="btnMetroStart">▶ Metronome</button>
+                  <div class="compact-field bpm-field">
+                    <small>BPM (<span id="metroBpmVal">100</span>)</small>
+                    <input type="range" id="metroBpm" min="40" max="220" value="100" step="2">
+                  </div>
+                  <label class="auto-speed-check">
+                    <input type="checkbox" id="metroAutoSpeed" checked>
+                    <span data-i18n="lblAutoSpeed">Auto Speed-up (+5 BPM / 4 bars)</span>
+                  </label>
+                </div>
+
+                <div class="metro-dots-container" id="metroBeatDots">
+                  <div class="metro-dot"></div>
+                  <div class="metro-dot"></div>
+                  <div class="metro-dot"></div>
+                  <div class="metro-dot"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ACCORDION 3: REAL-TIME SCALE SCANNER -->
+        <div class="accordion-item" id="accItemScanner">
+          <div class="accordion-header" data-target="accContentScanner">
+            <div class="acc-title-group">
+              <span class="acc-icon">🔍</span>
+              <span class="acc-title" data-i18n="accScanner">실시간 스케일 자동 스캐너</span>
+            </div>
+            <span class="acc-chevron">▾</span>
+          </div>
+
+          <div class="accordion-content" id="accContentScanner">
+            <div class="scanner-full-card">
+              <div class="card-header">
+                <div class="card-h" data-i18n="cardScanner">Scale Scanner</div>
+                <div class="card-sub" data-i18n="subScanner">Play for 10-15 seconds to auto-detect your scale.</div>
+              </div>
+
+              <div class="scanner-action-bar">
+                <button id="btnScanStart" class="btn-primary-action" data-i18n="btnScanStart">Start Scan</button>
+                <button id="btnScanStop" class="btn danger" style="display: none;" data-i18n="btnScanStop">Stop Scan</button>
+                <div id="scanProgress" class="scan-progress-bar" style="display: none;">
+                  <div id="scanBar" class="scan-bar-fill"></div>
+                </div>
+              </div>
+
+              <div id="scanResults" class="scan-results-container" style="display: none;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ACCORDION 4: AUDIO SENSITIVITY & GUITAR TUNING SETTINGS -->
+        <div class="accordion-item" id="accItemSettings">
+          <div class="accordion-header" data-target="accContentSettings">
+            <div class="acc-title-group">
+              <span class="acc-icon">⚙️</span>
+              <span class="acc-title" data-i18n="accSettings">오디오 감도 & 기타 튜닝 상세 설정</span>
+            </div>
+            <span class="acc-chevron">▾</span>
+          </div>
+
+          <div class="accordion-content" id="accContentSettings">
+            <div class="settings-accordion-layout">
+              <!-- Audio Output & Monitoring -->
+              <div class="settings-group">
+                <div class="settings-group-title">🎧 Audio Monitoring & Output</div>
+                <div class="settings-row">
+                  <div class="compact-field" style="flex: 1;">
+                    <small data-i18n="lblOutputDevice">Output Device</small>
+                    <select id="outputDeviceSel" class="select-styled">
+                      <option value="" data-i18n="optDefaultOutput">Default (System Output)</option>
+                    </select>
+                  </div>
+                  <div class="compact-field" style="flex: 1;">
+                    <small data-i18n="lblMonitor">Direct Audio Monitoring</small>
+                    <div class="monitoring-control-box">
+                      <input type="checkbox" id="monitorToggle" class="custom-check">
+                      <input type="range" id="monitorVol" min="0" max="1" step="0.05" value="0.7">
+                      <span id="monitorVolVal" class="val-tag">70%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Recognition Sensitivity, Stability, Ref Pitch -->
+              <div class="settings-group">
+                <div class="settings-group-title">🎛️ Recognition Engine</div>
+                <div class="settings-grid-3">
+                  <label class="settings-slider-card">
+                    <span class="slider-title" data-i18n="lblSens">Sensitivity</span>
+                    <input type="range" id="sens" min="0.005" max="0.06" step="0.005" value="0.015">
+                    <small class="slider-hint" data-i18n="descSens">Lower detects quiet notes; higher rejects noise.</small>
+                  </label>
+                  
+                  <label class="settings-slider-card">
+                    <span class="slider-title"><span data-i18n="lblStab">Stability</span>: <b id="stabVal">4</b> <span data-i18n="lblFrames">frames</span></span>
+                    <input type="range" id="stab" min="2" max="10" step="1" value="4">
+                    <small class="slider-hint" data-i18n="descStab">Confirmation speed vs stability threshold.</small>
+                  </label>
+
+                  <label class="settings-slider-card">
+                    <span class="slider-title"><span data-i18n="lblRefPitch">Ref Pitch (A4)</span>: <b id="refPitchVal">440</b>Hz</span>
+                    <input type="range" id="refPitch" min="425" max="455" step="1" value="440">
+                    <small class="slider-hint" data-i18n="descRefPitch">A4 base frequency (Default: 440Hz).</small>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Guitar Tuning Setup -->
+              <div class="settings-group">
+                <div class="settings-group-title">🎸 Guitar Tuning Setup</div>
+                <div class="settings-row">
+                  <div class="compact-field">
+                    <small data-i18n="lblTuning">Tuning Mode</small>
+                    <select id="tuningModeSel" class="select-styled">
+                      <option value="preset" data-i18n="optTuningPreset">Preset</option>
+                      <option value="custom" data-i18n="optTuningCustom">Custom</option>
+                    </select>
+                  </div>
+                  <div class="compact-field" id="tuningPresetField" style="flex: 1;">
+                    <small data-i18n="lblTuningPreset">Preset Tuning</small>
+                    <select id="tuningSel" class="select-styled"></select>
+                  </div>
+                </div>
+
+                <div id="tuningCustomField" style="display: none; margin-top: 10px;">
+                  <small data-i18n="lblTuningCustom" style="color: var(--muted); font-size: 11px;">Custom Strings (1-6)</small>
+                  <div class="custom-strings-bar">
+                    <select id="strSel_0" class="str-sel"></select>
+                    <select id="strSel_1" class="str-sel"></select>
+                    <select id="strSel_2" class="str-sel"></select>
+                    <select id="strSel_3" class="str-sel"></select>
+                    <select id="strSel_4" class="str-sel"></select>
+                    <select id="strSel_5" class="str-sel"></select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </aside>
+
   <!-- Circle of Fifths Modal -->
-  <div id="circleModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.75); z-index: 1000; backdrop-filter: blur(4px); align-items: center; justify-content: center;">
-    <div class="panel" style="width: 90%; max-width: 440px; background: #12161b; border: 1px solid var(--line); position: relative; padding: 24px;">
-      <button id="btnCloseCircle" class="ghost" style="position: absolute; top: 16px; right: 16px; padding: 4px 10px; font-size: 12px;">✕</button>
+  <div id="circleModal" class="modal-backdrop" style="display: none;">
+    <div class="panel circle-card">
+      <button id="btnCloseCircle" class="btn-close">✕</button>
       <div class="card-h" data-i18n="modalCircleTitle">Circle of Fifths Visualizer</div>
-      <div class="card-sub" style="margin-bottom: 16px;" data-i18n="modalCircleSub">Click any key to update fretboard. Relative & related keys are highlighted.</div>
-      <div style="display: flex; justify-content: center; align-items: center;">
-        <svg id="circleSvg" viewBox="0 0 320 320" style="width: 280px; height: 280px;"></svg>
+      <div class="card-sub" data-i18n="modalCircleSub">Click any key to update fretboard.</div>
+      <div class="circle-svg-wrap">
+        <svg id="circleSvg" viewBox="0 0 320 320"></svg>
       </div>
     </div>
   </div>

@@ -264,7 +264,7 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                     device=current_device_id,
                     channels=(1, 1),
                     samplerate=sample_rate,
-                    blocksize=2048,
+                    blocksize=512,
                     dtype='float32',
                     callback=sd_callback
                 )
@@ -279,7 +279,7 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                     device=current_device_id,
                     channels=1,
                     samplerate=sample_rate,
-                    blocksize=2048,
+                    blocksize=512,
                     dtype='float32',
                     callback=input_only_callback
                 )
@@ -306,7 +306,6 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
 
         with stream:
             logger.info(f"Audio capture active on device #{current_device_id} ({device_info['name']}).")
-            hop_size = 2048
             sliding_buf = np.zeros(buffer_size, dtype=np.float32)
             prev_rms = 0.0
             prev_notes = []
@@ -318,6 +317,7 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                 except asyncio.TimeoutError:
                     continue
 
+                hop_size = len(new_chunk)
                 sliding_buf[:-hop_size] = sliding_buf[hop_size:]
                 sliding_buf[-hop_size:] = new_chunk
 

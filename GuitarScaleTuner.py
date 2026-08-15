@@ -2,9 +2,10 @@ import os
 import sys
 import time
 import socket
-import subprocess
+import threading
 import webbrowser
 import logging
+import asyncio
 
 def get_base_dir():
     if getattr(sys, 'frozen', False):
@@ -19,77 +20,43 @@ if sys.stdout is None:
 if sys.stderr is None:
     sys.stderr = open(os.devnull, 'w')
 
-def find_available_port(start_port=8000, max_attempts=20):
-    for port in range(start_port, start_port + max_attempts):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            try:
-                s.bind(('0.0.0.0', port))
-                return port
-            except OSError:
-                continue
-    return start_port
-
-def kill_existing_zombies():
-    if sys.platform == "win32":
-        try:
-            my_pid = os.getpid()
-            cmd = f'wmic process where "name=\'GuitarScaleTuner.exe\' and processid!={my_pid}" call terminate'
-            subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except Exception:
-            pass
+from run_https_server import run_server, find_available_port
+from asio_server import audio_broadcaster
 
 def main():
-    args = sys.argv[1:]
-
-    if "--mode" in args:
-        idx = args.index("--mode")
-        mode = args[idx + 1] if idx + 1 < len(args) else ""
-        if mode == "asio":
-            from asio_server import main as asio_main
-            sys.argv = [sys.argv[0]]
-            asio_main()
-            return
-        elif mode == "web":
-            port = 8000
-            if "--port" in args:
-                p_idx = args.index("--port")
-                port = int(args[p_idx + 1])
-            from run_https_server import run_server
-            sys.argv = [sys.argv[0]]
-            run_server(port=port)
-            return
-
-    kill_existing_zombies()
     active_port = find_available_port(8000)
 
-    creationflags = 0
-    if sys.platform == "win32":
-        creationflags = subprocess.CREATE_NO_WINDOW
+    # 1. Run HTTP Web Server in background daemon thread
+    web_thread = threading.Thread(
+        target=run_server,
+        kwargs={"port": active_port},
+        daemon=True
+    )
+    web_thread.start()
 
-    if getattr(sys, 'frozen', False):
-        cmd_asio = [sys.executable, "--mode", "asio"]
-        cmd_web = [sys.executable, "--mode", "web", "--port", str(active_port)]
-    else:
-        cmd_asio = [sys.executable, os.path.abspath(__file__), "--mode", "asio"]
-        cmd_web = [sys.executable, os.path.abspath(__file__), "--mode", "web", "--port", str(active_port)]
-
-    asio_proc = subprocess.Popen(cmd_asio, creationflags=creationflags, cwd=base_dir)
-    web_proc = subprocess.Popen(cmd_web, creationflags=creationflags, cwd=base_dir)
-
-    time.sleep(1.2)
-    webbrowser.open(f"http://localhost:{active_port}")
-
+    # 2. Give web server 0.3s to bind and open browser
+    time.sleep(0.3)
     try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
+        webbrowser.open(f"http://localhost:{active_port}")
+    except Exception:
         pass
-    finally:
+
+    # 3. Run ASIO WebSocket Audio Engine with auto-restart resilience
+    while True:
         try:
-            asio_proc.terminate()
-            web_proc.terminate()
-        except Exception:
-            pass
+            asyncio.run(audio_broadcaster(
+                device_idx=None,
+                host="127.0.0.1",
+                port=8765,
+                sample_rate=44100,
+                buffer_size=8192,
+                sens_thr=0.012
+            ))
+        except KeyboardInterrupt:
+            break
+        except Exception as e:
+            print(f"[ERROR] ASIO Engine crashed, restarting in 1s: {e}")
+            time.sleep(1)
 
 if __name__ == "__main__":
     main()

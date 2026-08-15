@@ -863,6 +863,9 @@ function updatePoly(data) {
 
   if (activeNotes.length === 0) {
     $("bigNote").textContent = "––";
+    $("degTxt").textContent = "";
+    $("hz").textContent = "";
+    $("needle").style.left = "50%";
     v.textContent = (guideMode === "chord") ? t("verdictOutChord") : t("verdictOutScale");
     v.className = "verdict idle";
     return;
@@ -871,6 +874,8 @@ function updatePoly(data) {
   const firstMidi = activeNotes[0].midi;
   const cents = centsOff(activeNotes[0].f, firstMidi);
   updatePitchTracker(cents);
+  $("hz").textContent = activeNotes.map(n => `${Math.round(n.f)}Hz`).join(" · ");
+  $("needle").style.left = `${50 + Math.max(-50, Math.min(50, cents))}%`;
 
   if (quizMode) {
     const p = pc(firstMidi);
@@ -896,15 +901,18 @@ function updatePoly(data) {
       }
     }
   } else {
+    const noteNames = activeNotes.map(n => NOTE[pc(n.midi)]).join(" · ");
+    $("bigNote").textContent = noteNames;
     const allInScale = activeNotes.every(n => inScale(n.midi));
     const degrees = activeNotes.map(n => DEG[pc(n.midi - rootPc)]).filter(x => x).join(" · ");
     if (allInScale) {
-      $("degTxt").textContent = t("degPrefix") + degrees;
+      $("degTxt").textContent = degrees ? (t("degPrefix") + degrees) : "";
       v.textContent = (guideMode === "chord") ? t("verdictInChord") : t("verdictInScale");
       v.className = "verdict ok";
     } else {
       $("degTxt").textContent = degrees ? (t("degPrefix") + degrees) : "";
       v.textContent = (guideMode === "chord") ? t("verdictOutChord") : t("verdictOutScale");
+      v.className = "verdict no";
     }
   }
 }
@@ -913,6 +921,9 @@ function update(res) {
   const v = $("verdict");
   if (res.f < 0) {
     $("bigNote").textContent = "––";
+    $("degTxt").textContent = "";
+    $("hz").textContent = "";
+    $("needle").style.left = "50%";
     v.textContent = (guideMode === "chord") ? t("verdictOutChord") : t("verdictOutScale");
     v.className = "verdict idle";
     litPcs = [];
@@ -929,6 +940,8 @@ function update(res) {
   litPcs = [p];
   drawFB();
   updateTunerUI([{ f: res.f, midi: m }]);
+  $("hz").textContent = `${Math.round(res.f)}Hz`;
+  $("needle").style.left = `${50 + Math.max(-50, Math.min(50, cents))}%`;
 
   if (quizMode) {
     if (guideMode === "chord") {
@@ -1016,6 +1029,7 @@ async function start() {
     running = true;
     $("led").classList.add("on"); $("powerTxt").textContent = t("powerOn");
     $("startBtn").textContent = t("btnStop");
+    $("startBtn").classList.add("danger");
     if (quizMode) {
       newQuiz();
     } else {
@@ -1037,6 +1051,7 @@ function stop() {
   }
   $("led").classList.remove("on"); $("powerTxt").textContent = t("powerOff");
   $("startBtn").textContent = t("btnStart");
+  $("startBtn").classList.remove("danger");
   $("bigNote").textContent = "––"; litPcs = []; drawFB();
   updateTunerUI([]);
   refreshDynamic();
@@ -1044,7 +1059,10 @@ function stop() {
 
 function refreshDynamic() {
   if ($("powerTxt")) $("powerTxt").textContent = running ? t("powerOn") : t("powerOff");
-  if ($("startBtn")) $("startBtn").textContent = running ? t("btnStop") : t("btnStart");
+  if ($("startBtn")) {
+    $("startBtn").textContent = running ? t("btnStop") : t("btnStart");
+    $("startBtn").classList.toggle("danger", running);
+  }
   if ($("modeSub")) $("modeSub").textContent = quizMode ? t("subQuiz") : t("subPractice");
 }
 
@@ -1396,9 +1414,13 @@ function initSlideToggles() {
   const modeT = $("modeToggle");
   if (modeT) {
     updateToggleVisuals(modeT, quizMode, "togglePractice", "toggleQuiz");
+    const quizStatsPill = $("quizStatsPill");
+    if (quizStatsPill) quizStatsPill.style.display = quizMode ? "flex" : "none";
+
     modeT.onclick = () => {
       quizMode = !quizMode;
       updateToggleVisuals(modeT, quizMode, "togglePractice", "toggleQuiz");
+      if (quizStatsPill) quizStatsPill.style.display = quizMode ? "flex" : "none";
       refreshDynamic();
       if (!running) return;
       if (quizMode) newQuiz();
@@ -1446,6 +1468,46 @@ function initSlideToggles() {
       drawFB();
     };
   }
+}
+
+function initAccordions() {
+  const btnToggleSettings = $("btnToggleSettings");
+  const sideDrawer = $("sideDrawer");
+  const sideDrawerBackdrop = $("sideDrawerBackdrop");
+  const btnCloseDrawer = $("btnCloseDrawer");
+
+  const openDrawer = () => {
+    if (sideDrawer) sideDrawer.classList.add("open");
+    if (sideDrawerBackdrop) sideDrawerBackdrop.classList.add("open");
+  };
+
+  const closeDrawer = () => {
+    if (sideDrawer) sideDrawer.classList.remove("open");
+    if (sideDrawerBackdrop) sideDrawerBackdrop.classList.remove("open");
+  };
+
+  if (btnToggleSettings) {
+    btnToggleSettings.onclick = () => {
+      if (sideDrawer && sideDrawer.classList.contains("open")) {
+        closeDrawer();
+      } else {
+        openDrawer();
+      }
+    };
+  }
+
+  if (btnCloseDrawer) btnCloseDrawer.onclick = closeDrawer;
+  if (sideDrawerBackdrop) sideDrawerBackdrop.onclick = closeDrawer;
+
+  const headers = document.querySelectorAll(".accordion-header");
+  headers.forEach(header => {
+    header.onclick = () => {
+      const item = header.closest(".accordion-item");
+      if (item) {
+        item.classList.toggle("expanded");
+      }
+    };
+  });
 }
 
 function getChordPcs(rootPc, chordTypeVal) {
@@ -1780,6 +1842,7 @@ rebuildTuningSel();
 initCustomTuningSel();
 rebuildVoicingSel();
 initSlideToggles();
+initAccordions();
 bindEvents();
 initDeviceSel();
 listOutputDevices();
