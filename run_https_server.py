@@ -27,32 +27,39 @@ class CustomHTTPRequestHandler(SimpleHTTPRequestHandler):
                 return ""  # Invalid path to block access
         return clean_path
 
+    def list_directory(self, path):
+        self.send_error(403, "Directory listing is disabled")
+        return None
+
     def end_headers(self):
-        self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
         super().end_headers()
 
-def find_available_port(start_port=8000, max_attempts=20):
-    for port in range(start_port, start_port + max_attempts):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            try:
-                s.bind(('127.0.0.1', port))
-                return port
-            except OSError:
-                continue
-    return start_port
+def create_server(start_port=8000, max_attempts=20, directory=None):
+    base_dir = directory or os.getcwd()
+    handler = partial(CustomHTTPRequestHandler, directory=base_dir)
+    for p in range(start_port, start_port + max_attempts):
+        try:
+            httpd = HTTPServer(('127.0.0.1', p), handler)
+            return httpd, p
+        except OSError:
+            continue
+    httpd = HTTPServer(('127.0.0.1', start_port), handler)
+    return httpd, start_port
 
-def run_server(port=8000, directory=None):
+def run_server(port=8000, directory=None, on_bound=None):
     if directory:
         os.chdir(directory)
     base_dir = directory or os.getcwd()
-    active_port = find_available_port(port)
-    server_address = ('127.0.0.1', active_port)
-    handler = partial(CustomHTTPRequestHandler, directory=base_dir)
-    httpd = HTTPServer(server_address, handler)
+    httpd, active_port = create_server(start_port=port, directory=base_dir)
     print(f"\n===================================================")
     print(f"  Guitar Scale Tuner Server: http://localhost:{active_port}")
     print(f"===================================================\n")
+    if on_bound:
+        try:
+            on_bound(active_port)
+        except Exception:
+            pass
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

@@ -130,7 +130,8 @@ body {
   color: var(--muted);
 }
 
-.btn-primary-action {
+.btn-primary-action,
+.btn {
   font-family: var(--disp);
   font-size: 13px;
   font-weight: 600;
@@ -146,17 +147,21 @@ body {
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
 }
 
-.btn-primary-action:hover {
+.btn-primary-action:hover,
+.btn:hover,
+.btn.primary:hover {
   background: var(--accent-hover);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
-.btn-primary-action.danger {
+.btn-primary-action.danger,
+.btn.danger {
   background: var(--root);
   box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
 }
 
-.btn-primary-action.danger:hover {
+.btn-primary-action.danger:hover,
+.btn.danger:hover {
   background: #f87171;
 }
 

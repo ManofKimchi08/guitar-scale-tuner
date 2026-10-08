@@ -65,12 +65,36 @@ const TUNINGS = new Proxy({}, {
 
 const CIRCLE_MAJOR = ["C", "G", "D", "A", "E", "B", "F#", "Db", "Ab", "Eb", "Bb", "F"];
 const CIRCLE_MINOR = ["Am", "Em", "Bm", "F#m", "C#m", "G#m", "D#m", "Bbm", "Fm", "Cm", "Gm", "Dm"];
+const CIRCLE_KEY_PC = {
+  "C": 0, "G": 7, "D": 2, "A": 9, "E": 4, "B": 11,
+  "F#": 6, "Db": 1, "Ab": 8, "Eb": 3, "Bb": 10, "F": 5
+};
 
 const JAM_PROGRESSIONS = {
-  pop: [0, 7, 9, 5],      // I - V - vi - IV
-  jazz: [2, 7, 0, 9],     // ii - V - I - VI
-  blues: [0, 5, 0, 7],    // I - IV - I - V
-  sad: [0, 8, 3, 10]      // i - VI - III - VII
+  pop: [
+    { deg: 0, isMinor: false }, // I
+    { deg: 7, isMinor: false }, // V
+    { deg: 9, isMinor: true },  // vi
+    { deg: 5, isMinor: false }  // IV
+  ],
+  jazz: [
+    { deg: 2, isMinor: true },  // ii
+    { deg: 7, isMinor: false }, // V
+    { deg: 0, isMinor: false }, // I
+    { deg: 9, isMinor: true }   // vi
+  ],
+  blues: [
+    { deg: 0, isMinor: false }, // I
+    { deg: 5, isMinor: false }, // IV
+    { deg: 0, isMinor: false }, // I
+    { deg: 7, isMinor: false }  // V
+  ],
+  sad: [
+    { deg: 0, isMinor: true },  // i (minor)
+    { deg: 8, isMinor: false }, // VI (Major)
+    { deg: 3, isMinor: false }, // III (Major in natural minor)
+    { deg: 10, isMinor: false } // VII (Major)
+  ]
 };
 
 let currentTuningId = "standard";
@@ -287,17 +311,23 @@ function sendRefPitch() {
   }
 }
 
-function playAsioPcmChunk(pcmData, sampleRate = 44100) {
-  if (!isMonitoringEnabled || !pcmData || pcmData.length === 0) return;
+let currentAsioSampleRate = 44100;
+
+function playAsioPcmChunk(pcmData, sampleRate = (currentAsioSampleRate || 44100)) {
+  if (!pcmData || pcmData.length === 0) return;
+  const needMonitor = isMonitoringEnabled;
+  const needRec = isRecording && recMode === "browser" && recDestNode;
+  if (!needMonitor && !needRec) return;
   ensureAudioCtx();
 
-  if (!monitorGainNode && audioCtx) {
+  if (needMonitor && !monitorGainNode && audioCtx) {
     monitorGainNode = audioCtx.createGain();
-    monitorGainNode.gain.setValueAtTime(isMonitoringEnabled ? monitorVolume : 0, audioCtx.currentTime);
+    monitorGainNode.gain.setValueAtTime(monitorVolume, audioCtx.currentTime);
     monitorGainNode.connect(audioCtx.destination);
   }
 
-  const buffer = audioCtx.createBuffer(1, pcmData.length, sampleRate);
+  const effectiveSr = sampleRate > 0 ? sampleRate : 44100;
+  const buffer = audioCtx.createBuffer(1, pcmData.length, effectiveSr);
   const channelData = buffer.getChannelData(0);
   for (let i = 0; i < pcmData.length; i++) {
     channelData[i] = pcmData[i];
@@ -311,14 +341,15 @@ function playAsioPcmChunk(pcmData, sampleRate = 44100) {
     try { sourceNode.disconnect(); } catch (e) { }
   };
 
-  if (monitorGainNode) {
+  if (needMonitor && monitorGainNode) {
     sourceNode.connect(monitorGainNode);
-  } else {
-    sourceNode.connect(audioCtx.destination);
+  }
+  if (needRec && recDestNode) {
+    try { sourceNode.connect(recDestNode); } catch (e) { }
   }
 
   const now = audioCtx.currentTime;
-  const MAX_PCM_LATENCY = 0.035; // Maximum 35ms allowed queue latency
+  const MAX_PCM_LATENCY = 0.050; // Maximum allowed queue latency
   if (nextAsioPcmTime < now || (nextAsioPcmTime - now) > MAX_PCM_LATENCY) {
     nextAsioPcmTime = now + 0.005;
   }
@@ -369,11 +400,15 @@ async function listOutputDevices() {
 }
 
 async function getStream(id) {
-  const isSpecificId = id && id !== "mic_default" && id !== "asio_ws";
+  let cleanId = id;
+  if (cleanId && cleanId.startsWith("mic_dev_")) {
+    cleanId = cleanId.slice("mic_dev_".length);
+  }
+  const isSpecificId = cleanId && cleanId !== "mic_default" && cleanId !== "asio_ws" && !cleanId.startsWith("asio_dev_");
   return navigator.mediaDevices.getUserMedia({
     audio: {
       echoCancellation: false, noiseSuppression: false, autoGainControl: false,
-      ...(isSpecificId ? { deviceId: { exact: id } } : {})
+      ...(isSpecificId ? { deviceId: { exact: cleanId } } : {})
     }
   });
 }
@@ -492,14 +527,20 @@ function connectAsioWs() {
           $("err").textContent = "";
           $("verdict").textContent = t("verdictAsioConnected");
           $("verdict").className = "verdict ok";
+          if (data.sample_rate) {
+            currentAsioSampleRate = data.sample_rate;
+          }
           return;
         }
         if (data.type === "asio_error") {
           $("err").textContent = data.message;
           return;
         }
+        if (data.sample_rate) {
+          currentAsioSampleRate = data.sample_rate;
+        }
         if (data.pcm) {
-          playAsioPcmChunk(data.pcm);
+          playAsioPcmChunk(data.pcm, data.sample_rate || currentAsioSampleRate);
         }
         updatePoly(data);
       } catch (e) {
@@ -745,7 +786,7 @@ function renderStaticFretboard() {
       const isVisibleTone = isChordMode ? inCurrentChord : inCurrentScale;
 
       let isVoicingNote = false;
-      if (voicingMode && currentVoicing) {
+      if (voicingMode && currentVoicing && currentInstrument !== "bass") {
         const targetFret = currentVoicing.frets[s];
         if (targetFret !== null && targetFret === f) {
           isVoicingNote = true;
@@ -883,7 +924,7 @@ function renderCircleOfFifths() {
   svg.innerHTML = "";
 
   const cx = 150, cy = 150, rOuter = 135, rMid = 95, rInner = 55;
-  const rootIndex = CIRCLE_MAJOR.findIndex(k => NOTE.indexOf(k.replace("b", "#")) === rootPc || NOTE.indexOf(k) === rootPc);
+  const rootIndex = CIRCLE_MAJOR.findIndex(k => CIRCLE_KEY_PC[k] === rootPc);
   const activeIdx = rootIndex !== -1 ? rootIndex : 0;
 
   for (let i = 0; i < 12; i++) {
@@ -901,8 +942,7 @@ function renderCircleOfFifths() {
       classOuter += " related-key";
     }
 
-    const notePcVal = NOTE.indexOf(CIRCLE_MAJOR[i].replace("b", "#")) !== -1 ?
-      NOTE.indexOf(CIRCLE_MAJOR[i].replace("b", "#")) : NOTE.indexOf(CIRCLE_MAJOR[i]);
+    const notePcVal = CIRCLE_KEY_PC[CIRCLE_MAJOR[i]];
 
     const x1 = cx + rOuter * Math.cos(startAngle), y1 = cy + rOuter * Math.sin(startAngle);
     const x2 = cx + rOuter * Math.cos(endAngle), y2 = cy + rOuter * Math.sin(endAngle);
@@ -953,6 +993,13 @@ function updatePoly(data) {
   const chroma = data.chroma || [];
   const rms = data.rms || 0;
 
+  // 1. Accumulate chroma for Scale Scanner if scanning
+  if (isScanning && chroma && chroma.length === 12) {
+    for (let i = 0; i < 12; i++) {
+      scanChromaHistory[i] += chroma[i];
+    }
+  }
+
   if (activeNotes.length > 0) {
     litPcs = activeNotes.map(n => pc(n.midi));
   } else {
@@ -962,7 +1009,7 @@ function updatePoly(data) {
   updateFretboardLit();
   updateTunerUI(activeNotes);
 
-  if (activeNotes.length === 0) {
+  if (activeNotes.length === 0 && (!data.f || data.f <= 0)) {
     $("bigNote").textContent = "––";
     $("degTxt").textContent = "";
     $("hz").textContent = "";
@@ -972,10 +1019,29 @@ function updatePoly(data) {
     return;
   }
 
-  const firstMidi = activeNotes[0].midi;
-  const cents = centsOff(activeNotes[0].f, firstMidi);
+  // Determine dominant/primary note and accurate cents
+  let firstMidi = 69;
+  let cents = 0;
+  let primaryF = -1;
+
+  if (data.f && data.f > 0) {
+    primaryF = data.f;
+    firstMidi = freqToMidi(data.f);
+    cents = centsOff(data.f, firstMidi);
+  } else if (activeNotes.length > 0) {
+    const sortedNotes = [...activeNotes].sort((a, b) => (b.amp || 0) - (a.amp || 0));
+    const dominant = sortedNotes[0];
+    firstMidi = dominant.midi;
+    primaryF = dominant.f;
+    cents = centsOff(dominant.f, firstMidi);
+  }
+
   updatePitchTracker(cents);
-  $("hz").textContent = activeNotes.map(n => `${Math.round(n.f)}Hz`).join(" · ");
+  if (primaryF > 0) {
+    $("hz").textContent = `${Math.round(primaryF)}Hz`;
+  } else {
+    $("hz").textContent = activeNotes.map(n => `${Math.round(n.f)}Hz`).join(" · ");
+  }
   $("needle").style.left = `${50 + Math.max(-50, Math.min(50, cents))}%`;
 
   if (isRecording) {
@@ -993,14 +1059,19 @@ function updatePoly(data) {
   if (quizMode) {
     const p = pc(firstMidi);
     if (guideMode === "chord") {
-      const hmmState = runHMM(chroma, rms);
-      if (hmmState < 24) {
-        const rootIndex = hmmState % 12;
-        const isCorrectChord = (rootIndex === pc(rootPc + targetInterval));
-        if (isCorrectChord) {
-          detectedPcs = [...targetChordPcs];
-          updateChordQuizPrompt();
-          quizSolved();
+      if (!lock) {
+        const hmmState = runHMM(chroma, rms);
+        if (hmmState < 24) {
+          const rootIndex = hmmState % 12;
+          const isMinor = (hmmState >= 12);
+          const targetIsMinor = (chordTypeVal === "minor" || chordTypeVal === "min7");
+          const rootMatches = (rootIndex === pc(rootPc + targetInterval));
+          const qualityMatches = (isMinor === targetIsMinor);
+          if (rootMatches && qualityMatches) {
+            detectedPcs = [...targetChordPcs];
+            updateChordQuizPrompt();
+            quizSolved();
+          }
         }
       }
     } else {
@@ -1015,15 +1086,16 @@ function updatePoly(data) {
     }
   } else {
     const noteNames = activeNotes.map(n => NOTE[pc(n.midi)]).join(" · ");
-    $("bigNote").textContent = noteNames;
-    const allInScale = activeNotes.every(n => inScale(n.midi));
+    $("bigNote").textContent = (data.f > 0 && activeNotes.length <= 1) ? NOTE[pc(firstMidi)] : (noteNames || NOTE[pc(firstMidi)]);
+    const allInTarget = (guideMode === "chord")
+      ? (activeNotes.length > 0 && activeNotes.every(n => currentChordPcs.includes(pc(n.midi))))
+      : (activeNotes.length > 0 && activeNotes.every(n => inScale(n.midi)));
     const degrees = activeNotes.map(n => DEG[pc(n.midi - rootPc)]).filter(x => x).join(" · ");
-    if (allInScale) {
-      $("degTxt").textContent = degrees ? (t("degPrefix") + degrees) : "";
+    $("degTxt").textContent = degrees ? (t("degPrefix") + degrees) : "";
+    if (allInTarget) {
       v.textContent = (guideMode === "chord") ? t("verdictInChord") : t("verdictInScale");
       v.className = "verdict ok";
     } else {
-      $("degTxt").textContent = degrees ? (t("degPrefix") + degrees) : "";
       v.textContent = (guideMode === "chord") ? t("verdictOutChord") : t("verdictOutScale");
       v.className = "verdict no";
     }
@@ -1048,6 +1120,10 @@ function update(res) {
   const m = freqToMidi(res.f);
   const p = pc(m);
   const cents = centsOff(res.f, m);
+
+  if (isScanning) {
+    scanChromaHistory[p] += 1.0;
+  }
 
   updatePitchTracker(cents);
   litPcs = [p];
@@ -1092,12 +1168,16 @@ function update(res) {
   } else {
     $("bigNote").textContent = NOTE[p];
     const interval = pc(m - rootPc);
-    if (inScale(m)) {
+    const isChordTarget = (guideMode === "chord");
+    const isToneOk = isChordTarget ? currentChordPcs.includes(p) : inScale(m);
+    if (isToneOk) {
       $("degTxt").textContent = t("degPrefix") + DEG[interval];
-      v.textContent = (guideMode === "chord") ? t("verdictInChord") : t("verdictInScale"); v.className = "verdict ok";
+      v.textContent = isChordTarget ? t("verdictInChord") : t("verdictInScale");
+      v.className = "verdict ok";
     } else {
       $("degTxt").textContent = "";
-      v.textContent = (guideMode === "chord") ? t("verdictOutChord") : t("verdictOutScale"); v.className = "verdict no";
+      v.textContent = isChordTarget ? t("verdictOutChord") : t("verdictOutScale");
+      v.className = "verdict no";
     }
   }
 }
@@ -1126,10 +1206,17 @@ async function connect(id) {
     try { ws.close(); } catch (e) { }
     ws = null;
   }
-  if (id === "asio_ws") {
+  if (id === "asio_ws" || (id && id.startsWith("asio_dev_"))) {
     if (source) { source.disconnect(); source = null; }
     if (stream) { stream.getTracks().forEach(tk => tk.stop()); stream = null; }
     await connectAsioWs();
+    if (id && id.startsWith("asio_dev_")) {
+      const devId = parseInt(id.slice("asio_dev_".length), 10);
+      currentAsioDeviceId = devId;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "select_asio_device", device_id: devId }));
+      }
+    }
     return;
   }
   if (source) source.disconnect();
@@ -1149,7 +1236,7 @@ async function start() {
   try {
     const devId = $("deviceSel").value;
     await connect(devId);
-    if (devId !== "asio_ws") {
+    if (devId && !devId.startsWith("asio_")) {
       await listDevices();
     }
     running = true;
@@ -1170,6 +1257,12 @@ async function start() {
 
 function stop() {
   running = false; if (raf) cancelAnimationFrame(raf);
+  if (isRecording) {
+    try { stopRecording(); } catch (e) { }
+  }
+  if (isScanning) {
+    try { stopScan(); } catch (e) { }
+  }
   if (source) {
     try { source.disconnect(); } catch (e) { }
     source = null;
@@ -1279,10 +1372,11 @@ function playMidiNote(midi) {
   osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch (e) { } };
 }
 
-function playJamSynthChord(rootPcVal, isMinor, durationSec = 2.0) {
+function playJamSynthChord(rootPcVal, isMinor, durationSec = 2.0, time = (audioCtx ? audioCtx.currentTime : 0)) {
   try { ensureAudioCtx(); } catch (e) { return; }
   const thirdInterval = isMinor ? 3 : 4;
   const chordNotes = [rootPcVal + 48, rootPcVal + thirdInterval + 48, rootPcVal + 7 + 48];
+  const baseTime = Math.max(audioCtx.currentTime, time);
 
   chordNotes.forEach((midi, idx) => {
     const freq = midiToFreq(midi);
@@ -1290,9 +1384,9 @@ function playJamSynthChord(rootPcVal, isMinor, durationSec = 2.0) {
     const gain = audioCtx.createGain();
 
     osc.type = "triangle";
-    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    osc.frequency.setValueAtTime(freq, baseTime);
 
-    const startTime = audioCtx.currentTime + (idx * 0.03);
+    const startTime = baseTime + (idx * 0.03);
     const stopTime = startTime + durationSec;
 
     gain.gain.setValueAtTime(0.001, startTime);
@@ -1310,23 +1404,24 @@ function playJamSynthChord(rootPcVal, isMinor, durationSec = 2.0) {
   });
 }
 
-function playMetronomeClick(isDownbeat) {
+function playMetronomeClick(isDownbeat, time = (audioCtx ? audioCtx.currentTime : 0)) {
   try { ensureAudioCtx(); } catch (e) { return; }
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
 
   const freq = isDownbeat ? 1200 : 800;
-  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  const clickTime = Math.max(audioCtx.currentTime, time);
+  osc.frequency.setValueAtTime(freq, clickTime);
 
-  gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+  gain.gain.setValueAtTime(0.3, clickTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, clickTime + 0.05);
 
   osc.connect(gain);
   const dest = getMasterSynthBus();
   if (dest) gain.connect(dest);
 
-  osc.start(audioCtx.currentTime);
-  osc.stop(audioCtx.currentTime + 0.05);
+  osc.start(clickTime);
+  osc.stop(clickTime + 0.05);
 
   osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch (e) { } };
 }
@@ -1402,7 +1497,7 @@ function finishScan() {
     const scaleName = t("scale_" + res.scaleId);
     const scorePct = Math.round(res.score * 100);
     html += `
-      <div class="scan-result-item" data-root="${res.rootPc}" data-scale="${res.scaleId}" style="display:flex; justify-space-between; align-items:center; padding:8px 12px; margin-bottom:6px; background:var(--bg); border:1px solid #334155; border-radius:6px; cursor:pointer;">
+      <div class="scan-result-item" data-root="${res.rootPc}" data-scale="${res.scaleId}" style="display:flex; justify-content: space-between; align-items:center; padding:8px 12px; margin-bottom:6px; background:var(--bg); border:1px solid #334155; border-radius:6px; cursor:pointer;">
         <div><span style="font-weight:bold; font-size:13px; color:#ffffff;">${idx + 1}. ${rootName} ${scaleName}</span></div>
         <div style="display:flex; align-items:center; gap:8px;">
           <span style="font-size:12px; color:var(--ok); font-weight:bold;">${scorePct}%</span>
@@ -1426,12 +1521,16 @@ function finishScan() {
   });
 }
 
+let nextJamTime = 0;
+
 function startJamTrack() {
   if (isJamPlaying) return;
+  ensureAudioCtx();
   isJamPlaying = true;
   jamBarIndex = 0;
+  nextJamTime = audioCtx.currentTime + 0.05;
   $("btnJam").textContent = t("btnJamStop");
-  $("btnJam").className = "btn danger";
+  $("btnJam").className = "btn-primary-action danger";
   stepJamTrack();
 }
 
@@ -1441,19 +1540,21 @@ function stopJamTrack() {
   jamTimer = null;
   jamTargetChordPcs = [];
   $("btnJam").textContent = t("btnJamPlay");
-  $("btnJam").className = "btn primary";
+  $("btnJam").className = "btn-primary-action";
   $("jamCurrentChord").textContent = "––";
   drawFB();
 }
 
 function stepJamTrack() {
   if (!isJamPlaying) return;
+  ensureAudioCtx();
 
   const prog = JAM_PROGRESSIONS[jamProgressionKey] || JAM_PROGRESSIONS.pop;
-  const degreeOffset = prog[jamBarIndex % prog.length];
+  const chordItem = prog[jamBarIndex % prog.length];
+  const degreeOffset = chordItem.deg;
+  const isMinorChord = chordItem.isMinor;
 
   const currentChordRootPc = pc(rootPc + degreeOffset);
-  const isMinorChord = (jamProgressionKey === "sad") ? (jamBarIndex % 2 === 0) : (degreeOffset === 9 || degreeOffset === 2);
   const thirdInterval = isMinorChord ? 3 : 4;
   jamTargetChordPcs = [currentChordRootPc, pc(currentChordRootPc + thirdInterval), pc(currentChordRootPc + 7)];
 
@@ -1461,20 +1562,26 @@ function stepJamTrack() {
   $("jamCurrentChord").textContent = chordName;
 
   const barDurationSec = (60 / jamBpm) * 4;
-  playJamSynthChord(currentChordRootPc, isMinorChord, barDurationSec);
+  playJamSynthChord(currentChordRootPc, isMinorChord, barDurationSec, nextJamTime);
   drawFB();
 
   jamBarIndex++;
-  jamTimer = setTimeout(stepJamTrack, barDurationSec * 1000);
+  nextJamTime += barDurationSec;
+  const delayMs = Math.max(25, (nextJamTime - audioCtx.currentTime - 0.05) * 1000);
+  jamTimer = setTimeout(stepJamTrack, delayMs);
 }
+
+let nextMetroTime = 0;
 
 function startMetronome() {
   if (isMetroPlaying) return;
+  ensureAudioCtx();
   isMetroPlaying = true;
   metroBeatCount = 0;
   metroBarCount = 0;
+  nextMetroTime = audioCtx.currentTime + 0.05;
   $("btnMetro").textContent = t("btnMetroStop");
-  $("btnMetro").className = "btn danger";
+  $("btnMetro").className = "btn-primary-action danger";
   stepMetronome();
 }
 
@@ -1483,17 +1590,18 @@ function stopMetronome() {
   if (metroTimer) clearTimeout(metroTimer);
   metroTimer = null;
   $("btnMetro").textContent = t("btnMetroStart");
-  $("btnMetro").className = "btn primary";
+  $("btnMetro").className = "btn-primary-action";
   document.querySelectorAll(".metro-dot").forEach(d => d.className = "metro-dot");
 }
 
 function stepMetronome() {
   if (!isMetroPlaying) return;
+  ensureAudioCtx();
 
   const currentBeatInBar = metroBeatCount % 4;
   const isDownbeat = (currentBeatInBar === 0);
 
-  playMetronomeClick(isDownbeat);
+  playMetronomeClick(isDownbeat, nextMetroTime);
 
   const dots = document.querySelectorAll(".metro-dot");
   dots.forEach((d, idx) => {
@@ -1514,8 +1622,10 @@ function stepMetronome() {
     }
   }
 
-  const intervalMs = (60 / metroBpm) * 1000;
-  metroTimer = setTimeout(stepMetronome, intervalMs);
+  const intervalSec = 60 / metroBpm;
+  nextMetroTime += intervalSec;
+  const delayMs = Math.max(15, (nextMetroTime - audioCtx.currentTime - 0.02) * 1000);
+  metroTimer = setTimeout(stepMetronome, delayMs);
 }
 
 function rebuildScaleSel() {
@@ -2031,13 +2141,21 @@ function rebuildVoicingSel() {
   if (!sel) return;
   sel.innerHTML = "";
 
-  currentVoicingsList = getChordVoicings(rootPc, chordTypeVal);
-
   const allOpt = document.createElement("option");
   allOpt.value = "all";
   allOpt.textContent = `⭐ ${t("optAllChordTones")}`;
   sel.appendChild(allOpt);
 
+  if (currentInstrument === "bass") {
+    sel.value = "all";
+    voicingMode = false;
+    currentVoicing = null;
+    sel.disabled = true;
+    return;
+  }
+  sel.disabled = false;
+
+  currentVoicingsList = getChordVoicings(rootPc, chordTypeVal);
   currentVoicingsList.forEach((v, idx) => {
     const o = document.createElement("option");
     o.value = idx;
@@ -2169,7 +2287,16 @@ function bindEvents() {
     };
   }
 
-  if ($("sens")) $("sens").oninput = e => sensitivity = parseFloat(e.target.value);
+  if ($("sens")) {
+    $("sens").oninput = e => {
+      sensitivity = parseFloat(e.target.value);
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(JSON.stringify({ type: "set_sensitivity", value: sensitivity }));
+        } catch (err) { }
+      }
+    };
+  }
   if ($("stab")) {
     $("stab").oninput = e => {
       stabNeeded = parseInt(e.target.value, 10);
@@ -2269,18 +2396,22 @@ function bindEvents() {
   }
 
   if ($("deviceSel")) {
-    $("deviceSel").onchange = e => {
+    $("deviceSel").onchange = async (e) => {
       const val = e.target.value;
       if (val.startsWith("asio_dev_")) {
         const devId = parseInt(val.replace("asio_dev_", ""), 10);
         currentAsioDeviceId = devId;
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: "select_asio_device", device_id: devId }));
-        } else {
-          connectAsioWs();
+        } else if (running) {
+          await connect(val);
         }
       } else if (val === "asio_ws") {
-        connectAsioWs();
+        if (running) await connect(val);
+      } else {
+        if (running) {
+          await connect(val);
+        }
       }
     };
   }

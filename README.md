@@ -2,7 +2,7 @@
 
 A powerful, ultra low-latency fretboard **scale guide & practice studio** in the browser and desktop that **listens to your real electric & bass guitar** in real-time.
 
-[![Release](https://img.shields.io/badge/Release-v2.1.0-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
+[![Release](https://img.shields.io/badge/Release-v2.1.1-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Web-brightgreen.svg)]()
 
@@ -20,7 +20,7 @@ A powerful, ultra low-latency fretboard **scale guide & practice studio** in the
 
 ---
 
-## 🌟 Key Features (v2.1.0)
+## 🌟 Key Features (v2.1.1)
 
 ### 1. 🎸 6-String Guitar & 4-String Bass Support
 - **Dual Instrument Engine**: Instant toggle between `🎸 6-String Guitar` and `🎸 4-String Bass`.
@@ -29,7 +29,7 @@ A powerful, ultra low-latency fretboard **scale guide & practice studio** in the
 
 ### 2. 🎙️ 3-Tier Recording Studio & Smart Scorecard
 - **Tier 1 (Instant Browser REC)**: One-click recording of guitar audio directly into memory. Supports optional simultaneous mixing of **backing tracks & metronome**. Export as DAW-ready 16-bit lossless `.wav`.
-- **Tier 2 (ASIO Studio Lossless)**: Direct 32-bit Float PCM disk streaming to `recordings/ASIO_Take_*.wav`.
+- **Tier 2 (ASIO Studio Lossless)**: Direct 16-bit PCM WAV disk streaming to `~/Music/GuitarScaleTuner/recordings/ASIO_Take_*.wav`.
 - **Tier 3 (Smart Analysis & Synced Replay)**: Automated performance scorecard computing **Total Notes**, **Scale Accuracy (%)**, and **Pitch Stability (%)**. Includes an interactive **Synced Fretboard Replay** that animates your original fingering and HUD meter in lockstep with the recorded audio.
 
 ### 3. 🎛️ Adaptive Sample Rate Negotiation (Zero PaErrorCode -9997)
@@ -92,7 +92,7 @@ guitar-scale-tuner/
 │   ├── TECHNICAL_DOCUMENTATION.md  # Engineering whitepaper & DSP spec
 │   └── screenshots/          # High-resolution UI screenshots
 ├── favicon.ico / favicon.png # Windows binary & web application icons
-└── recordings/               # Output directory for ASIO lossless WAV takes
+└── recordings/               # Output directory for ASIO lossless WAV takes (~/Music/GuitarScaleTuner/recordings)
 ```
 
 ---

@@ -68,14 +68,14 @@ $$r(\tau) = \sum_{n=0}^{N-\tau-1} x[n] \cdot x[n+\tau]$$
 - **포물선 보간 (Parabolic Interpolation)**:
   이산 샘플 간격 사이의 피크 위치를 3차 다항 보간하여 소수점 단위의 정밀 주파수($f = \frac{f_s}{T_{\text{interpolated}}}$)를 도출합니다.
 
-### 2.2 백엔드: HPS + Coordinate Descent NNLS 다성 디코더
-파이썬 백엔드는 오디오 인터페이스로부터 512 샘플 단위의 PCM 스트림을 받아 슬라이딩 윈도우(8192 FFT)를 구성한 후 배음 소거와 희소 행렬 분해를 수행합니다.
+### 2.2 백엔드: YIN 단음 기본 주파수 추적 & Coordinate Descent NNLS 다성 디코더
+파이썬 백엔드는 오디오 인터페이스로부터 들어오는 PCM 스트림을 받아 고정밀 기본 주파수 추출과 다성 화음 분해를 병행합니다.
 
-1. **배음 곱 스펙트럼 (Harmonic Product Spectrum, HPS)**:
-   현악기 연주 시 발생하는 강력한 2차, 3차 배음(Harmonics)에 의한 옥타브 오인식을 억제합니다:
-   $$HPS[k] = |X[k]| \times |X[2k]| \times |X[3k]|$$
-2. **비음수 최소자승법 (Non-Negative Least Squares, NNLS)**:
-   각 MIDI 음정(23~88, B0~F6)에 대한 이상적인 기본 주파수 및 배음 사전 행렬 $A \in \mathbb{R}^{M \times N}$를 사전 계산(Precompute)합니다. 관측된 스펙트럼 벡터 $y$에 대해 다음 목적식을 Coordinate Descent 방식으로 실시간(15회 이내 수렴) 최적화합니다:
+1. **고속 YIN 단음 추적 알고리즘 (Fast YIN Fundamental Pitch Tracking)**:
+   FFT 기반 상호상관(Cross-correlation)으로 정규화 누적 차분 함수(CMND)를 계산하고, 최소 지점 주변을 3점 포물선 보간하여 30Hz~1400Hz 대역에서 서브센트 단위의 정밀 기본 주파수($f_0$)와 신뢰도(Confidence)를 추출합니다:
+   $$d'(\tau) = \frac{d(\tau)}{\frac{1}{\tau} \sum_{j=1}^\tau d(j)}$$
+2. **비음수 최소자승법 (Coordinate Descent NNLS) & 배음 가지치기 (Harmonic Pruning)**:
+   각 MIDI 음정(23~88, B0~F6)에 대한 이상적인 기본 주파수 및 배음 사전 행렬 $A \in \mathbb{R}^{M \times N}$를 사전 계산(Precompute)합니다. 관측된 스펙트럼 벡터 $y$에 대해 Coordinate Descent 방식으로 실시간 분해한 뒤, 기본음의 배음 위치(+12, +19, +24, +28, +31, +34, +36 반음)에 발생한 허위 피크를 사후 가지치기하여 고스트 노트를 방지합니다:
    $$\min_{x \ge 0} \frac{1}{2} \|Ax - y\|_2^2 \iff x_j \leftarrow \max\left(0, \frac{A_j^T y - \sum_{k \ne j} (A^T A)_{jk} x_k}{(A^T A)_{jj}}\right)$$
 3. **12차원 크로마그램 (12D Chromagram)**:
    해 벡터 $x$의 에너지를 12개 반음 클래스($\text{C, C}\sharp, \dots, \text{B}$)로 모듈로 누적 정규화하여 출력합니다.
@@ -117,7 +117,7 @@ for test_sr in candidate_srs:
 ### 3.3 수학적 행렬 동적 실시간 재계산
 스트림이 협상된 샘플레이트 $f_s$로 개방되면, 오디오 엔진은 즉시 주파수 해상도 $\Delta f = \frac{f_s}{N_{\text{FFT}}}$를 재계산하고 사전 행렬 $A$ 및 $A^T A$를 실시간 재생성합니다:
 $$M = \left\lfloor \frac{1400}{\Delta f} \right\rfloor - \left\lfloor \frac{30}{\Delta f} \right\rfloor$$
-이를 통해 44.1kHz, 48kHz, 96kHz 등 어떤 주파수에서도 **음정 판정 오차가 0.0 Hz 단위로 완벽하게 보정**됩니다.
+이를 통해 44.1kHz, 48kHz, 96kHz 등 어떤 주파수에서도 주파수 빈 해상도와 사전 행렬의 일치성을 유지하여 음정 오차를 최소화합니다.
 
 ---
 
@@ -128,7 +128,7 @@ $$M = \left\lfloor \frac{1400}{\Delta f} \right\rfloor - \left\lfloor \frac{30}{
 | 단계 | 명칭 | 동작 메커니즘 | 특징 |
 | :--- | :--- | :--- | :--- |
 | **Tier 1** | **브라우저 즉석 녹음** | Web Audio API 노드 버퍼링 | 원클릭 녹음, WAV 다운로드, 백킹 트랙 동시 믹싱 |
-| **Tier 2** | **ASIO 무손실 저장** | 파이썬 sounddevice PCM 캡처 | 32/24-bit 원음 Float32 무손실 로컬 디스크 즉시 저장 |
+| **Tier 2** | **ASIO 무손실 저장** | 파이썬 sounddevice PCM 캡처 | 16-bit PCM WAV 무손실 로컬 디스크 즉시 저장 (~/Music/GuitarScaleTuner) |
 | **Tier 3** | **스마트 연주 분석 & 복기** | 타임스탬프 기반 피치/스케일 로깅 | 적중률(%), 안정도(%) 채점 및 지판 싱크 애니메이션 복기 |
 
 ### 4.1 순수 16-bit PCM WAV 바이너리 인코더
@@ -141,8 +141,8 @@ $$M = \left\lfloor \frac{1400}{\Delta f} \right\rfloor - \left\lfloor \frac{30}{
 1. **스케일 적중률 (Scale Accuracy)**:
    $$\text{Accuracy (\%)} = \left( \frac{\sum_{k=1}^K \mathbb{I}(\text{inScale}_k = \text{true})}{K} \right) \times 100$$
 2. **피치 안정도 (Pitch Stability)**:
-   센트 편차의 표준편차 $\sigma_c$를 기반으로 피치 흔들림 감쇠 함수 적용:
-   $$\text{Stability (\%)} = \max\left(0, \min\left(100, 100 - 3 \times \sigma_c\right)\right)$$
+   평균 센트 절대 편차 $\overline{|\Delta c|}$를 기반으로 피치 안정도 산출:
+   $$\text{Stability (\%)} = \max\left(0, \min\left(100, 100 - 2.5 \times \overline{|\Delta c|}\right)\right)$$
 
 ### 4.3 지판 싱크 타임라인 복기 (Replay Engine)
 녹음된 오디오를 재생할 때 `audio.currentTime`을 `requestAnimationFrame` 루프로 추적하여, 당시 연주되었던 해당 타임스탬프의 음정을 지판 위 흰색 발광(`played`) 노트로 실시간 재현하고 센트 바늘 HUD를 동기화하여 재생합니다.
@@ -164,9 +164,9 @@ $$M = \left\lfloor \frac{1400}{\Delta f} \right\rfloor - \left\lfloor \frac{30}{
 
 ## 6. 프론트엔드 렌더링 최적화 & 반응형 UI/UX
 
-### 6.1 DOM Thrashing 제거 ($O(1)$ 클래스 토글 구조)
+### 6.1 DOM Thrashing 제거 (CSS 클래스 토글 구조)
 - 기존: 초당 60~80회의 오디오 콜백마다 SVG 지판 요소 전체를 `innerHTML = ""`로 파괴하고 수백 개의 SVG DOM 노드를 재생성하여 심각한 프레임 드롭과 메모리 누수 유발.
-- 개선: 앱 초기화 시 지판 프렛, 현, 인레이를 1회만 정적 렌더링(`renderStaticFretboard`)하고, 실시간 음정 변화는 캐시된 원형 노드의 CSS 클래스(`lit`, `played`, `in-scale`)만 $O(1)$로 토글하도록 개선하여 가비지 컬렉션(GC) 부하를 85% 이상 절감.
+- 개선: 앱 초기화 시 지판 프렛, 현, 인레이를 1회만 정적 렌더링(`renderStaticFretboard`)하고, 실시간 음정 변화는 캐시된 원형 노드의 CSS 클래스(`lit`, `played`, `in-scale`)만 토글하도록 개선하여 가비지 컬렉션(GC) 부하 및 렌더링 오버헤드를 대폭 경감.
 
 ### 6.2 글래스모피즘 사이드 드로어 & 딥링크 라우팅
 - 우측 상단 ⚙️ 버튼을 통해 슬라이드되는 사이드 드로어 내에 5개 아코디언 카드(튜너, 잼, 레코더, 스캐너, 오디오 상세 설정)를 집약 배치.

@@ -4,12 +4,30 @@ import logging
 import math
 import argparse
 import sys
+import re
 import numpy as np
 import sounddevice as sd
 import websockets
 import os
 import wave
 import datetime
+
+def get_recordings_dir():
+    """Returns safe persistent directory for audio recordings."""
+    if getattr(sys, 'frozen', False):
+        user_music = os.path.join(os.path.expanduser("~"), "Music", "GuitarScaleTuner", "recordings")
+        try:
+            os.makedirs(user_music, exist_ok=True)
+            return user_music
+        except Exception:
+            pass
+        exe_dir = os.path.dirname(sys.executable)
+        local_rec = os.path.join(exe_dir, "recordings")
+        os.makedirs(local_rec, exist_ok=True)
+        return local_rec
+    rec_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "recordings")
+    os.makedirs(rec_dir, exist_ok=True)
+    return rec_dir
 
 if sys.stdout is None:
     sys.stdout = open(os.devnull, 'w')
@@ -96,56 +114,154 @@ def precompute_A(sample_rate, buffer_size, ref_pitch):
     AtA = A.T @ A
     return A, AtA
 
+def fast_yin_diff(x, w, max_tau):
+    """Computes difference function for YIN using fast FFT correlation."""
+    x_sq = x ** 2
+    cumsum_sq = np.concatenate(([0.0], np.cumsum(x_sq)))
+    tau_indices = np.arange(max_tau + 1)
+    energy = (cumsum_sq[w] - cumsum_sq[0]) + (cumsum_sq[tau_indices + w] - cumsum_sq[tau_indices])
+    
+    n_fft = 2 ** int(np.ceil(np.log2(w + max_tau + w)))
+    fx1 = np.fft.rfft(x[:w][::-1], n_fft)
+    fx2 = np.fft.rfft(x[:w + max_tau], n_fft)
+    conv = np.fft.irfft(fx1 * fx2, n_fft)
+    corr = conv[w - 1 : w + max_tau]
+    
+    diff = energy - 2 * corr
+    diff[diff < 0] = 0
+    return diff
+
+def fast_yin(audio_chunk, sr, min_freq=30.0, max_freq=1400.0, threshold=0.15):
+    """High-accuracy monophonic fundamental pitch estimation (YIN algorithm with parabolic interpolation)."""
+    n = len(audio_chunk)
+    min_tau = max(1, int(sr / max_freq))
+    max_tau = min(n - 64, int(sr / min_freq))
+    w = n - max_tau
+    if w <= 0 or max_tau <= min_tau:
+        return -1.0, 0.0
+        
+    diff = fast_yin_diff(audio_chunk, w, max_tau)
+    cmnd = np.ones(max_tau + 1, dtype=np.float32)
+    cum = np.cumsum(diff[1:max_tau + 1])
+    taus = np.arange(1, max_tau + 1)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        cmnd[1:max_tau + 1] = diff[1:max_tau + 1] / (cum / taus)
+    cmnd[0] = 1.0
+    
+    best_tau = -1
+    for tau in range(min_tau, max_tau):
+        if cmnd[tau] < threshold:
+            while tau + 1 < max_tau and cmnd[tau + 1] < cmnd[tau]:
+                tau += 1
+            best_tau = tau
+            break
+            
+    if best_tau == -1:
+        best_tau = min_tau + int(np.argmin(cmnd[min_tau:max_tau]))
+        if cmnd[best_tau] > 0.40:
+            return -1.0, 0.0
+
+    t_val = float(best_tau)
+    if 0 < best_tau < max_tau:
+        s0 = cmnd[best_tau - 1]
+        s1 = cmnd[best_tau]
+        s2 = cmnd[best_tau + 1]
+        denom = 2 * (2 * s1 - s0 - s2)
+        if abs(denom) > 1e-6:
+            delta = (s0 - s2) / denom
+            t_val += delta
+            
+    freq = sr / t_val
+    confidence = float(max(0.0, 1.0 - cmnd[best_tau]))
+    return freq, confidence
+
+def refine_peak_fft(mags, n_fft, sr, target_f):
+    """Parabolic interpolation of the FFT peak near target_f to get precise measured Hz."""
+    target_bin = int(round(target_f * n_fft / sr))
+    search_r = max(2, int(round(3.0 * n_fft / sr)))
+    lo = max(1, target_bin - search_r)
+    hi = min(len(mags) - 2, target_bin + search_r + 1)
+    if lo >= hi:
+        return target_f
+    peak_idx = lo + int(np.argmax(mags[lo:hi]))
+    if 0 < peak_idx < len(mags) - 1:
+        s0 = mags[peak_idx - 1]
+        s1 = mags[peak_idx]
+        s2 = mags[peak_idx + 1]
+        denom = s0 - 2 * s1 + s2
+        if abs(denom) > 1e-9:
+            delta = 0.5 * (s0 - s2) / denom
+            return (peak_idx + delta) * (sr / n_fft)
+    return peak_idx * (sr / n_fft)
+
+# Cached window cache for performance
+_window_cache = {}
+
+def get_hanning_window(n):
+    if n not in _window_cache:
+        _window_cache[n] = np.hanning(n)
+    return _window_cache[n]
+
 def detect_pitches_nnls(audio_chunk, sr, A, AtA, idx_min, idx_max, ref_pitch=440.0, sens_threshold=0.012):
-    """Detects multiple pitches and extracts 12D Chroma using HPS + NNLS."""
+    """Detects polyphonic pitches using NNLS with harmonic pruning (no HPS distortion) and extracts 12D Chroma."""
     rms = np.sqrt(np.mean(audio_chunk ** 2))
     if rms < sens_threshold:
         return [], np.zeros(12, dtype=np.float32), rms
         
     n_fft = len(audio_chunk)
-    windowed = audio_chunk * np.hanning(n_fft)
+    window = get_hanning_window(n_fft)
+    windowed = audio_chunk * window
     
     fft_vals = np.fft.rfft(windowed)
     mags = np.abs(fft_vals)
     
-    hps = np.copy(mags)
-    L2 = len(mags[::2])
-    hps[:L2] *= mags[::2]
-    L3 = len(mags[::3])
-    hps[:L3] *= mags[::3]
-    
-    hps_max = np.max(hps[idx_min:idx_max]) if len(hps[idx_min:idx_max]) > 0 else 0.0
-    if hps_max > 0:
-        hps /= hps_max
-        
-    y = hps[idx_min:idx_max]
+    # NNLS on normalized spectrum directly (avoid HPS which destroys harmonics)
+    mag_max = np.max(mags[idx_min:idx_max]) if len(mags[idx_min:idx_max]) > 0 else 0.0
+    y = (mags[idx_min:idx_max] / mag_max) if mag_max > 0 else mags[idx_min:idx_max]
     Aty = A.T @ y
     
-    x = nnls_coordinate_descent(AtA, Aty)
+    x = nnls_coordinate_descent(AtA, Aty, max_iter=15)
     
-    detected = []
+    candidates = []
     chroma = np.zeros(12, dtype=np.float32)
     
     for j in range(len(x)):
         midi = 23 + j
         chroma[midi % 12] += x[j]
         
-        if x[j] > 0.018:
+        if x[j] > 0.02:
             is_local_max = True
             if j > 0 and x[j] < x[j - 1]:
                 is_local_max = False
             if j < len(x) - 1 and x[j] < x[j + 1]:
                 is_local_max = False
             if is_local_max:
-                note_name = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][midi % 12]
-                octave = (midi // 12) - 1
-                freq_est = ref_pitch * (2.0 ** ((midi - 69.0) / 12.0))
-                detected.append({
-                    "f": float(round(freq_est, 1)),
-                    "midi": int(midi),
-                    "name": f"{note_name}{octave}"
-                })
+                candidates.append({'j': j, 'midi': midi, 'amp': float(x[j])})
                 
+    # Harmonic pruning: remove phantom overtones (+12, +19, +24, +28, +31, +34, +36 semitones)
+    harm_offsets = [12, 19, 24, 28, 31, 34, 36]
+    detected = []
+    for cand in candidates:
+        is_harmonic = False
+        for lower in candidates:
+            if lower['midi'] < cand['midi']:
+                diff = cand['midi'] - lower['midi']
+                if any(abs(diff - h) <= 1 for h in harm_offsets):
+                    if lower['amp'] >= 0.4 * cand['amp']:
+                        is_harmonic = True
+                        break
+        if not is_harmonic:
+            note_name = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][cand['midi'] % 12]
+            octave = (cand['midi'] // 12) - 1
+            f_nom = ref_pitch * (2.0 ** ((cand['midi'] - 69.0) / 12.0))
+            f_meas = refine_peak_fft(mags, n_fft, sr, f_nom)
+            detected.append({
+                "f": float(round(f_meas, 1)),
+                "midi": int(cand['midi']),
+                "name": f"{note_name}{octave}",
+                "amp": cand['amp']
+            })
+            
     c_sum = np.sum(chroma)
     if c_sum > 0:
         chroma /= c_sum
@@ -242,8 +358,12 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                             A_matrix, AtA_matrix = precompute_A(sample_rate, buffer_size, val)
                     elif msg_type == "set_monitoring":
                         monitor_enabled = bool(data.get("enabled", False))
-                        monitor_volume = float(data.get("volume", 0.7))
+                        monitor_volume = min(1.0, max(0.0, float(data.get("volume", 0.7))))
                         logger.info(f"Updated monitoring: enabled={monitor_enabled}, vol={monitor_volume}")
+                    elif msg_type == "set_sensitivity":
+                        val = float(data.get("value", 0.012))
+                        sens_thr = max(0.001, min(0.1, val))
+                        logger.info(f"Updated sensitivity threshold to {sens_thr}")
                     elif msg_type == "get_asio_devices":
                         await websocket.send(await get_device_payload())
                     elif msg_type == "select_asio_device":
@@ -265,9 +385,9 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                         logger.info(f"Stopped ASIO recording ({len(recorded_audio_chunks)} chunks)")
                         if recorded_audio_chunks:
                             try:
-                                os.makedirs("recordings", exist_ok=True)
+                                rec_dir = get_recordings_dir()
                                 ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                                fname = os.path.join("recordings", f"ASIO_Take_{ts}.wav")
+                                fname = os.path.join(rec_dir, f"ASIO_Take_{ts}.wav")
                                 all_pcm = np.concatenate(recorded_audio_chunks)
                                 int16_pcm = np.int16(np.clip(all_pcm, -1.0, 1.0) * 32767)
                                 with wave.open(fname, "wb") as wf:
@@ -296,7 +416,8 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
             connected_clients.remove(websocket)
             logger.info(f"Client disconnected from {websocket.remote_address}")
 
-    server = await websockets.serve(ws_handler, host, port)
+    allowed_origins = [re.compile(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"), None]
+    server = await websockets.serve(ws_handler, host, port, origins=allowed_origins)
     logger.info(f"WebSocket server started on ws://{host}:{port}")
 
     while True:
@@ -304,15 +425,28 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
         while not audio_queue.empty():
             audio_queue.get_nowait()
 
+        device_info = None
         try:
-            device_info = sd.query_devices(current_device_id)
-            logger.info(f"Opening audio input device #{current_device_id}: {device_info['name']}")
+            if current_device_id is not None:
+                device_info = sd.query_devices(current_device_id)
+                logger.info(f"Opening audio input device #{current_device_id}: {device_info['name']}")
         except Exception as dev_e:
             logger.error(f"Device #{current_device_id} query failed: {dev_e}")
+            device_info = None
+
+        if device_info is None:
             input_devs = get_audio_input_devices()
             if input_devs:
                 current_device_id = input_devs[0]['id']
-                device_info = sd.query_devices(current_device_id)
+                try:
+                    device_info = sd.query_devices(current_device_id)
+                except Exception:
+                    device_info = None
+
+        if device_info is None:
+            logger.warning("No audio input devices found. Waiting 1s before retrying...")
+            await asyncio.sleep(1.0)
+            continue
 
         native_sr = int(device_info.get('default_samplerate', 0))
         max_in = int(device_info.get('max_input_channels', 1))
@@ -431,6 +565,8 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
             prev_rms = 0.0
             prev_notes = []
             prev_chroma = np.zeros(12, dtype=np.float32).tolist()
+            prev_f0 = -1.0
+            prev_conf = 0.0
 
             while not stream_restart_event.is_set():
                 try:
@@ -446,10 +582,16 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                 is_transient = (rms > 2.0 * prev_rms) and (rms > 0.005) and (prev_rms > 0.001)
 
                 chroma = np.zeros(12, dtype=np.float32).tolist()
+                f0 = -1.0
+                conf = 0.0
                 if is_transient:
                     notes = prev_notes
                     chroma = prev_chroma
+                    f0 = prev_f0
+                    conf = prev_conf
                 else:
+                    if rms >= sens_thr:
+                        f0, conf = fast_yin(sliding_buf, sample_rate, threshold=0.15)
                     notes, chroma_arr, rms = detect_pitches_nnls(
                         sliding_buf, sample_rate, A_matrix, AtA_matrix, idx_min, idx_max,
                         ref_pitch=ref_pitch_val, sens_threshold=sens_thr
@@ -457,13 +599,18 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                     chroma = chroma_arr.tolist()
                     prev_notes = notes
                     prev_chroma = chroma
+                    prev_f0 = f0
+                    prev_conf = conf
 
                 prev_rms = rms
 
                 payload_data = {
+                    "f": float(round(f0, 2)) if f0 > 0 else -1.0,
+                    "confidence": float(round(conf, 3)),
                     "notes": notes,
                     "rms": float(rms),
-                    "chroma": chroma
+                    "chroma": chroma,
+                    "sample_rate": sample_rate
                 }
                 if monitor_enabled:
                     payload_data["pcm"] = np.round(new_chunk * monitor_volume, 4).tolist()

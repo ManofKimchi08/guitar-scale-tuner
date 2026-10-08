@@ -1,10 +1,8 @@
 import os
 import sys
 import time
-import socket
 import threading
 import webbrowser
-import logging
 import asyncio
 
 def get_base_dir():
@@ -13,33 +11,37 @@ def get_base_dir():
     return os.path.dirname(os.path.abspath(__file__))
 
 base_dir = get_base_dir()
-os.chdir(base_dir)
 
 if sys.stdout is None:
     sys.stdout = open(os.devnull, 'w')
 if sys.stderr is None:
     sys.stderr = open(os.devnull, 'w')
 
-from run_https_server import run_server, find_available_port
+from run_https_server import run_server
 from asio_server import audio_broadcaster
 
 def main():
-    active_port = find_available_port(8000)
+    bound_event = threading.Event()
+    active_port = [8000]
+
+    def on_bound(port):
+        active_port[0] = port
+        bound_event.set()
 
     # 1. Run HTTP Web Server in background daemon thread
     web_thread = threading.Thread(
         target=run_server,
-        kwargs={"port": active_port, "directory": base_dir},
+        kwargs={"port": 8000, "directory": base_dir, "on_bound": on_bound},
         daemon=True
     )
     web_thread.start()
 
-    # 2. Give web server 0.3s to bind and open browser
-    time.sleep(0.3)
-    try:
-        webbrowser.open(f"http://localhost:{active_port}")
-    except Exception:
-        pass
+    # 2. Wait until web server binds to port, then open browser
+    if bound_event.wait(timeout=3.0):
+        try:
+            webbrowser.open(f"http://localhost:{active_port[0]}")
+        except Exception:
+            pass
 
     # 3. Run ASIO WebSocket Audio Engine with auto-restart resilience
     while True:
