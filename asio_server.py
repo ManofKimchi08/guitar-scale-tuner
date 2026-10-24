@@ -97,15 +97,23 @@ def precompute_A(sample_rate, buffer_size, ref_pitch):
     
     for j, midi in enumerate(notes_range):
         f0 = ref_pitch * (2.0 ** ((midi - 69.0) / 12.0))
-        for h in range(1, 5): # Fundamental + 3 harmonics
+        num_harmonics = 6 if midi < 48 else 4
+        for h in range(1, num_harmonics + 1):
             fh = f0 * h
-            weight = 1.0 / h
-            bin_idx = int(round(fh / bin_width)) - idx_min
+            if fh >= max_freq:
+                break
+            weight = 1.0 / (h ** 0.85)
+            b_exact = (fh / bin_width) - idx_min
+            semi_bw = (fh * 0.059463) / bin_width
+            sigma = max(0.36, min(0.95, 0.35 * semi_bw))
+            b_center = int(round(b_exact))
             for offset in [-1, 0, 1]:
-                target_bin = bin_idx + offset
+                target_bin = b_center + offset
                 if 0 <= target_bin < M:
-                    spread = 1.0 if offset == 0 else 0.5
-                    A[target_bin, j] += weight * spread
+                    dist = target_bin - b_exact
+                    spread = math.exp(-0.5 * (dist / sigma) ** 2)
+                    if spread > 0.05:
+                        A[target_bin, j] += weight * spread
                     
         norm = np.linalg.norm(A[:, j])
         if norm > 0:
@@ -116,19 +124,20 @@ def precompute_A(sample_rate, buffer_size, ref_pitch):
 
 def fast_yin_diff(x, w, max_tau):
     """Computes difference function for YIN using fast FFT correlation."""
-    x_sq = x ** 2
+    x64 = np.asarray(x, dtype=np.float64)
+    x_sq = x64 ** 2
     cumsum_sq = np.concatenate(([0.0], np.cumsum(x_sq)))
     tau_indices = np.arange(max_tau + 1)
     energy = (cumsum_sq[w] - cumsum_sq[0]) + (cumsum_sq[tau_indices + w] - cumsum_sq[tau_indices])
     
     n_fft = 2 ** int(np.ceil(np.log2(w + max_tau + w)))
-    fx1 = np.fft.rfft(x[:w][::-1], n_fft)
-    fx2 = np.fft.rfft(x[:w + max_tau], n_fft)
+    fx1 = np.fft.rfft(x64[:w][::-1], n_fft)
+    fx2 = np.fft.rfft(x64[:w + max_tau], n_fft)
     conv = np.fft.irfft(fx1 * fx2, n_fft)
     corr = conv[w - 1 : w + max_tau]
     
-    diff = energy - 2 * corr
-    diff[diff < 0] = 0
+    diff = energy - 2.0 * corr
+    diff[diff < 0] = 0.0
     return diff
 
 def fast_yin(audio_chunk, sr, min_freq=30.0, max_freq=1400.0, threshold=0.15):
@@ -141,9 +150,9 @@ def fast_yin(audio_chunk, sr, min_freq=30.0, max_freq=1400.0, threshold=0.15):
         return -1.0, 0.0
         
     diff = fast_yin_diff(audio_chunk, w, max_tau)
-    cmnd = np.ones(max_tau + 1, dtype=np.float32)
+    cmnd = np.ones(max_tau + 1, dtype=np.float64)
     cum = np.cumsum(diff[1:max_tau + 1])
-    taus = np.arange(1, max_tau + 1)
+    taus = np.arange(1, max_tau + 1, dtype=np.float64)
     with np.errstate(divide='ignore', invalid='ignore'):
         cmnd[1:max_tau + 1] = diff[1:max_tau + 1] / (cum / taus)
     cmnd[0] = 1.0
@@ -163,15 +172,16 @@ def fast_yin(audio_chunk, sr, min_freq=30.0, max_freq=1400.0, threshold=0.15):
 
     t_val = float(best_tau)
     if 0 < best_tau < max_tau:
-        s0 = cmnd[best_tau - 1]
-        s1 = cmnd[best_tau]
-        s2 = cmnd[best_tau + 1]
-        denom = 2 * (2 * s1 - s0 - s2)
-        if abs(denom) > 1e-6:
+        s0 = diff[best_tau - 1]
+        s1 = diff[best_tau]
+        s2 = diff[best_tau + 1]
+        denom = 2.0 * (s0 - 2.0 * s1 + s2)
+        if abs(denom) > 1e-12:
             delta = (s0 - s2) / denom
-            t_val += delta
+            if abs(delta) < 1.0:
+                t_val += delta
             
-    freq = sr / t_val
+    freq = float(sr / t_val)
     confidence = float(max(0.0, 1.0 - cmnd[best_tau]))
     return freq, confidence
 
@@ -202,8 +212,19 @@ def get_hanning_window(n):
         _window_cache[n] = np.hanning(n)
     return _window_cache[n]
 
-def detect_pitches_nnls(audio_chunk, sr, A, AtA, idx_min, idx_max, ref_pitch=440.0, sens_threshold=0.012):
-    """Detects polyphonic pitches using NNLS with harmonic pruning (no HPS distortion) and extracts 12D Chroma."""
+def _save_wav_sync(fname, chunks, sr):
+    """Synchronously concatenates audio chunks and writes 16-bit PCM WAV file (run via asyncio.to_thread)."""
+    all_pcm = np.concatenate(chunks)
+    int16_pcm = np.int16(np.clip(all_pcm, -1.0, 1.0) * 32767)
+    with wave.open(fname, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sr)
+        wf.writeframes(int16_pcm.tobytes())
+    return round(len(all_pcm) / sr, 1)
+
+def detect_pitches_nnls(audio_chunk, sr, A, AtA, idx_min, idx_max, ref_pitch=440.0, sens_threshold=0.012, f0_yin=-1.0, conf_yin=0.0):
+    """Detects polyphonic pitches using NNLS with harmonic pruning and YIN reconciliation, and extracts 12D Chroma."""
     rms = np.sqrt(np.mean(audio_chunk ** 2))
     if rms < sens_threshold:
         return [], np.zeros(12, dtype=np.float32), rms
@@ -221,6 +242,9 @@ def detect_pitches_nnls(audio_chunk, sr, A, AtA, idx_min, idx_max, ref_pitch=440
     Aty = A.T @ y
     
     x = nnls_coordinate_descent(AtA, Aty, max_iter=15)
+    max_x = float(np.max(x)) if len(x) > 0 else 0.0
+    amp_floor = max(0.06, 0.22 * max_x)
+    bin_width = sr / n_fft
     
     candidates = []
     chroma = np.zeros(12, dtype=np.float32)
@@ -229,44 +253,98 @@ def detect_pitches_nnls(audio_chunk, sr, A, AtA, idx_min, idx_max, ref_pitch=440
         midi = 23 + j
         chroma[midi % 12] += x[j]
         
-        if x[j] > 0.02:
+        if x[j] >= amp_floor:
             is_local_max = True
             if j > 0 and x[j] < x[j - 1]:
                 is_local_max = False
             if j < len(x) - 1 and x[j] < x[j + 1]:
                 is_local_max = False
             if is_local_max:
-                candidates.append({'j': j, 'midi': midi, 'amp': float(x[j])})
+                f_nom = ref_pitch * (2.0 ** ((midi - 69.0) / 12.0))
+                b_idx = int(round(f_nom / bin_width)) - idx_min
+                lo_b = max(0, b_idx - 1)
+                hi_b = min(len(y), b_idx + 2)
+                f0_energy = float(np.max(y[lo_b:hi_b])) if hi_b > lo_b else 0.0
+                if f0_energy >= 0.05:
+                    candidates.append({'j': j, 'midi': midi, 'amp': float(x[j])})
                 
     # Harmonic pruning: remove phantom overtones (+12, +19, +24, +28, +31, +34, +36 semitones)
     harm_offsets = [12, 19, 24, 28, 31, 34, 36]
+    yin_midi = -1
+    if f0_yin > 0 and conf_yin >= 0.65:
+        cand_yin_midi = int(round(69.0 + 12.0 * math.log2(f0_yin / ref_pitch)))
+        if 23 <= cand_yin_midi <= 88:
+            b_yin = int(round(f0_yin / bin_width)) - idx_min
+            lo_y = max(0, b_yin - 1)
+            hi_y = min(len(y), b_yin + 2)
+            yin_f0_energy = float(np.max(y[lo_y:hi_y])) if hi_y > lo_y else 0.0
+            if yin_f0_energy >= 0.12:
+                yin_midi = cand_yin_midi
+
+    # Check if signal is clearly monophonic (single dominant pitch at yin_midi)
+    strong_non_harmonic_cands = 0
+    if yin_midi > 0:
+        for c in candidates:
+            d = c['midi'] - yin_midi
+            if abs(d) > 2 and not any(abs(d - h) <= 1 for h in harm_offsets):
+                if c['amp'] >= 0.35 * max_x:
+                    strong_non_harmonic_cands += 1
+    is_monophonic_yin = (yin_midi > 0 and strong_non_harmonic_cands == 0)
+
     detected = []
+    found_yin_midi = False
     for cand in candidates:
         is_harmonic = False
         for lower in candidates:
             if lower['midi'] < cand['midi']:
                 diff = cand['midi'] - lower['midi']
                 if any(abs(diff - h) <= 1 for h in harm_offsets):
-                    if lower['amp'] >= 0.4 * cand['amp']:
+                    if lower['amp'] >= 0.35 * cand['amp']:
                         is_harmonic = True
                         break
+        if not is_harmonic and is_monophonic_yin:
+            diff_yin = cand['midi'] - yin_midi
+            if 0 < abs(diff_yin) <= 2:
+                is_harmonic = True
+            elif diff_yin < 0 and conf_yin >= 0.72:
+                is_harmonic = True
+            elif diff_yin > 0 and any(abs(diff_yin - h) <= 1 for h in harm_offsets):
+                is_harmonic = True
+
         if not is_harmonic:
             note_name = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][cand['midi'] % 12]
             octave = (cand['midi'] // 12) - 1
             f_nom = ref_pitch * (2.0 ** ((cand['midi'] - 69.0) / 12.0))
-            f_meas = refine_peak_fft(mags, n_fft, sr, f_nom)
+            if cand['midi'] == yin_midi and f0_yin > 0:
+                f_meas = f0_yin
+                found_yin_midi = True
+            else:
+                f_meas = refine_peak_fft(mags, n_fft, sr, f_nom)
             detected.append({
-                "f": float(round(f_meas, 1)),
+                "f": float(round(f_meas, 2)),
                 "midi": int(cand['midi']),
                 "name": f"{note_name}{octave}",
                 "amp": cand['amp']
             })
+
+    if is_monophonic_yin and not found_yin_midi:
+        note_name = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][yin_midi % 12]
+        octave = (yin_midi // 12) - 1
+        detected.insert(0, {
+            "f": float(round(f0_yin, 2)),
+            "midi": int(yin_midi),
+            "name": f"{note_name}{octave}",
+            "amp": float(max(0.5, max_x))
+        })
+        chroma[yin_midi % 12] = max(chroma[yin_midi % 12], max(0.5, max_x))
             
     c_sum = np.sum(chroma)
     if c_sum > 0:
         chroma /= c_sum
         
     return detected, chroma, rms
+
+MAX_RECORDING_CHUNKS = 180000  # ~30 minutes safety cap at 48kHz / 512 blocksize
 
 async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, sens_thr):
     """Captures audio from ASIO device and broadcasts detected pitches over WebSockets."""
@@ -288,13 +366,14 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
 
     monitor_enabled = False
     monitor_volume = 0.7
+    browser_rec_streaming = False
     ref_pitch_val = 440.0
     is_asio_recording = False
     recorded_audio_chunks = []
 
     def push_audio(chunk):
         nonlocal is_asio_recording, recorded_audio_chunks
-        if is_asio_recording:
+        if is_asio_recording and len(recorded_audio_chunks) < MAX_RECORDING_CHUNKS:
             recorded_audio_chunks.append(chunk.copy())
         if audio_queue.full():
             try:
@@ -336,7 +415,7 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
 
     async def ws_handler(websocket):
         nonlocal A_matrix, AtA_matrix, ref_pitch_val, monitor_enabled, monitor_volume, current_device_id, sample_rate
-        nonlocal is_asio_recording, recorded_audio_chunks
+        nonlocal is_asio_recording, recorded_audio_chunks, sens_thr, browser_rec_streaming
         logger.info(f"Client connected from {websocket.remote_address}")
         connected_clients.add(websocket)
 
@@ -360,6 +439,9 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                         monitor_enabled = bool(data.get("enabled", False))
                         monitor_volume = min(1.0, max(0.0, float(data.get("volume", 0.7))))
                         logger.info(f"Updated monitoring: enabled={monitor_enabled}, vol={monitor_volume}")
+                    elif msg_type == "set_browser_recording":
+                        browser_rec_streaming = bool(data.get("enabled", False))
+                        logger.info(f"Updated browser recording PCM stream: enabled={browser_rec_streaming}")
                     elif msg_type == "set_sensitivity":
                         val = float(data.get("value", 0.012))
                         sens_thr = max(0.001, min(0.1, val))
@@ -382,20 +464,15 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                                 pass
                     elif msg_type == "stop_asio_recording":
                         is_asio_recording = False
-                        logger.info(f"Stopped ASIO recording ({len(recorded_audio_chunks)} chunks)")
-                        if recorded_audio_chunks:
+                        chunks_to_save = list(recorded_audio_chunks)
+                        recorded_audio_chunks = []
+                        logger.info(f"Stopped ASIO recording ({len(chunks_to_save)} chunks)")
+                        if chunks_to_save:
                             try:
                                 rec_dir = get_recordings_dir()
                                 ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                                 fname = os.path.join(rec_dir, f"ASIO_Take_{ts}.wav")
-                                all_pcm = np.concatenate(recorded_audio_chunks)
-                                int16_pcm = np.int16(np.clip(all_pcm, -1.0, 1.0) * 32767)
-                                with wave.open(fname, "wb") as wf:
-                                    wf.setnchannels(1)
-                                    wf.setsampwidth(2)
-                                    wf.setframerate(sample_rate)
-                                    wf.writeframes(int16_pcm.tobytes())
-                                duration = round(len(all_pcm) / sample_rate, 1)
+                                duration = await asyncio.to_thread(_save_wav_sync, fname, chunks_to_save, sample_rate)
                                 payload = json.dumps({
                                     "type": "asio_recording_saved",
                                     "filename": os.path.abspath(fname),
@@ -414,6 +491,8 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
             pass
         finally:
             connected_clients.remove(websocket)
+            if not connected_clients:
+                browser_rec_streaming = False
             logger.info(f"Client disconnected from {websocket.remote_address}")
 
     allowed_origins = [re.compile(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"), None]
@@ -591,11 +670,17 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                     conf = prev_conf
                 else:
                     if rms >= sens_thr:
-                        f0, conf = fast_yin(sliding_buf, sample_rate, threshold=0.15)
+                        yin_win = min(len(sliding_buf), 4096)
+                        f0, conf = fast_yin(sliding_buf[-yin_win:], sample_rate, threshold=0.15)
                     notes, chroma_arr, rms = detect_pitches_nnls(
                         sliding_buf, sample_rate, A_matrix, AtA_matrix, idx_min, idx_max,
-                        ref_pitch=ref_pitch_val, sens_threshold=sens_thr
+                        ref_pitch=ref_pitch_val, sens_threshold=sens_thr,
+                        f0_yin=f0, conf_yin=conf
                     )
+                    if f0 > 0 and notes:
+                        yin_m = int(round(69.0 + 12.0 * math.log2(f0 / ref_pitch_val)))
+                        if not any(abs(n["midi"] - yin_m) <= 1 for n in notes):
+                            f0 = notes[0]["f"] if len(notes) == 1 else -1.0
                     chroma = chroma_arr.tolist()
                     prev_notes = notes
                     prev_chroma = chroma
@@ -612,14 +697,14 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                     "chroma": chroma,
                     "sample_rate": sample_rate
                 }
-                if monitor_enabled:
-                    payload_data["pcm"] = np.round(new_chunk * monitor_volume, 4).tolist()
+                if monitor_enabled or browser_rec_streaming:
+                    payload_data["pcm"] = np.round(new_chunk, 4).tolist()
 
                 payload = json.dumps(payload_data)
 
                 if connected_clients:
                     await asyncio.gather(
-                        *[asyncio.create_task(client.send(payload)) for client in connected_clients],
+                        *[asyncio.wait_for(client.send(payload), timeout=0.05) for client in list(connected_clients)],
                         return_exceptions=True
                     )
 

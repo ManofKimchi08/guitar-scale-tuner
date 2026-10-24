@@ -43,7 +43,8 @@ def main():
         except Exception:
             pass
 
-    # 3. Run ASIO WebSocket Audio Engine with auto-restart resilience
+    # 3. Run ASIO WebSocket Audio Engine with auto-restart resilience & circuit breaker
+    crash_timestamps = []
     while True:
         try:
             asyncio.run(audio_broadcaster(
@@ -57,6 +58,12 @@ def main():
         except KeyboardInterrupt:
             break
         except Exception as e:
+            now = time.time()
+            crash_timestamps = [t for t in crash_timestamps if now - t < 15.0]
+            crash_timestamps.append(now)
+            if len(crash_timestamps) >= 5:
+                print(f"[FATAL] ASIO Engine crashed 5 times within 15s (Port 8765 in use or fatal driver error): {e}")
+                break
             print(f"[ERROR] ASIO Engine crashed, restarting in 1s: {e}")
             time.sleep(1)
 

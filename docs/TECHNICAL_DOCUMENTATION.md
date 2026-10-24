@@ -1,6 +1,6 @@
 # 📖 Guitar Scale Tuner - 기술 명세서 & 시스템 아키텍처 (Technical Documentation)
 
-본 문서는 **Guitar Scale Tuner (Scales, heard.) v2.1.0**의 전체 소프트웨어 구조, 오디오 신호 처리(DSP) 알고리즘, 적응형 샘플레이트 협상 시스템, 3-Tier 레코딩 엔진, 그리고 프론트엔드 최적화 기법을 기술적으로 상세히 서술한 엔지니어링 명세서입니다.
+본 문서는 **Guitar Scale Tuner (Scales, heard.) v2.1.2**의 전체 소프트웨어 구조, 오디오 신호 처리(DSP) 알고리즘, 적응형 샘플레이트 협상 시스템, 3-Tier 레코딩 엔진, 그리고 프론트엔드 최적화 기법을 기술적으로 상세히 서술한 엔지니어링 명세서입니다.
 
 ---
 
@@ -28,8 +28,8 @@ flowchart TD
     subgraph Backend ["⚡ Python Core Engine (GuitarScaleTuner.exe)"]
         Interface -->|WASAPI / DirectSound / ASIO| PA["PortAudio (sounddevice)"]
         PA -->|Adaptive SR Probe| Broadcaster["Audio Broadcaster Loop"]
-        Broadcaster -->|FFT 8192 + HPS| NNLS["Coordinate Descent NNLS"]
-        Broadcaster -->|WAV Writer| RecDisk["Lossless WAV Recorder"]
+        Broadcaster -->|YIN + NNLS Harmonic Pruning| NNLS["Coordinate Descent NNLS & YIN"]
+        Broadcaster -->|Async WAV Writer| RecDisk["Lossless WAV Recorder"]
         NNLS -->|Notes & Chroma JSON| WS["WebSocket Server (Port 8765)"]
         HTTPServer["HTTP Server (Port 8000)"] -->|Static Files| BrowserUI
     end
@@ -186,6 +186,6 @@ $$M = \left\lfloor \frac{1400}{\Delta f} \right\rfloor - \left\lfloor \frac{30}{
 
 ---
 
-*문서 작성일: 2026년 9월 10일*  
-*소프트웨어 버전: Guitar Scale Tuner v2.1.0*  
+*문서 작성일: 2026년 10월 24일*  
+*소프트웨어 버전: Guitar Scale Tuner v2.1.2*  
 *작성자: Advanced Agentic Engineer (Antigravity)*

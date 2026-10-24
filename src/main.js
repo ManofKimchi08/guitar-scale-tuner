@@ -146,7 +146,13 @@ function setLang(l) {
   applyStaticI18n();
   rebuildScaleSel();
   rebuildTuningSel();
+  rebuildDeviceDropdown();
+  listOutputDevices();
   refreshDynamic();
+  if (!isJamPlaying && $("jamBarCounter")) {
+    const prog = JAM_PROGRESSIONS[jamProgressionKey] || JAM_PROGRESSIONS.pop;
+    $("jamBarCounter").textContent = `${t("lblBar")} 1/${prog.length}`;
+  }
   drawFB();
 }
 
@@ -255,6 +261,7 @@ let scanChromaHistory = Array(12).fill(0);
 let targetChordName = "";
 let targetChordPcs = [];
 let detectedPcs = [];
+let currentChordPcs = [];
 
 // Voicing Guide State
 let voicingMode = false;
@@ -316,7 +323,7 @@ let currentAsioSampleRate = 44100;
 function playAsioPcmChunk(pcmData, sampleRate = (currentAsioSampleRate || 44100)) {
   if (!pcmData || pcmData.length === 0) return;
   const needMonitor = isMonitoringEnabled;
-  const needRec = isRecording && recMode === "browser" && recDestNode;
+  const needRec = isRecording && !!recDestNode;
   if (!needMonitor && !needRec) return;
   ensureAudioCtx();
 
@@ -426,7 +433,7 @@ async function rebuildDeviceDropdown() {
   // 1. ASIO & Audio Interfaces (Python Server)
   if (currentAsioDevices && currentAsioDevices.length > 0) {
     const asioGroup = document.createElement("optgroup");
-    asioGroup.label = `⚡ 오디오 인터페이스 & 백엔드 장치 (Python)`;
+    asioGroup.label = t("optAsioDeviceGroup");
 
     currentAsioDevices.forEach(d => {
       const o = document.createElement("option");
@@ -454,7 +461,7 @@ async function rebuildDeviceDropdown() {
 
   if (micDevices.length > 0) {
     const micGroup = document.createElement("optgroup");
-    micGroup.label = `🎙️ Direct Microphones`;
+    micGroup.label = t("optMicDeviceGroup");
 
     micDevices.forEach((x, i) => {
       const o = document.createElement("option");
@@ -503,6 +510,12 @@ function connectAsioWs() {
       $("err").textContent = "";
       sendRefPitch();
       sendMonitoringState();
+      try {
+        ws.send(JSON.stringify({ type: "set_sensitivity", value: sensitivity }));
+        if (isRecording) {
+          ws.send(JSON.stringify({ type: "set_browser_recording", enabled: true }));
+        }
+      } catch (e) { }
       resolve();
     };
 
@@ -584,7 +597,7 @@ function autoCorrelate(inputBuf, sr) {
     let s = 0;
     const limit = N - i;
     for (let j = 0; j < limit; j++) s += b[j] * b[j + i];
-    c[i] = s;
+    c[i] = limit > 0 ? (s / limit) * (1.0 - 0.12 * (i / maxLag)) : 0;
   }
 
   let d = minLag;
@@ -611,7 +624,9 @@ function autoCorrelate(inputBuf, sr) {
 function updatePitchTracker(cents) {
   const now = Date.now();
   pitchHistory.push({ time: now, cents: cents });
-  pitchHistory = pitchHistory.filter(item => now - item.time <= 5000);
+  while (pitchHistory.length > 0 && now - pitchHistory[0].time > 5000) {
+    pitchHistory.shift();
+  }
 
   drawPitchCanvas();
 
@@ -635,6 +650,8 @@ function updatePitchTracker(cents) {
 function drawPitchCanvas() {
   const canvas = $("pitchCanvas");
   if (!canvas) return;
+  const drawer = $("sideDrawer");
+  if (drawer && !drawer.classList.contains("open")) return;
   const ctx = canvas.getContext("2d");
   const W = canvas.width, H = canvas.height;
 
@@ -770,7 +787,7 @@ function renderStaticFretboard() {
     voicingMode = false;
     currentVoicing = null;
   }
-  const currentChordPcs = isChordMode ? getChordPcs(rootPc, chordTypeVal) : [];
+  currentChordPcs = isChordMode ? getChordPcs(rootPc, chordTypeVal) : [];
 
   for (let s = 0; s < numStrings; s++) {
     const openMidi = strings[s];
@@ -919,12 +936,21 @@ function updateTunerUI(detected) {
   });
 }
 
+function isCurrentModeMinor() {
+  if (guideMode === "chord") {
+    return chordTypeVal === "minor" || chordTypeVal === "min7";
+  }
+  return ["natural_minor", "harmonic_minor", "melodic_minor", "minor_pent", "blues", "dorian", "phrygian"].includes(scaleId);
+}
+
 function renderCircleOfFifths() {
   const svg = $("circleSvg"); if (!svg) return;
   svg.innerHTML = "";
 
   const cx = 150, cy = 150, rOuter = 135, rMid = 95, rInner = 55;
-  const rootIndex = CIRCLE_MAJOR.findIndex(k => CIRCLE_KEY_PC[k] === rootPc);
+  const minorActive = isCurrentModeMinor();
+  const lookupMajorPc = minorActive ? pc(rootPc + 3) : rootPc;
+  const rootIndex = CIRCLE_MAJOR.findIndex(k => CIRCLE_KEY_PC[k] === lookupMajorPc);
   const activeIdx = rootIndex !== -1 ? rootIndex : 0;
 
   for (let i = 0; i < 12; i++) {
@@ -936,13 +962,19 @@ function renderCircleOfFifths() {
     let classInner = "circle-sector";
 
     if (i === activeIdx) {
-      classOuter += " active-root";
-      classInner += " relative-key";
+      if (minorActive) {
+        classInner += " active-root";
+        classOuter += " relative-key";
+      } else {
+        classOuter += " active-root";
+        classInner += " relative-key";
+      }
     } else if (i === (activeIdx + 11) % 12 || i === (activeIdx + 1) % 12) {
       classOuter += " related-key";
     }
 
     const notePcVal = CIRCLE_KEY_PC[CIRCLE_MAJOR[i]];
+    const minorPcVal = pc(notePcVal + 9);
 
     const x1 = cx + rOuter * Math.cos(startAngle), y1 = cy + rOuter * Math.sin(startAngle);
     const x2 = cx + rOuter * Math.cos(endAngle), y2 = cy + rOuter * Math.sin(endAngle);
@@ -953,6 +985,7 @@ function renderCircleOfFifths() {
     pathOuter.setAttribute("d", `M ${x1} ${y1} A ${rOuter} ${rOuter} 0 0 1 ${x2} ${y2} L ${x3} ${y3} A ${rMid} ${rMid} 0 0 0 ${x4} ${y4} Z`);
     pathOuter.setAttribute("class", classOuter);
     pathOuter.setAttribute("data-pc", notePcVal);
+    pathOuter.setAttribute("data-minor", "0");
     svg.appendChild(pathOuter);
 
     const txOuter = cx + ((rOuter + rMid) / 2) * Math.cos(midAngle);
@@ -972,7 +1005,8 @@ function renderCircleOfFifths() {
     const pathInner = document.createElementNS("http://www.w3.org/2000/svg", "path");
     pathInner.setAttribute("d", `M ${mx1} ${my1} A ${rMid} ${rMid} 0 0 1 ${mx2} ${my2} L ${mx3} ${my3} A ${rInner} ${rInner} 0 0 0 ${mx4} ${my4} Z`);
     pathInner.setAttribute("class", classInner);
-    pathInner.setAttribute("data-pc", notePcVal);
+    pathInner.setAttribute("data-pc", minorPcVal);
+    pathInner.setAttribute("data-minor", "1");
     svg.appendChild(pathInner);
 
     const txInner = cx + ((rMid + rInner) / 2) * Math.cos(midAngle);
@@ -1046,19 +1080,30 @@ function updatePoly(data) {
 
   if (isRecording) {
     const elapsed = (Date.now() - recStartTime) / 1000;
+    const allMidis = activeNotes.length > 0 ? activeNotes.map(n => n.midi) : [firstMidi];
+    const displayNote = activeNotes.length > 1
+      ? activeNotes.map(n => NOTE[pc(n.midi)]).join(" · ")
+      : NOTE[pc(firstMidi)];
+    const chordPcsNow = (guideMode === "chord") ? (currentChordPcs.length > 0 ? currentChordPcs : getChordPcs(rootPc, chordTypeVal)) : [];
+    const inTargetNow = (guideMode === "chord")
+      ? allMidis.every(m => chordPcsNow.includes(pc(m)))
+      : allMidis.every(m => inScale(m));
     recordingTimeline.push({
       t: elapsed,
-      note: NOTE[pc(firstMidi)],
+      note: displayNote,
       midi: firstMidi,
+      midis: allMidis,
       cents: cents,
-      inScale: inScale(firstMidi),
-      deg: DEG[pc(firstMidi - rootPc)]
+      inScale: inTargetNow,
+      deg: allMidis.map(m => DEG[pc(m - rootPc)]).filter(Boolean).join(" · ")
     });
   }
 
   if (quizMode) {
     const p = pc(firstMidi);
     if (guideMode === "chord") {
+      const noteNames = activeNotes.map(n => NOTE[pc(n.midi)]).join(" · ");
+      $("bigNote").textContent = noteNames || NOTE[p];
       if (!lock) {
         const hmmState = runHMM(chroma, rms);
         if (hmmState < 24) {
@@ -1087,10 +1132,12 @@ function updatePoly(data) {
   } else {
     const noteNames = activeNotes.map(n => NOTE[pc(n.midi)]).join(" · ");
     $("bigNote").textContent = (data.f > 0 && activeNotes.length <= 1) ? NOTE[pc(firstMidi)] : (noteNames || NOTE[pc(firstMidi)]);
+    const activeChordPcs = (currentChordPcs && currentChordPcs.length > 0) ? currentChordPcs : getChordPcs(rootPc, chordTypeVal);
+    const evalNotes = activeNotes.length > 0 ? activeNotes : [{ midi: firstMidi }];
     const allInTarget = (guideMode === "chord")
-      ? (activeNotes.length > 0 && activeNotes.every(n => currentChordPcs.includes(pc(n.midi))))
-      : (activeNotes.length > 0 && activeNotes.every(n => inScale(n.midi)));
-    const degrees = activeNotes.map(n => DEG[pc(n.midi - rootPc)]).filter(x => x).join(" · ");
+      ? evalNotes.every(n => activeChordPcs.includes(pc(n.midi)))
+      : evalNotes.every(n => inScale(n.midi));
+    const degrees = evalNotes.map(n => DEG[pc(n.midi - rootPc)]).filter(x => x).join(" · ");
     $("degTxt").textContent = degrees ? (t("degPrefix") + degrees) : "";
     if (allInTarget) {
       v.textContent = (guideMode === "chord") ? t("verdictInChord") : t("verdictInScale");
@@ -1132,20 +1179,24 @@ function update(res) {
   $("hz").textContent = `${Math.round(res.f)}Hz`;
   $("needle").style.left = `${50 + Math.max(-50, Math.min(50, cents))}%`;
 
+  const activeChordPcs = (currentChordPcs && currentChordPcs.length > 0) ? currentChordPcs : getChordPcs(rootPc, chordTypeVal);
+
   if (isRecording) {
     const elapsed = (Date.now() - recStartTime) / 1000;
     recordingTimeline.push({
       t: elapsed,
       note: NOTE[p],
       midi: m,
+      midis: [m],
       cents: cents,
-      inScale: inScale(m),
+      inScale: (guideMode === "chord") ? activeChordPcs.includes(p) : inScale(m),
       deg: DEG[pc(m - rootPc)]
     });
   }
 
   if (quizMode) {
     if (guideMode === "chord") {
+      $("bigNote").textContent = NOTE[p];
       const hit = targetChordPcs.includes(p);
       if (!lock && hit && Math.abs(cents) < 40) {
         history.push(p); if (history.length > stabNeeded) history.shift();
@@ -1169,7 +1220,7 @@ function update(res) {
     $("bigNote").textContent = NOTE[p];
     const interval = pc(m - rootPc);
     const isChordTarget = (guideMode === "chord");
-    const isToneOk = isChordTarget ? currentChordPcs.includes(p) : inScale(m);
+    const isToneOk = isChordTarget ? activeChordPcs.includes(p) : inScale(m);
     if (isToneOk) {
       $("degTxt").textContent = t("degPrefix") + DEG[interval];
       v.textContent = isChordTarget ? t("verdictInChord") : t("verdictInScale");
@@ -1185,9 +1236,10 @@ function update(res) {
 function loop() {
   if (!running) return;
   if (ws && ws.readyState === WebSocket.OPEN) {
-    raf = requestAnimationFrame(loop);
+    raf = null;
     return;
   }
+  if (!analyser || !buf) return;
   analyser.getFloatTimeDomainData(buf);
   update(autoCorrelate(buf, audioCtx.sampleRate));
   raf = requestAnimationFrame(loop);
@@ -1229,6 +1281,10 @@ async function connect(id) {
   source.connect(analyser);
 
   source.connect(monitorGainNode);
+  if (running) {
+    if (raf) cancelAnimationFrame(raf);
+    loop();
+  }
 }
 
 async function start() {
@@ -1542,6 +1598,8 @@ function stopJamTrack() {
   $("btnJam").textContent = t("btnJamPlay");
   $("btnJam").className = "btn-primary-action";
   $("jamCurrentChord").textContent = "––";
+  const prog = JAM_PROGRESSIONS[jamProgressionKey] || JAM_PROGRESSIONS.pop;
+  if ($("jamBarCounter")) $("jamBarCounter").textContent = `${t("lblBar")} 1/${prog.length}`;
   drawFB();
 }
 
@@ -1550,7 +1608,8 @@ function stepJamTrack() {
   ensureAudioCtx();
 
   const prog = JAM_PROGRESSIONS[jamProgressionKey] || JAM_PROGRESSIONS.pop;
-  const chordItem = prog[jamBarIndex % prog.length];
+  const barIdxInProg = jamBarIndex % prog.length;
+  const chordItem = prog[barIdxInProg];
   const degreeOffset = chordItem.deg;
   const isMinorChord = chordItem.isMinor;
 
@@ -1560,6 +1619,7 @@ function stepJamTrack() {
 
   const chordName = `${NOTE[currentChordRootPc]} ${isMinorChord ? "m" : "Maj"}`;
   $("jamCurrentChord").textContent = chordName;
+  if ($("jamBarCounter")) $("jamBarCounter").textContent = `${t("lblBar")} ${barIdxInProg + 1}/${prog.length}`;
 
   const barDurationSec = (60 / jamBpm) * 4;
   playJamSynthChord(currentChordRootPc, isMinorChord, barDurationSec, nextJamTime);
@@ -1739,8 +1799,10 @@ function audioBufferToWav(buffer) {
   return new Blob([view], { type: 'audio/wav' });
 }
 
+let activeRecMode = "browser";
+
 function startRecording() {
-  const recMode = $("recModeSel") ? $("recModeSel").value : "browser";
+  activeRecMode = $("recModeSel") ? $("recModeSel").value : "browser";
   const shouldMix = $("recMixCheck") ? $("recMixCheck").checked : true;
 
   isRecording = true;
@@ -1763,65 +1825,71 @@ function startRecording() {
     if ($("recTimerTxt")) $("recTimerTxt").textContent = `${mins}:${secs}`;
   }, 500);
 
-  if (recMode === "asio") {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "start_asio_recording" }));
-    }
-  } else {
+  if (ws && ws.readyState === WebSocket.OPEN) {
     try {
-      ensureAudioCtx();
-      recDestNode = audioCtx.createMediaStreamDestination();
-
-      if (source) {
-        try { source.connect(recDestNode); } catch (e) { }
+      ws.send(JSON.stringify({ type: "set_browser_recording", enabled: true }));
+      if (activeRecMode === "asio") {
+        ws.send(JSON.stringify({ type: "start_asio_recording" }));
       }
-      if (shouldMix) {
-        const bus = getMasterSynthBus();
-        if (bus) {
-          try { bus.connect(recDestNode); } catch (e) { }
-        }
-      }
+    } catch (e) { }
+  }
 
-      recordedAudioChunks = [];
-      const options = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? { mimeType: "audio/webm;codecs=opus" }
-        : {};
-      mediaRecorder = new MediaRecorder(recDestNode.stream, options);
+  try {
+    ensureAudioCtx();
+    recDestNode = audioCtx.createMediaStreamDestination();
 
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) {
-          recordedAudioChunks.push(e.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        if (recordedAudioChunks.length === 0) return;
-        const rawBlob = new Blob(recordedAudioChunks, { type: mediaRecorder.mimeType || "audio/webm" });
-        try {
-          const arrayBuf = await rawBlob.arrayBuffer();
-          const audioBuf = await audioCtx.decodeAudioData(arrayBuf);
-          recordedAudioBlob = audioBufferToWav(audioBuf);
-        } catch (e) {
-          recordedAudioBlob = rawBlob;
-        }
-
-        if (recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
-        recordedAudioUrl = URL.createObjectURL(recordedAudioBlob);
-
-        const player = $("recAudioPlayer");
-        if (player) {
-          player.src = recordedAudioUrl;
-          player.load();
-        }
-
-        finishRecordingAnalysis();
-      };
-
-      mediaRecorder.start(200);
-    } catch (err) {
-      console.error("Failed to start MediaRecorder:", err);
-      $("err").textContent = `녹음 시작 실패: ${err.message}`;
+    if (source) {
+      try { source.connect(recDestNode); } catch (e) { }
     }
+    if (shouldMix) {
+      const bus = getMasterSynthBus();
+      if (bus) {
+        try { bus.connect(recDestNode); } catch (e) { }
+      }
+    }
+
+    recordedAudioChunks = [];
+    const options = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? { mimeType: "audio/webm;codecs=opus" }
+      : {};
+    mediaRecorder = new MediaRecorder(recDestNode.stream, options);
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) {
+        recordedAudioChunks.push(e.data);
+      }
+    };
+
+    mediaRecorder.onstop = async () => {
+      if (recordedAudioChunks.length === 0) {
+        finishRecordingAnalysis();
+        return;
+      }
+      const rawBlob = new Blob(recordedAudioChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+      try {
+        const arrayBuf = await rawBlob.arrayBuffer();
+        const audioBuf = await audioCtx.decodeAudioData(arrayBuf);
+        recordedAudioBlob = audioBufferToWav(audioBuf);
+      } catch (e) {
+        recordedAudioBlob = rawBlob;
+      }
+
+      if (recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
+      recordedAudioUrl = URL.createObjectURL(recordedAudioBlob);
+
+      const player = $("recAudioPlayer");
+      if (player) {
+        player.src = recordedAudioUrl;
+        player.load();
+      }
+
+      finishRecordingAnalysis();
+    };
+
+    mediaRecorder.start(200);
+  } catch (err) {
+    console.error("Failed to start MediaRecorder:", err);
+    $("err").textContent = `${t("errRecStartFailed")}${err.message}`;
   }
 }
 
@@ -1840,23 +1908,25 @@ function stopRecording() {
   const timerBadge = $("recTimerBadge");
   if (timerBadge) timerBadge.style.display = "none";
 
-  const recMode = $("recModeSel") ? $("recModeSel").value : "browser";
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    try {
+      ws.send(JSON.stringify({ type: "set_browser_recording", enabled: false }));
+      if (activeRecMode === "asio") {
+        ws.send(JSON.stringify({ type: "stop_asio_recording" }));
+      }
+    } catch (e) { }
+  }
 
-  if (recMode === "asio") {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "stop_asio_recording" }));
-    }
-    finishRecordingAnalysis();
+  if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    try { mediaRecorder.stop(); } catch (e) { finishRecordingAnalysis(); }
   } else {
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
-      try { mediaRecorder.stop(); } catch (e) { }
-    }
-    if (recDestNode) {
-      if (source) { try { source.disconnect(recDestNode); } catch (e) { } }
-      const bus = getMasterSynthBus();
-      if (bus) { try { bus.disconnect(recDestNode); } catch (e) { } }
-      recDestNode = null;
-    }
+    finishRecordingAnalysis();
+  }
+  if (recDestNode) {
+    if (source) { try { source.disconnect(recDestNode); } catch (e) { } }
+    const bus = getMasterSynthBus();
+    if (bus) { try { bus.disconnect(recDestNode); } catch (e) { } }
+    recDestNode = null;
   }
 }
 
@@ -1916,15 +1986,22 @@ function startSyncReplay() {
 
     const currentT = player.currentTime;
     let currentEvent = null;
-    for (let i = recordingTimeline.length - 1; i >= 0; i--) {
-      if (recordingTimeline[i].t <= currentT && currentT - recordingTimeline[i].t < 0.25) {
-        currentEvent = recordingTimeline[i];
-        break;
+    let lo = 0, hi = recordingTimeline.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >>> 1;
+      if (recordingTimeline[mid].t <= currentT) {
+        currentEvent = recordingTimeline[mid];
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
       }
+    }
+    if (currentEvent && (currentT - currentEvent.t >= 0.25)) {
+      currentEvent = null;
     }
 
     if (currentEvent) {
-      litPcs = [pc(currentEvent.midi)];
+      litPcs = currentEvent.midis ? currentEvent.midis.map(m => pc(m)) : [pc(currentEvent.midi)];
       updateFretboardLit();
       $("bigNote").textContent = currentEvent.note;
       $("degTxt").textContent = currentEvent.deg ? `${t("degPrefix")}${currentEvent.deg}` : "";
@@ -2339,9 +2416,28 @@ function bindEvents() {
       const sector = e.target.closest(".circle-sector");
       if (sector) {
         const pcVal = parseInt(sector.getAttribute("data-pc"), 10);
+        const clickedMinor = sector.getAttribute("data-minor") === "1";
         if (!isNaN(pcVal)) {
           rootPc = pcVal;
           if ($("keySel")) $("keySel").value = pcVal;
+          if (guideMode === "chord") {
+            if (clickedMinor && (chordTypeVal === "major" || chordTypeVal === "maj7")) {
+              chordTypeVal = (chordTypeVal === "maj7") ? "min7" : "minor";
+              if ($("chordTypeSel")) $("chordTypeSel").value = chordTypeVal;
+            } else if (!clickedMinor && (chordTypeVal === "minor" || chordTypeVal === "min7")) {
+              chordTypeVal = (chordTypeVal === "min7") ? "maj7" : "major";
+              if ($("chordTypeSel")) $("chordTypeSel").value = chordTypeVal;
+            }
+          } else {
+            if (clickedMinor && (scaleId === "major" || scaleId === "major_pent")) {
+              scaleId = (scaleId === "major_pent") ? "minor_pent" : "natural_minor";
+              if ($("scaleSel")) $("scaleSel").value = scaleId;
+            } else if (!clickedMinor && (scaleId === "natural_minor" || scaleId === "minor_pent")) {
+              scaleId = (scaleId === "minor_pent") ? "major_pent" : "major";
+              if ($("scaleSel")) $("scaleSel").value = scaleId;
+            }
+          }
+          rebuildVoicingSel();
           drawFB();
           renderCircleOfFifths();
           if (voicingMode) updateVoicingGuide();
@@ -2355,7 +2451,13 @@ function bindEvents() {
   if ($("jamProgSel")) {
     $("jamProgSel").onchange = e => {
       jamProgressionKey = e.target.value;
-      if (isJamPlaying) { stopJamTrack(); startJamTrack(); }
+      if (isJamPlaying) {
+        stopJamTrack();
+        startJamTrack();
+      } else if ($("jamBarCounter")) {
+        const prog = JAM_PROGRESSIONS[jamProgressionKey] || JAM_PROGRESSIONS.pop;
+        $("jamBarCounter").textContent = `${t("lblBar")} 1/${prog.length}`;
+      }
     };
   }
   if ($("jamBpm")) {
@@ -2370,6 +2472,12 @@ function bindEvents() {
     $("metroBpm").oninput = e => {
       metroBpm = parseInt(e.target.value, 10);
       if ($("metroBpmVal")) $("metroBpmVal").textContent = metroBpm;
+    };
+  }
+  if ($("metroAutoSpeed")) {
+    isAutoSpeedUp = $("metroAutoSpeed").checked;
+    $("metroAutoSpeed").onchange = e => {
+      isAutoSpeedUp = e.target.checked;
     };
   }
 
@@ -2436,8 +2544,20 @@ function rebuildCustomTuningUI() {
   const maxMidi = (currentInstrument === "bass") ? 55 : 72;
 
   for (let s = 0; s < numStrings; s++) {
+    const wrap = document.createElement("div");
+    wrap.style.display = "flex";
+    wrap.style.flexDirection = "column";
+    wrap.style.alignItems = "center";
+    wrap.style.gap = "2px";
+
+    const lbl = document.createElement("small");
+    lbl.style.fontSize = "10px";
+    lbl.style.color = "var(--sub)";
+    lbl.textContent = `${s + 1}st`;
+
     const sel = document.createElement("select");
     sel.id = "strSel_" + s;
+    sel.className = "select-styled";
     for (let m = minMidi; m <= maxMidi; m++) {
       const o = document.createElement("option");
       o.value = m;
@@ -2451,7 +2571,9 @@ function rebuildCustomTuningUI() {
       rebuildTunerUI();
       drawFB();
     };
-    bar.appendChild(sel);
+    wrap.appendChild(lbl);
+    wrap.appendChild(sel);
+    bar.appendChild(wrap);
   }
 }
 

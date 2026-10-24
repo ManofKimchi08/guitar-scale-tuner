@@ -2,7 +2,7 @@
 
 A powerful, ultra low-latency fretboard **scale guide & practice studio** in the browser and desktop that **listens to your real electric & bass guitar** in real-time.
 
-[![Release](https://img.shields.io/badge/Release-v2.1.1-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
+[![Release](https://img.shields.io/badge/Release-v2.1.2-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Web-brightgreen.svg)]()
 
@@ -20,7 +20,7 @@ A powerful, ultra low-latency fretboard **scale guide & practice studio** in the
 
 ---
 
-## 🌟 Key Features (v2.1.1)
+## 🌟 Key Features (v2.1.2)
 
 ### 1. 🎸 6-String Guitar & 4-String Bass Support
 - **Dual Instrument Engine**: Instant toggle between `🎸 6-String Guitar` and `🎸 4-String Bass`.
