@@ -128,10 +128,11 @@
 
           <!-- Sleek Compact 4-Chip Toggle Controls -->
           <div class="chip-toggle-grid">
-            <div class="chip-toggle" id="modeToggle">
+            <div class="chip-toggle three-way" id="modeToggle">
               <div class="chip-slider" id="modeHandler"></div>
               <button type="button" class="chip-btn active" id="togglePractice" data-i18n="modePractice">연습</button>
               <button type="button" class="chip-btn" id="toggleQuiz" data-i18n="modeQuiz">퀴즈</button>
+              <button type="button" class="chip-btn" id="toggleRhythm" data-i18n="modeRhythm">🎮 리듬</button>
             </div>
 
             <div class="chip-toggle" id="guideToggle">
@@ -140,10 +141,11 @@
               <button type="button" class="chip-btn" id="toggleChord" data-i18n="guideChord">코드</button>
             </div>
 
-            <div class="chip-toggle" id="labelToggle">
+            <div class="chip-toggle three-way" id="labelToggle">
               <div class="chip-slider" id="labelHandler"></div>
               <button type="button" class="chip-btn active" id="toggleName" data-i18n="labelName">음이름</button>
               <button type="button" class="chip-btn" id="toggleDeg" data-i18n="labelDegree">도수</button>
+              <button type="button" class="chip-btn" id="toggleFinger" data-i18n="labelFinger">🖐️ 운지</button>
             </div>
 
             <div class="chip-toggle" id="handToggle">
@@ -155,10 +157,162 @@
         </div>
       </div>
 
+      <!-- Rhythm Game & Smart Fingering Arena Card -->
+      <div class="panel rhythm-arena-card" id="rhythmGamePanel" style="display: none;">
+        <div class="rhythm-top-bar">
+          <div class="rhythm-title-wrap">
+            <span class="rhythm-badge" data-i18n="rhythmTitle">🎮 리듬 & 지판·운지 트레이너</span>
+            <span class="rhythm-sub" id="rhythmSubHint" data-i18n="subRhythm">리듬 트레이너 — 박자에 맞춰 목표 프렛과 손가락(1~4)으로 연주하세요.</span>
+          </div>
+          <div class="rhythm-live-stats">
+            <div class="rhythm-stat-pill">
+              <small>SCORE</small>
+              <b id="rhythmScoreVal">0</b>
+            </div>
+            <div class="rhythm-stat-pill combo">
+              <small>COMBO</small>
+              <b id="rhythmComboVal">0</b>
+            </div>
+            <div class="rhythm-stat-pill acc">
+              <small>ACC</small>
+              <b id="rhythmAccVal">100%</b>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rhythm Trainer Controls -->
+        <div class="rhythm-controls-bar">
+          <div class="compact-field">
+            <small data-i18n="lblRhythmBox">프렛 박스 (포지션)</small>
+            <select id="rhythmBoxSel" class="select-styled">
+              <option value="open" data-i18n="box_open">오픈 포지션 (0~4프렛)</option>
+              <option value="box1" selected data-i18n="box_1">Box 1 (5~8프렛)</option>
+              <option value="box2" data-i18n="box_2">Box 2 (7~10프렛)</option>
+              <option value="box3" data-i18n="box_3">Box 3 (9~12프렛)</option>
+              <option value="high" data-i18n="box_high">하이 포지션 (12~15프렛)</option>
+              <option value="full" data-i18n="box_full">전체 지판 (0~12프렛)</option>
+            </select>
+          </div>
+
+          <div class="compact-field">
+            <small data-i18n="lblRhythmDrill">연습 시퀀스</small>
+            <select id="rhythmDrillSel" class="select-styled">
+              <option value="run" selected data-i18n="drill_run">📈 상·하행 스케일 런</option>
+              <option value="seq" data-i18n="drill_seq">🔀 3연음·인터벌 시퀀스</option>
+              <option value="chord" data-i18n="drill_chord">🎯 루트 & 코드톤 타겟</option>
+              <option value="random" data-i18n="drill_random">🎲 랜덤 초견 (Sight-Read)</option>
+            </select>
+          </div>
+
+          <div class="compact-field">
+            <small data-i18n="lblRhythmMeter">박자표 (Time Sig)</small>
+            <select id="rhythmMeterSel" class="select-styled">
+              <option value="4_4" selected data-i18n="meter_4_4">4/4박 (강·약·중강·약)</option>
+              <option value="3_4" data-i18n="meter_3_4">3/4박 (강·약·약 왈츠)</option>
+              <option value="6_8" data-i18n="meter_6_8">6/8박 (3+3 겹박자)</option>
+              <option value="12_8" data-i18n="meter_12_8">12/8박 (3+3+3+3 슬로우록)</option>
+              <option value="2_4" data-i18n="meter_2_4">2/4박 (강·약 폴카/행진)</option>
+              <option value="5_4" data-i18n="meter_5_4">5/4박 (3+2 변박자)</option>
+              <option value="7_8" data-i18n="meter_7_8">7/8박 (2+2+3 변박자)</option>
+            </select>
+          </div>
+
+          <div class="compact-field">
+            <small data-i18n="lblRhythmSubdiv">음표 분할·리듬</small>
+            <select id="rhythmSubdivSel" class="select-styled">
+              <option value="quarter" selected data-i18n="subdiv_quarter">♩ 4분음표 (정박 1x)</option>
+              <option value="eighth" data-i18n="subdiv_eighth">♪ 8분음표 (반박 2x)</option>
+              <option value="triplet" data-i18n="subdiv_triplet">🎶 8분 셋잇단음표 (Triplet 3x)</option>
+              <option value="sixteenth" data-i18n="subdiv_sixteenth">♬ 16분음표 (고속 4x)</option>
+              <option value="shuffle" data-i18n="subdiv_shuffle">🎷 블루스 셔플 (Swing 2:1)</option>
+              <option value="dotted" data-i18n="subdiv_dotted">🎯 부점 리듬 (점8분+16분)</option>
+              <option value="gallop" data-i18n="subdiv_gallop">🐎 메탈 갤럽 (8분+16분×2)</option>
+              <option value="rev_gallop" data-i18n="subdiv_rev_gallop">🏇 리버스 갤럽 (16분×2+8분)</option>
+              <option value="tresillo" data-i18n="subdiv_tresillo">💃 라틴·팝 트레시요 (3-3-2)</option>
+              <option value="funk16" data-i18n="subdiv_funk16">🕺 펑크 16비트 싱코페이션</option>
+              <option value="riff" data-i18n="subdiv_riff">⚡ 록 싱코페이션 리프</option>
+            </select>
+          </div>
+
+          <div class="compact-field bpm-field">
+            <small>BPM (<span id="rhythmBpmVal">90</span>)</small>
+            <input type="range" id="rhythmBpm" min="50" max="180" value="90" step="2">
+          </div>
+
+          <div class="compact-field">
+            <small data-i18n="lblRhythmLength">노트 수</small>
+            <select id="rhythmLenSel" class="select-styled">
+              <option value="16">16 Notes</option>
+              <option value="24" selected>24 Notes</option>
+              <option value="32">32 Notes</option>
+              <option value="48">48 Notes</option>
+            </select>
+          </div>
+
+          <div class="compact-field bpm-field">
+            <small><span data-i18n="lblRhythmLatency">입력 보정(ms)</span> (<span id="rhythmLatVal">40</span>)</small>
+            <input type="range" id="rhythmLatency" min="0" max="140" value="40" step="5">
+          </div>
+
+          <button id="btnRhythmToggle" class="btn-primary-action" data-i18n="btnRhythmStart">▶ 게임 시작</button>
+        </div>
+
+        <!-- Live Finger Indicator Bar -->
+        <div class="finger-guide-bar" id="fingerGuideBar">
+          <div class="finger-pill f0" data-finger="0"><span data-i18n="finger_0">⓪ 개방현</span></div>
+          <div class="finger-pill f1" data-finger="1"><span data-i18n="finger_1">① 검지</span></div>
+          <div class="finger-pill f2" data-finger="2"><span data-i18n="finger_2">② 중지</span></div>
+          <div class="finger-pill f3" data-finger="3"><span data-i18n="finger_3">③ 약지</span></div>
+          <div class="finger-pill f4" data-finger="4"><span data-i18n="finger_4">④ 소지</span></div>
+          <div class="rhythm-judge-banner" id="rhythmJudgeBanner" data-i18n="rhythmReady">▶ 게임 시작을 누르면 4박자 카운트인 후 노트가 출발합니다</div>
+        </div>
+
+        <!-- Scrolling Highway Canvas -->
+        <div class="rhythm-highway-wrap">
+          <canvas id="rhythmCanvas" width="840" height="175"></canvas>
+          <div class="rhythm-progress-track">
+            <div class="rhythm-progress-bar" id="rhythmProgressBar"></div>
+          </div>
+        </div>
+
+        <!-- Session Result Scorecard Overlay -->
+        <div class="rhythm-result-box" id="rhythmResultBox" style="display: none;">
+          <div class="rhythm-result-header">
+            <div class="rhythm-result-title" data-i18n="rhythmResultTitle">🏆 리듬 & 지판 트레이닝 성적표</div>
+            <div class="rhythm-rank-badge" id="rhythmRankBadge">S</div>
+          </div>
+          <div class="rhythm-result-grid">
+            <div class="report-stat-item">
+              <span class="stat-lbl" data-i18n="rhythmAccuracy">타이밍 정확도</span>
+              <strong class="stat-val ok" id="resRhythmAcc">100%</strong>
+            </div>
+            <div class="report-stat-item">
+              <span class="stat-lbl" data-i18n="rhythmMaxCombo">최대 콤보</span>
+              <strong class="stat-val tone" id="resRhythmCombo">24</strong>
+            </div>
+            <div class="report-stat-item">
+              <span class="stat-lbl" data-i18n="rhythmAvgOffset">평균 박자 편차</span>
+              <strong class="stat-val" id="resRhythmOffset">+0ms</strong>
+            </div>
+            <div class="report-stat-item">
+              <span class="stat-lbl">PERFECT / GREAT / GOOD / MISS</span>
+              <strong class="stat-val" id="resRhythmBreakdown">0 / 0 / 0 / 0</strong>
+            </div>
+          </div>
+          <div class="rhythm-weak-spot">
+            <span class="weak-lbl" data-i18n="rhythmWeakSpot">집중 복습 추천 포지션</span>:
+            <strong id="resRhythmWeakTxt">–</strong>
+          </div>
+          <div class="rhythm-result-actions">
+            <button id="btnRhythmRetry" class="btn-primary-action" data-i18n="btnRhythmRetry">🔄 다시 도전</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Hero Fretboard Card -->
       <div class="panel fretboard-card">
         <div class="fretboard-wrap">
-          <svg id="fb" viewBox="0 0 840 250" preserveAspectRatio="xMidYMid meet"></svg>
+          <svg id="fb" viewBox="0 0 840 302" preserveAspectRatio="xMidYMid meet"></svg>
         </div>
         
         <!-- Legend Bar -->

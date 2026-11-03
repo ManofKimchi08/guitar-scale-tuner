@@ -234,7 +234,8 @@ let audioCtx = null, analyser = null, source = null, stream = null, raf = null, 
 let running = false;
 let rootPc = 9;                 // default A
 let scaleId = "minor_pent";
-let labelMode = "name";         // "name" | "deg"
+let labelMode = "name";         // "name" | "deg" | "finger"
+let appMode = "practice";       // "practice" | "quiz" | "rhythm"
 let quizMode = false;
 let targetInterval = 0;
 let score = 0, streak = 0, lock = false;
@@ -287,6 +288,106 @@ let metroBpm = 100;
 let metroBeatCount = 0;
 let metroBarCount = 0;
 let isAutoSpeedUp = true;
+
+// Rhythm Game & Smart Fingering State
+const FINGER_BADGES = ["⓪", "①", "②", "③", "④"];
+const FINGER_COLORS = ["#94a3b8", "#38bdf8", "#22c55e", "#f59e0b", "#ec4899"];
+let rhythmBoxId = "box1";       // "open" | "box1" | "box2" | "box3" | "high" | "full"
+let rhythmDrillId = "run";      // "run" | "seq" | "chord" | "random"
+let rhythmMeterId = "4_4";      // "4_4" | "3_4" | "6_8" | "12_8" | "2_4" | "5_4" | "7_8"
+let rhythmSubdivId = "quarter"; // "quarter" | "eighth" | "triplet" | "sixteenth" | "shuffle" | ...
+let rhythmBpm = 90;
+let rhythmNoteCount = 24;
+let rhythmLatencyMs = 45;
+let isRhythmPlaying = false;
+let rhythmRaf = null;
+let rhythmStartTime = 0;
+let rhythmChart = [];
+let rhythmScore = 0;
+let rhythmCombo = 0;
+let rhythmMaxCombo = 0;
+let rhythmCounts = { perfect: 0, great: 0, good: 0, miss: 0 };
+let rhythmOffsets = [];
+let rhythmParticles = [];
+let rhythmScheduledClickBeat = -4;
+let rhythmTotalBeats = 0;
+let rhythmLastHitTime = 0;
+let rhythmLastHitMidi = -1;
+let rhythmCurrentTarget = null;
+let rhythmNextTarget = null;
+
+function getFretBoxRange(boxId) {
+  switch (boxId) {
+    case "open": return [0, 4];
+    case "box1": return [5, 8];
+    case "box2": return [7, 10];
+    case "box3": return [9, 12];
+    case "high": return [12, 15];
+    case "full": return [0, 12];
+    default: return [5, 8];
+  }
+}
+
+function getRecommendedFinger(sIdx, fret, boxIdOverride = null) {
+  if (fret <= 0) return 0; // Open string
+
+  // 1. If in Chord mode with an active CAGED voicing, use the exact chord voicing finger
+  if (guideMode === "chord" && voicingMode && currentVoicing && currentInstrument !== "bass") {
+    if (currentVoicing.frets[sIdx] === fret && currentVoicing.fingers && currentVoicing.fingers[sIdx] !== null) {
+      return currentVoicing.fingers[sIdx];
+    }
+  }
+
+  // 2. Determine the active 4-fret hand box window
+  let minF = 1, maxF = 4;
+  const effectiveBox = boxIdOverride || (appMode === "rhythm" ? rhythmBoxId : "full");
+  if (effectiveBox && effectiveBox !== "full") {
+    const [bMin, bMax] = getFretBoxRange(effectiveBox);
+    if (fret >= Math.max(1, bMin) && fret <= bMax) {
+      minF = Math.max(1, bMin);
+      maxF = bMax;
+    } else if (fret <= 4) { minF = 1; maxF = 4; }
+    else if (fret <= 8) { minF = 5; maxF = 8; }
+    else if (fret <= 12) { minF = 9; maxF = 12; }
+    else { minF = 12; maxF = 15; }
+  } else {
+    if (fret <= 4) { minF = 1; maxF = 4; }
+    else if (fret <= 8) { minF = 5; maxF = 8; }
+    else if (fret <= 12) { minF = 9; maxF = 12; }
+    else { minF = 12; maxF = 15; }
+  }
+
+  // 3. Inspect active scale/chord notes on this string inside [minF, maxF] for ergonomic 2-note / 3NPS rules
+  const openMidi = strings[sIdx] || 40;
+  const isChordMode = (guideMode === "chord");
+  const chordPcs = isChordMode ? getChordPcs(rootPc, chordTypeVal) : [];
+  const activeFrets = [];
+  for (let f = minF; f <= maxF; f++) {
+    const m = openMidi + f;
+    const ok = isChordMode ? chordPcs.includes(pc(m)) : inScale(m);
+    if (ok) activeFrets.push(f);
+  }
+
+  if (activeFrets.includes(fret)) {
+    if (activeFrets.length === 2) {
+      const [f1, f2] = activeFrets;
+      const f1Finger = (f1 > minF && (f2 - f1) <= 2) ? 2 : 1;
+      if (fret === f1) return f1Finger;
+      const span = f2 - f1;
+      return Math.max(2, Math.min(4, f1Finger + span));
+    } else if (activeFrets.length === 3) {
+      const [f1, f2, f3] = activeFrets;
+      if (fret === f1) return 1;
+      if (fret === f3) return 4;
+      if (fret === f2) {
+        return (f2 - f1 <= 1 || f3 - f1 >= 4) ? 2 : 3;
+      }
+    }
+  }
+
+  // 4. Standard 1-Finger-Per-Fret fallback relative to minF
+  return Math.max(1, Math.min(4, fret - minF + 1));
+}
 
 function ensureAudioCtx() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -699,6 +800,9 @@ function drawPitchCanvas() {
 
 // ---------- Fretboard Drawing & DOM Optimization ----------
 let fretboardNoteElements = [];
+let fretboardGeom = null;
+let hoveredFretNote = null;
+let handAnchorFretSmoothed = null;
 
 function renderStaticFretboard() {
   const fb = $("fb"); if (!fb) return;
@@ -707,7 +811,7 @@ function renderStaticFretboard() {
 
   const frets = 15;
   const numStrings = strings.length;
-  const W = 840, H = 250, marginX = 40, marginY = 25;
+  const W = 840, H = 240, marginX = 40, marginY = 24;
   const usableW = W - marginX * 2, usableH = H - marginY * 2;
 
   const fretX = [];
@@ -770,6 +874,37 @@ function renderStaticFretboard() {
   });
 
   const stringY = (sIdx) => marginY + (sIdx * (usableH / Math.max(1, numStrings - 1)));
+  const fretCenterX = (fNum) => {
+    const clamped = Math.max(0, Math.min(frets, fNum));
+    if (clamped === 0) return isLeftHand ? (W - marginX + 15) : (marginX - 15);
+    const lo = Math.floor(clamped);
+    const hi = Math.min(frets, lo + 1);
+    const frac = clamped - lo;
+    const cLo = lo === 0 ? (isLeftHand ? W - marginX + 15 : marginX - 15) : (fretX[lo - 1] + fretX[lo]) / 2;
+    const cHi = (fretX[hi - 1] + fretX[hi]) / 2;
+    return cLo + (cHi - cLo) * frac;
+  };
+
+  fretboardGeom = { fretX, stringY, fretCenterX, marginX, marginY, W, neckH: H, fullH: 302, frets, numStrings };
+
+  // Highlight active Fret Box Zone when in Rhythm Mode
+  if (appMode === "rhythm") {
+    const [bMin, bMax] = getFretBoxRange(rhythmBoxId);
+    const xStart = bMin === 0 ? fretX[0] : fretX[bMin - 1];
+    const xEnd = fretX[Math.min(frets, bMax)];
+    const rectX = Math.min(xStart, xEnd);
+    const rectW = Math.abs(xEnd - xStart);
+    const boxRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    boxRect.setAttribute("x", rectX);
+    boxRect.setAttribute("y", marginY - 8);
+    boxRect.setAttribute("width", rectW);
+    boxRect.setAttribute("height", usableH + 16);
+    boxRect.setAttribute("rx", "6");
+    boxRect.setAttribute("fill", "rgba(56, 189, 248, 0.07)");
+    boxRect.setAttribute("stroke", "rgba(56, 189, 248, 0.35)");
+    boxRect.setAttribute("stroke-dasharray", "4 3");
+    fb.appendChild(boxRect);
+  }
 
   for (let s = 0; s < numStrings; s++) {
     const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
@@ -781,6 +916,12 @@ function renderStaticFretboard() {
     line.setAttribute("stroke-width", strokeW);
     fb.appendChild(line);
   }
+
+  // Hybrid Hand Back Layer (Palm, Knuckles, and 2-Segment Finger Bones rendered UNDER note dots so text is never occluded)
+  const handBackLayer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  handBackLayer.setAttribute("id", "fretboardHandBackLayer");
+  handBackLayer.style.pointerEvents = "none";
+  fb.appendChild(handBackLayer);
 
   const isChordMode = (guideMode === "chord");
   if (!isChordMode) {
@@ -814,6 +955,7 @@ function renderStaticFretboard() {
       if (!isVisibleTone && !voicingMode) continue;
 
       const cx = f === 0 ? (isLeftHand ? W - marginX + 15 : marginX - 15) : (fretX[f - 1] + fretX[f]) / 2;
+      const fingerNum = getRecommendedFinger(s, f);
 
       const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
       let classes = "note-dot";
@@ -825,6 +967,11 @@ function renderStaticFretboard() {
       g.setAttribute("class", classes);
       g.setAttribute("data-midi", midi);
       g.setAttribute("data-pc", notePc);
+      g.setAttribute("data-str", s);
+      g.setAttribute("data-fret", f);
+      g.setAttribute("data-cx", cx);
+      g.setAttribute("data-cy", y);
+      g.setAttribute("data-finger", fingerNum);
 
       const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       circle.setAttribute("cx", cx); circle.setAttribute("cy", y);
@@ -833,16 +980,22 @@ function renderStaticFretboard() {
       let fill = "var(--tone)";
       if (isRoot) fill = "var(--root)";
       circle.setAttribute("fill", fill);
+      if (labelMode === "finger") {
+        circle.setAttribute("stroke", FINGER_COLORS[fingerNum] || "#ffffff");
+        circle.setAttribute("stroke-width", "2.2");
+      }
       g.appendChild(circle);
 
       const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
       text.setAttribute("x", cx); text.setAttribute("y", y + 4);
       text.setAttribute("text-anchor", "middle");
       text.setAttribute("fill", "#ffffff");
-      text.setAttribute("font-size", "11px");
+      text.setAttribute("font-size", labelMode === "finger" ? "12px" : "11px");
       text.setAttribute("font-weight", "bold");
 
-      const label = labelMode === "deg" ? DEG[interval] : NOTE[notePc];
+      let label = NOTE[notePc];
+      if (labelMode === "deg") label = DEG[interval];
+      else if (labelMode === "finger") label = FINGER_BADGES[fingerNum] || String(fingerNum);
       text.textContent = label;
       g.appendChild(text);
 
@@ -850,23 +1003,417 @@ function renderStaticFretboard() {
       fretboardNoteElements.push(g);
     }
   }
+
+  // Hybrid Hand Tip Layer (Fingertip Pads, Nail Crescents, Barre Bars, and Motion Trajectory Arcs)
+  const handTipLayer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  handTipLayer.setAttribute("id", "fretboardHandTipLayer");
+  handTipLayer.style.pointerEvents = "none";
+  fb.appendChild(handTipLayer);
+
+  const approachRing = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  approachRing.setAttribute("id", "rhythmApproachRing");
+  approachRing.setAttribute("class", "rhythm-approach-ring");
+  approachRing.style.display = "none";
+  fb.appendChild(approachRing);
+}
+
+function renderFretboardHandOverlay(nowRel = 0) {
+  const backLayer = $("fretboardHandBackLayer");
+  const tipLayer = $("fretboardHandTipLayer");
+  if (!backLayer || !tipLayer || !fretboardGeom) return;
+
+  backLayer.innerHTML = "";
+  tipLayer.innerHTML = "";
+
+  const isChordVoicingActive = (guideMode === "chord" && voicingMode && currentVoicing && currentInstrument !== "bass");
+  const shouldShowHand = (appMode === "rhythm") || (labelMode === "finger") || isChordVoicingActive || (hoveredFretNote !== null);
+  if (!shouldShowHand) return;
+
+  const { fretCenterX, stringY, neckH, frets, numStrings } = fretboardGeom;
+  const ns = "http://www.w3.org/2000/svg";
+
+  // 1. Determine active finger target(s), next target, and optional Barre chord info
+  const activeByFinger = { 1: null, 2: null, 3: null, 4: null };
+  let primaryActive = null;
+  let nextTarget = null;
+  let barreInfo = null; // { fret, minS, maxS, finger: 1 }
+  let openStringTarget = null;
+
+  if (isRhythmPlaying) {
+    primaryActive = rhythmCurrentTarget;
+    nextTarget = rhythmNextTarget;
+    if (primaryActive) {
+      if (primaryActive.fret === 0) {
+        openStringTarget = primaryActive;
+      } else if (primaryActive.finger >= 1 && primaryActive.finger <= 4) {
+        activeByFinger[primaryActive.finger] = primaryActive;
+      }
+    }
+  } else if (isChordVoicingActive) {
+    // Show all fingers of the selected CAGED Chord Voicing simultaneously (including Barre on Finger 1!)
+    const f1Strings = [];
+    let f1Fret = null;
+    for (let s = 0; s < numStrings; s++) {
+      const f = currentVoicing.frets[s];
+      if (f === null || f === undefined || f <= 0) continue;
+      const fNum = (currentVoicing.fingers && currentVoicing.fingers[s]) ? currentVoicing.fingers[s] : getRecommendedFinger(s, f);
+      if (fNum === 1) {
+        f1Strings.push(s);
+        f1Fret = f;
+      }
+      if (fNum >= 1 && fNum <= 4) {
+        // Keep the lowest-pitched string (highest s index) as the primary tip target for each finger
+        if (!activeByFinger[fNum] || s > activeByFinger[fNum].s) {
+          activeByFinger[fNum] = { s, fret: f, finger: fNum, pc: pc(strings[s] + f) };
+        }
+      }
+    }
+    if (f1Strings.length >= 2 && f1Fret > 0) {
+      barreInfo = {
+        fret: f1Fret,
+        minS: Math.min(...f1Strings),
+        maxS: Math.max(...f1Strings),
+        finger: 1
+      };
+    }
+    if (hoveredFretNote) {
+      primaryActive = hoveredFretNote;
+      if (hoveredFretNote.fret > 0 && hoveredFretNote.finger >= 1 && hoveredFretNote.finger <= 4) {
+        activeByFinger[hoveredFretNote.finger] = hoveredFretNote;
+      }
+    }
+  } else if (appMode === "rhythm") {
+    // Idle Rhythm Mode Preview: show 1st note (ACTIVE) and 2nd note (NEXT) of preview chart
+    const previewChart = generateRhythmChart();
+    primaryActive = hoveredFretNote || previewChart[0] || null;
+    nextTarget = hoveredFretNote ? null : (previewChart[1] || null);
+    if (primaryActive) {
+      if (primaryActive.fret === 0) openStringTarget = primaryActive;
+      else if (primaryActive.finger >= 1 && primaryActive.finger <= 4) {
+        activeByFinger[primaryActive.finger] = primaryActive;
+      }
+    }
+  } else if (hoveredFretNote) {
+    primaryActive = hoveredFretNote;
+    if (primaryActive.fret === 0) openStringTarget = primaryActive;
+    else if (primaryActive.finger >= 1 && primaryActive.finger <= 4) {
+      activeByFinger[primaryActive.finger] = primaryActive;
+    }
+  } else if (litPcs && litPcs.length > 0) {
+    // In Finger Guide mode when playing a note into mic, find matching fret dot
+    const playedPc = litPcs[0];
+    const matchDot = fretboardNoteElements.find(g => parseInt(g.getAttribute("data-pc"), 10) === playedPc);
+    if (matchDot) {
+      const s = parseInt(matchDot.getAttribute("data-str"), 10);
+      const fret = parseInt(matchDot.getAttribute("data-fret"), 10);
+      const finger = parseInt(matchDot.getAttribute("data-finger"), 10);
+      primaryActive = { s, fret, finger, pc: playedPc };
+      if (fret === 0) openStringTarget = primaryActive;
+      else if (finger >= 1 && finger <= 4) activeByFinger[finger] = primaryActive;
+    }
+  }
+
+  // 2. Compute Target 4-Fret Hand Anchor (Fret of Index Finger 1)
+  let [boxMin, boxMax] = getFretBoxRange(appMode === "rhythm" ? rhythmBoxId : "box1");
+  let targetAnchorFret = Math.max(1, boxMin === 0 ? 1 : boxMin);
+
+  if (isChordVoicingActive) {
+    const validFrets = currentVoicing.frets.filter(f => f !== null && f > 0);
+    if (validFrets.length > 0) {
+      targetAnchorFret = Math.max(1, Math.min(frets - 3, Math.min(...validFrets)));
+    }
+  } else if (primaryActive && primaryActive.fret > 0 && primaryActive.finger >= 1) {
+    // Align palm so Finger `primaryActive.finger` naturally lines up with `primaryActive.fret`
+    targetAnchorFret = Math.max(1, Math.min(frets - 3, primaryActive.fret - (primaryActive.finger - 1)));
+  }
+
+  if (handAnchorFretSmoothed === null || !isRhythmPlaying) {
+    handAnchorFretSmoothed = targetAnchorFret;
+  } else {
+    handAnchorFretSmoothed += (targetAnchorFret - handAnchorFretSmoothed) * 0.25;
+  }
+
+  const anchorF = handAnchorFretSmoothed;
+  const knuckleX = {};
+  for (let fIdx = 1; fIdx <= 4; fIdx++) {
+    knuckleX[fIdx] = fretCenterX(anchorF + (fIdx - 1));
+  }
+  const knuckleY = neckH + 14; // y = 254
+  const palmBottomY = neckH + 56; // y = 296
+
+  // 3. Draw Translucent Ghost Palm & Thumb Silhouette in backLayer
+  const leftEdgeX = Math.min(knuckleX[1], knuckleX[4]) - 18;
+  const rightEdgeX = Math.max(knuckleX[1], knuckleX[4]) + 18;
+  const palmW = Math.max(90, rightEdgeX - leftEdgeX);
+  const palmCenterX = (leftEdgeX + rightEdgeX) / 2;
+  const thumbSideX = isLeftHand ? (rightEdgeX + 14) : (leftEdgeX - 14);
+
+  const palmPath = document.createElementNS(ns, "path");
+  const dPalm = `
+    M ${leftEdgeX + 8} ${knuckleY - 4}
+    Q ${palmCenterX} ${knuckleY - 10} ${rightEdgeX - 8} ${knuckleY - 4}
+    Q ${rightEdgeX + 6} ${knuckleY + 12} ${rightEdgeX - 4} ${palmBottomY - 6}
+    Q ${palmCenterX} ${palmBottomY + 4} ${leftEdgeX + 4} ${palmBottomY - 6}
+    Q ${leftEdgeX - 6} ${knuckleY + 12} ${leftEdgeX + 8} ${knuckleY - 4}
+    Z
+  `;
+  palmPath.setAttribute("d", dPalm);
+  palmPath.setAttribute("fill", "rgba(15, 23, 42, 0.82)");
+  palmPath.setAttribute("stroke", "rgba(56, 189, 248, 0.45)");
+  palmPath.setAttribute("stroke-width", "1.6");
+  backLayer.appendChild(palmPath);
+
+  // Thumb silhouette peeking on the index-finger side of the palm
+  const thumbBaseX = isLeftHand ? rightEdgeX - 4 : leftEdgeX + 4;
+  const thumbPath = document.createElementNS(ns, "path");
+  thumbPath.setAttribute(
+    "d",
+    `M ${thumbBaseX} ${knuckleY + 18} Q ${thumbSideX} ${knuckleY - 6} ${thumbBaseX + (isLeftHand ? -4 : 4)} ${knuckleY - 12}`
+  );
+  thumbPath.setAttribute("fill", "none");
+  thumbPath.setAttribute("stroke", "rgba(148, 163, 184, 0.45)");
+  thumbPath.setAttribute("stroke-width", "9");
+  thumbPath.setAttribute("stroke-linecap", "round");
+  backLayer.appendChild(thumbPath);
+
+  // Palm Position Label (e.g., "🖐️ POS 5F~8F")
+  const minDispF = Math.round(anchorF);
+  const maxDispF = Math.min(frets, minDispF + 3);
+  const palmLbl = document.createElementNS(ns, "text");
+  palmLbl.setAttribute("x", palmCenterX);
+  palmLbl.setAttribute("y", palmBottomY - 8);
+  palmLbl.setAttribute("text-anchor", "middle");
+  palmLbl.setAttribute("fill", "#94a3b8");
+  palmLbl.setAttribute("font-size", "10px");
+  palmLbl.setAttribute("font-family", "var(--mono)");
+  palmLbl.setAttribute("font-weight", "600");
+  palmLbl.textContent = barreInfo
+    ? `🖐️ BARRE ${barreInfo.fret}F (${currentVoicing ? currentVoicing.name : ""})`
+    : `🖐️ HAND POS: ${minDispF}F ~ ${maxDispF}F`;
+  backLayer.appendChild(palmLbl);
+
+  // Helper to compute 2-segment IK middle joint (PIP joint) between knuckle (kx, ky) and fingertip (tx, ty)
+  const computeJoint = (fIdx, kx, ky, tx, ty) => {
+    const midX = kx + (tx - kx) * 0.52;
+    const midY = ky + (ty - ky) * 0.48;
+    // Natural anatomical finger splay bow
+    const splayDir = isLeftHand ? -1 : 1;
+    const bowOffset = (fIdx - 2.5) * 3.5 * splayDir;
+    return { jx: midX + bowOffset, jy: midY };
+  };
+
+  // 4. Render Next-Note Ghost Finger & Motion Trajectory Arc (if in Rhythm Mode)
+  if (nextTarget && nextTarget.fret > 0 && nextTarget.finger >= 1 && nextTarget.finger <= 4) {
+    const nf = nextTarget.finger;
+    const isSameAsActive = activeByFinger[nf] && activeByFinger[nf].s === nextTarget.s && activeByFinger[nf].fret === nextTarget.fret;
+    if (!isSameAsActive) {
+      const kx = knuckleX[nf];
+      const ky = knuckleY;
+      const ntx = fretCenterX(nextTarget.fret);
+      const nty = stringY(nextTarget.s);
+      const { jx, jy } = computeJoint(nf, kx, ky, ntx, nty);
+      const fColor = FINGER_COLORS[nf] || "#38bdf8";
+
+      const ghostBone = document.createElementNS(ns, "path");
+      ghostBone.setAttribute("d", `M ${kx} ${ky} L ${jx} ${jy} L ${ntx} ${nty}`);
+      ghostBone.setAttribute("fill", "none");
+      ghostBone.setAttribute("stroke", fColor);
+      ghostBone.setAttribute("stroke-width", "6");
+      ghostBone.setAttribute("stroke-linecap", "round");
+      ghostBone.setAttribute("stroke-linejoin", "round");
+      ghostBone.setAttribute("stroke-dasharray", "5 4");
+      ghostBone.setAttribute("opacity", "0.45");
+      backLayer.appendChild(ghostBone);
+
+      // Motion Trajectory Arc from primaryActive to nextTarget
+      if (primaryActive && (primaryActive.s !== nextTarget.s || primaryActive.fret !== nextTarget.fret)) {
+        const curX = fretCenterX(primaryActive.fret);
+        const curY = stringY(primaryActive.s);
+        const ctrlX = (curX + ntx) / 2;
+        const ctrlY = Math.min(curY, nty) - 22;
+        const arc = document.createElementNS(ns, "path");
+        arc.setAttribute("d", `M ${curX} ${curY} Q ${ctrlX} ${ctrlY} ${ntx} ${nty}`);
+        arc.setAttribute("fill", "none");
+        arc.setAttribute("stroke", fColor);
+        arc.setAttribute("stroke-width", "1.8");
+        arc.setAttribute("stroke-dasharray", "3 3");
+        arc.setAttribute("opacity", "0.75");
+        tipLayer.appendChild(arc);
+      }
+    }
+  }
+
+  // 5. Render 4 Fingers (Standby or Active 2-Segment Articulated Bone + Fingertip Pad + Barre Bar)
+  for (let fIdx = 1; fIdx <= 4; fIdx++) {
+    const kx = knuckleX[fIdx];
+    const ky = knuckleY;
+    const fColor = FINGER_COLORS[fIdx] || "#38bdf8";
+    const activeTarget = activeByFinger[fIdx];
+
+    if (activeTarget && activeTarget.fret > 0) {
+      const tx = fretCenterX(activeTarget.fret);
+      const ty = stringY(activeTarget.s);
+      const { jx, jy } = computeJoint(fIdx, kx, ky, tx, ty);
+
+      // 5a. Outer Translucent Finger Flesh Silhouette (in backLayer, behind note dots)
+      const fleshPath = document.createElementNS(ns, "path");
+      fleshPath.setAttribute("d", `M ${kx} ${ky} L ${jx} ${jy} L ${tx} ${ty}`);
+      fleshPath.setAttribute("fill", "none");
+      fleshPath.setAttribute("stroke", fColor);
+      fleshPath.setAttribute("stroke-width", "15");
+      fleshPath.setAttribute("stroke-linecap", "round");
+      fleshPath.setAttribute("stroke-linejoin", "round");
+      fleshPath.setAttribute("opacity", "0.28");
+      backLayer.appendChild(fleshPath);
+
+      // 5b. Inner Articulated Bone Line (in backLayer)
+      const bonePath = document.createElementNS(ns, "path");
+      bonePath.setAttribute("d", `M ${kx} ${ky} L ${jx} ${jy} L ${tx} ${ty}`);
+      bonePath.setAttribute("fill", "none");
+      bonePath.setAttribute("stroke", fColor);
+      bonePath.setAttribute("stroke-width", "3.8");
+      bonePath.setAttribute("stroke-linecap", "round");
+      bonePath.setAttribute("stroke-linejoin", "round");
+      bonePath.setAttribute("opacity", "0.9");
+      backLayer.appendChild(bonePath);
+
+      // Middle Knuckle Joint (PIP Joint) Dot
+      const jointDot = document.createElementNS(ns, "circle");
+      jointDot.setAttribute("cx", jx);
+      jointDot.setAttribute("cy", jy);
+      jointDot.setAttribute("r", "4.5");
+      jointDot.setAttribute("fill", "#0f172a");
+      jointDot.setAttribute("stroke", fColor);
+      jointDot.setAttribute("stroke-width", "2");
+      backLayer.appendChild(jointDot);
+
+      // 5c. If Finger 1 is in Barre Chord Mode, draw the full Index Barre Bar in tipLayer
+      if (fIdx === 1 && barreInfo) {
+        const bx = fretCenterX(barreInfo.fret);
+        const yTop = stringY(barreInfo.minS) - 13;
+        const yBot = stringY(barreInfo.maxS) + 13;
+        const barreRect = document.createElementNS(ns, "rect");
+        barreRect.setAttribute("x", bx - 13);
+        barreRect.setAttribute("y", yTop);
+        barreRect.setAttribute("width", "26");
+        barreRect.setAttribute("height", Math.max(26, yBot - yTop));
+        barreRect.setAttribute("rx", "13");
+        barreRect.setAttribute("fill", "rgba(56, 189, 248, 0.18)");
+        barreRect.setAttribute("stroke", "#38bdf8");
+        barreRect.setAttribute("stroke-width", "2.4");
+        tipLayer.appendChild(barreRect);
+      } else {
+        // 5d. Anatomical Fingertip Pad + Nail Crescent around target fret (in tipLayer)
+        const padRing = document.createElementNS(ns, "ellipse");
+        padRing.setAttribute("cx", tx);
+        padRing.setAttribute("cy", ty);
+        padRing.setAttribute("rx", "15");
+        padRing.setAttribute("ry", "13.5");
+        padRing.setAttribute("fill", "none");
+        padRing.setAttribute("stroke", fColor);
+        padRing.setAttribute("stroke-width", "2.2");
+        padRing.setAttribute("opacity", "0.95");
+        tipLayer.appendChild(padRing);
+
+        // Fingertip Nail Crescent at top of pad
+        const nailArc = document.createElementNS(ns, "path");
+        nailArc.setAttribute("d", `M ${tx - 5.5} ${ty - 9.5} Q ${tx} ${ty - 13.5} ${tx + 5.5} ${ty - 9.5}`);
+        nailArc.setAttribute("fill", "none");
+        nailArc.setAttribute("stroke", "#ffffff");
+        nailArc.setAttribute("stroke-width", "1.6");
+        nailArc.setAttribute("stroke-linecap", "round");
+        tipLayer.appendChild(nailArc);
+      }
+    } else {
+      // Standby / Idle Finger resting just below the lowest string at its home fret column
+      const idleTipX = kx;
+      const idleTipY = neckH - 17; // y = 223, just below 6th string
+      const idleJointY = (ky + idleTipY) / 2;
+
+      const idleBone = document.createElementNS(ns, "path");
+      idleBone.setAttribute("d", `M ${kx} ${ky} L ${idleTipX} ${idleJointY} L ${idleTipX} ${idleTipY}`);
+      idleBone.setAttribute("fill", "none");
+      idleBone.setAttribute("stroke", fColor);
+      idleBone.setAttribute("stroke-width", "9");
+      idleBone.setAttribute("stroke-linecap", "round");
+      idleBone.setAttribute("opacity", "0.24");
+      backLayer.appendChild(idleBone);
+    }
+
+    // 5e. Draw Knuckle Base Badge (①, ②, ③, ④) on the Palm
+    const isFingerActive = !!(activeTarget && activeTarget.fret > 0);
+    const kCircle = document.createElementNS(ns, "circle");
+    kCircle.setAttribute("cx", kx);
+    kCircle.setAttribute("cy", ky);
+    kCircle.setAttribute("r", isFingerActive ? "10.5" : "8.5");
+    kCircle.setAttribute("fill", isFingerActive ? fColor : "#0f172a");
+    kCircle.setAttribute("stroke", fColor);
+    kCircle.setAttribute("stroke-width", isFingerActive ? "2.5" : "1.8");
+    backLayer.appendChild(kCircle);
+
+    const kText = document.createElementNS(ns, "text");
+    kText.setAttribute("x", kx);
+    kText.setAttribute("y", ky + 3.8);
+    kText.setAttribute("text-anchor", "middle");
+    kText.setAttribute("fill", isFingerActive ? "#090c10" : fColor);
+    kText.setAttribute("font-size", "10.5px");
+    kText.setAttribute("font-weight", "800");
+    kText.textContent = String(fIdx);
+    backLayer.appendChild(kText);
+
+    // Short finger name below knuckle when active
+    const kSub = document.createElementNS(ns, "text");
+    kSub.setAttribute("x", kx);
+    kSub.setAttribute("y", ky + 20);
+    kSub.setAttribute("text-anchor", "middle");
+    kSub.setAttribute("fill", isFingerActive ? "#ffffff" : "#64748b");
+    kSub.setAttribute("font-size", "9.5px");
+    kSub.setAttribute("font-weight", isFingerActive ? "700" : "500");
+    kSub.textContent = t("fingerShort_" + fIdx);
+    backLayer.appendChild(kSub);
+  }
+
+  // 6. Open String (⓪ 개방현) Nut Highlight Banner
+  if (openStringTarget && openStringTarget.fret === 0) {
+    const ox = fretCenterX(0);
+    const oy = stringY(openStringTarget.s);
+    const openHalo = document.createElementNS(ns, "circle");
+    openHalo.setAttribute("cx", ox);
+    openHalo.setAttribute("cy", oy);
+    openHalo.setAttribute("r", "15");
+    openHalo.setAttribute("fill", "none");
+    openHalo.setAttribute("stroke", "#cbd5e1");
+    openHalo.setAttribute("stroke-width", "2.2");
+    openHalo.setAttribute("stroke-dasharray", "4 2");
+    tipLayer.appendChild(openHalo);
+  }
 }
 
 function updateFretboardLit() {
   for (let i = 0; i < fretboardNoteElements.length; i++) {
     const g = fretboardNoteElements[i];
     const notePc = parseInt(g.getAttribute("data-pc"), 10);
+    const sIdx = parseInt(g.getAttribute("data-str"), 10);
+    const fret = parseInt(g.getAttribute("data-fret"), 10);
     const isLit = litPcs.includes(notePc);
     const isJamTarget = isJamPlaying && jamTargetChordPcs.includes(notePc);
+    const isRhythmNow = isRhythmPlaying && rhythmCurrentTarget && rhythmCurrentTarget.s === sIdx && rhythmCurrentTarget.fret === fret;
+    const isRhythmNext = isRhythmPlaying && rhythmNextTarget && rhythmNextTarget.s === sIdx && rhythmNextTarget.fret === fret && !isRhythmNow;
 
     g.classList.toggle("is-lit", isLit);
     g.classList.toggle("is-jam", isJamTarget && !isLit);
+    g.classList.toggle("is-rhythm-target", !!isRhythmNow);
+    g.classList.toggle("is-rhythm-next", !!isRhythmNext);
   }
+  renderFretboardHandOverlay(isRhythmPlaying && audioCtx ? (audioCtx.currentTime - rhythmStartTime) : 0);
 }
 
 function drawFB() {
   renderStaticFretboard();
   updateFretboardLit();
+  if (appMode === "rhythm" && !isRhythmPlaying) {
+    drawRhythmHighway(0);
+  }
 }
 
 function rebuildTunerUI() {
@@ -1099,6 +1646,10 @@ function updatePoly(data) {
     });
   }
 
+  if (isRhythmPlaying) {
+    checkRhythmHit(activeNotes.length > 0 ? activeNotes : [{ f: primaryF, midi: firstMidi }], primaryF, firstMidi, cents);
+  }
+
   if (quizMode) {
     const p = pc(firstMidi);
     if (guideMode === "chord") {
@@ -1192,6 +1743,10 @@ function update(res) {
       inScale: (guideMode === "chord") ? activeChordPcs.includes(p) : inScale(m),
       deg: DEG[pc(m - rootPc)]
     });
+  }
+
+  if (isRhythmPlaying) {
+    checkRhythmHit([{ f: res.f, midi: m }], res.f, m, cents);
   }
 
   if (quizMode) {
@@ -1349,7 +1904,19 @@ function refreshDynamic() {
     $("startBtn").textContent = running ? t("btnStop") : t("btnStart");
     $("startBtn").classList.toggle("danger", running);
   }
-  if ($("modeSub")) $("modeSub").textContent = quizMode ? t("subQuiz") : t("subPractice");
+  if ($("modeSub")) {
+    $("modeSub").textContent = appMode === "rhythm" ? t("subRhythm") : (quizMode ? t("subQuiz") : t("subPractice"));
+  }
+  if ($("btnRhythmToggle")) {
+    $("btnRhythmToggle").textContent = isRhythmPlaying ? t("btnRhythmStop") : t("btnRhythmStart");
+    $("btnRhythmToggle").classList.toggle("danger", isRhythmPlaying);
+  }
+  if (!isRhythmPlaying && $("rhythmJudgeBanner")) {
+    $("rhythmJudgeBanner").textContent = t("rhythmReady");
+  }
+  if (isRhythmPlaying || appMode === "rhythm") {
+    drawRhythmHighway(audioCtx ? audioCtx.currentTime : 0);
+  }
 }
 
 // ---------- Practice Tools & Quiz ----------
@@ -1460,16 +2027,19 @@ function playJamSynthChord(rootPcVal, isMinor, durationSec = 2.0, time = (audioC
   });
 }
 
-function playMetronomeClick(isDownbeat, time = (audioCtx ? audioCtx.currentTime : 0)) {
+function playMetronomeClick(accentLevel, time = (audioCtx ? audioCtx.currentTime : 0)) {
   try { ensureAudioCtx(); } catch (e) { return; }
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
 
-  const freq = isDownbeat ? 1200 : 800;
+  // accentLevel: true/2 = Downbeat (강박), 1 = Sub-accent (중강박, e.g. 4th pulse in 6/8 or 3rd beat in 4/4), false/0 = Weak pulse (약박)
+  const level = (accentLevel === true) ? 2 : (accentLevel === false ? 0 : (accentLevel || 0));
+  const freq = level === 2 ? 1320 : (level === 1 ? 980 : 740);
+  const peakGain = level === 2 ? 0.35 : (level === 1 ? 0.25 : 0.16);
   const clickTime = Math.max(audioCtx.currentTime, time);
   osc.frequency.setValueAtTime(freq, clickTime);
 
-  gain.gain.setValueAtTime(0.3, clickTime);
+  gain.gain.setValueAtTime(peakGain, clickTime);
   gain.gain.exponentialRampToValueAtTime(0.001, clickTime + 0.05);
 
   osc.connect(gain);
@@ -2054,21 +2624,72 @@ function updateToggleVisuals(toggleEl, isRightActive, leftLabelId, rightLabelId)
   if (rightL) rightL.classList.toggle("active", isRightActive);
 }
 
+function updateThreeWayToggleVisuals(toggleEl, posIdx, btnIds) {
+  if (!toggleEl) return;
+  toggleEl.classList.remove("pos-0", "pos-1", "pos-2");
+  toggleEl.classList.add(`pos-${posIdx}`);
+  btnIds.forEach((id, idx) => {
+    const el = $(id);
+    if (el) el.classList.toggle("active", idx === posIdx);
+  });
+}
+
+function setAppMode(nextMode) {
+  appMode = nextMode;
+  quizMode = (appMode === "quiz");
+  const modeT = $("modeToggle");
+  const modeIdx = appMode === "practice" ? 0 : (appMode === "quiz" ? 1 : 2);
+  updateThreeWayToggleVisuals(modeT, modeIdx, ["togglePractice", "toggleQuiz", "toggleRhythm"]);
+
+  const quizStatsPill = $("quizStatsPill");
+  if (quizStatsPill) quizStatsPill.style.display = quizMode ? "flex" : "none";
+
+  const rhythmPanel = $("rhythmGamePanel");
+  if (rhythmPanel) rhythmPanel.style.display = (appMode === "rhythm") ? "flex" : "none";
+
+  if (appMode !== "rhythm" && isRhythmPlaying) {
+    stopRhythmGame();
+  }
+
+  refreshDynamic();
+  drawFB();
+  if (appMode === "rhythm") {
+    drawRhythmHighway(0);
+  }
+
+  if (!running) return;
+  if (quizMode) newQuiz();
+  else if ($("prompt")) $("prompt").textContent = (guideMode === "chord") ? t("promptChordHover") : t("promptPlay");
+}
+
+function setLabelMode(nextLabelMode) {
+  labelMode = nextLabelMode;
+  const labelT = $("labelToggle");
+  const lblIdx = labelMode === "name" ? 0 : (labelMode === "deg" ? 1 : 2);
+  updateThreeWayToggleVisuals(labelT, lblIdx, ["toggleName", "toggleDeg", "toggleFinger"]);
+  drawFB();
+  if (appMode === "rhythm") {
+    drawRhythmHighway(isRhythmPlaying && audioCtx ? (audioCtx.currentTime - rhythmStartTime) : 0);
+  }
+}
+
 function initSlideToggles() {
   const modeT = $("modeToggle");
   if (modeT) {
-    updateToggleVisuals(modeT, quizMode, "togglePractice", "toggleQuiz");
+    const modeIdx = appMode === "practice" ? 0 : (appMode === "quiz" ? 1 : 2);
+    updateThreeWayToggleVisuals(modeT, modeIdx, ["togglePractice", "toggleQuiz", "toggleRhythm"]);
     const quizStatsPill = $("quizStatsPill");
     if (quizStatsPill) quizStatsPill.style.display = quizMode ? "flex" : "none";
 
-    modeT.onclick = () => {
-      quizMode = !quizMode;
-      updateToggleVisuals(modeT, quizMode, "togglePractice", "toggleQuiz");
-      if (quizStatsPill) quizStatsPill.style.display = quizMode ? "flex" : "none";
-      refreshDynamic();
-      if (!running) return;
-      if (quizMode) newQuiz();
-      else if ($("prompt")) $("prompt").textContent = (guideMode === "chord") ? t("promptChordHover") : t("promptPlay");
+    modeT.onclick = (e) => {
+      const btn = e.target.closest(".chip-btn");
+      if (btn && btn.id === "togglePractice") setAppMode("practice");
+      else if (btn && btn.id === "toggleQuiz") setAppMode("quiz");
+      else if (btn && btn.id === "toggleRhythm") setAppMode("rhythm");
+      else {
+        const next = appMode === "practice" ? "quiz" : (appMode === "quiz" ? "rhythm" : "practice");
+        setAppMode(next);
+      }
     };
   }
 
@@ -2095,11 +2716,17 @@ function initSlideToggles() {
 
   const labelT = $("labelToggle");
   if (labelT) {
-    updateToggleVisuals(labelT, labelMode === "deg", "toggleName", "toggleDeg");
-    labelT.onclick = () => {
-      labelMode = (labelMode === "name") ? "deg" : "name";
-      updateToggleVisuals(labelT, labelMode === "deg", "toggleName", "toggleDeg");
-      drawFB();
+    const lblIdx = labelMode === "name" ? 0 : (labelMode === "deg" ? 1 : 2);
+    updateThreeWayToggleVisuals(labelT, lblIdx, ["toggleName", "toggleDeg", "toggleFinger"]);
+    labelT.onclick = (e) => {
+      const btn = e.target.closest(".chip-btn");
+      if (btn && btn.id === "toggleName") setLabelMode("name");
+      else if (btn && btn.id === "toggleDeg") setLabelMode("deg");
+      else if (btn && btn.id === "toggleFinger") setLabelMode("finger");
+      else {
+        const next = labelMode === "name" ? "deg" : (labelMode === "deg" ? "finger" : "name");
+        setLabelMode(next);
+      }
     };
   }
 
@@ -2169,27 +2796,27 @@ function getChordPcs(rootPc, chordTypeVal) {
 function getChordVoicings(rootPc, chordTypeVal) {
   const voicingsMap = {
     major: [
-      { name: "CAGED - E Shape", baseRoot: 4, frets: [0, 0, 1, 2, 2, 0] },
-      { name: "CAGED - A Shape", baseRoot: 9, frets: [0, 2, 2, 2, 0, null] },
-      { name: "CAGED - C Shape", baseRoot: 0, frets: [0, 1, 0, 2, 3, null] },
-      { name: "CAGED - D Shape", baseRoot: 2, frets: [2, 3, 2, 0, null, null] }
+      { name: "CAGED - E Shape", baseRoot: 4, frets: [0, 0, 1, 2, 2, 0], openFingers: [0, 0, 1, 3, 2, 0], barreFingers: [1, 1, 2, 4, 3, 1] },
+      { name: "CAGED - A Shape", baseRoot: 9, frets: [0, 2, 2, 2, 0, null], openFingers: [0, 3, 2, 1, 0, null], barreFingers: [1, 4, 3, 2, 1, null] },
+      { name: "CAGED - C Shape", baseRoot: 0, frets: [0, 1, 0, 2, 3, null], openFingers: [0, 1, 0, 2, 3, null], barreFingers: [1, 2, 1, 3, 4, null] },
+      { name: "CAGED - D Shape", baseRoot: 2, frets: [2, 3, 2, 0, null, null], openFingers: [2, 3, 1, 0, null, null], barreFingers: [3, 4, 2, 1, null, null] }
     ],
     minor: [
-      { name: "E Minor Shape", baseRoot: 4, frets: [0, 0, 0, 2, 2, 0] },
-      { name: "A Minor Shape", baseRoot: 9, frets: [0, 1, 2, 2, 0, null] },
-      { name: "D Minor Shape", baseRoot: 2, frets: [1, 3, 2, 0, null, null] }
+      { name: "E Minor Shape", baseRoot: 4, frets: [0, 0, 0, 2, 2, 0], openFingers: [0, 0, 0, 3, 2, 0], barreFingers: [1, 1, 1, 4, 3, 1] },
+      { name: "A Minor Shape", baseRoot: 9, frets: [0, 1, 2, 2, 0, null], openFingers: [0, 1, 3, 2, 0, null], barreFingers: [1, 2, 4, 3, 1, null] },
+      { name: "D Minor Shape", baseRoot: 2, frets: [1, 3, 2, 0, null, null], openFingers: [1, 3, 2, 0, null, null], barreFingers: [2, 4, 3, 1, null, null] }
     ],
     dom7: [
-      { name: "E7 Shape", baseRoot: 4, frets: [0, 3, 1, 0, 2, 0] },
-      { name: "A7 Shape", baseRoot: 9, frets: [0, 2, 0, 2, 0, null] }
+      { name: "E7 Shape", baseRoot: 4, frets: [0, 3, 1, 0, 2, 0], openFingers: [0, 4, 1, 0, 2, 0], barreFingers: [1, 4, 2, 1, 3, 1] },
+      { name: "A7 Shape", baseRoot: 9, frets: [0, 2, 0, 2, 0, null], openFingers: [0, 3, 0, 2, 0, null], barreFingers: [1, 4, 1, 3, 1, null] }
     ],
     maj7: [
-      { name: "EMaj7 Shape", baseRoot: 4, frets: [0, 0, 1, 1, 2, 0] },
-      { name: "AMaj7 Shape", baseRoot: 9, frets: [0, 2, 1, 2, 0, null] }
+      { name: "EMaj7 Shape", baseRoot: 4, frets: [0, 0, 1, 1, 2, 0], openFingers: [0, 0, 2, 1, 3, 0], barreFingers: [1, 1, 3, 2, 4, 1] },
+      { name: "AMaj7 Shape", baseRoot: 9, frets: [0, 2, 1, 2, 0, null], openFingers: [0, 3, 1, 2, 0, null], barreFingers: [1, 4, 2, 3, 1, null] }
     ],
     min7: [
-      { name: "Em7 Shape", baseRoot: 4, frets: [0, 3, 0, 0, 2, 0] },
-      { name: "Am7 Shape", baseRoot: 9, frets: [0, 1, 0, 2, 0, null] }
+      { name: "Em7 Shape", baseRoot: 4, frets: [0, 3, 0, 0, 2, 0], openFingers: [0, 4, 0, 0, 2, 0], barreFingers: [1, 4, 1, 1, 3, 1] },
+      { name: "Am7 Shape", baseRoot: 9, frets: [0, 1, 0, 2, 0, null], openFingers: [0, 1, 0, 2, 0, null], barreFingers: [1, 2, 1, 3, 1, null] }
     ]
   };
 
@@ -2199,6 +2826,7 @@ function getChordVoicings(rootPc, chordTypeVal) {
     let shiftedFrets = v.frets.map(f => (f !== null ? f + offset : null));
 
     const validF = shiftedFrets.filter(f => f !== null);
+    let finalMinF = 0;
     if (validF.length > 0) {
       const maxF = Math.max(...validF);
       const minF = Math.min(...validF);
@@ -2207,9 +2835,11 @@ function getChordVoicings(rootPc, chordTypeVal) {
       } else if (minF < 0) {
         shiftedFrets = shiftedFrets.map(f => (f !== null ? f + 12 : null));
       }
+      finalMinF = Math.min(...shiftedFrets.filter(f => f !== null));
     }
 
-    return { name: v.name, frets: shiftedFrets };
+    const fingers = (finalMinF === 0 ? v.openFingers : v.barreFingers) || [];
+    return { name: v.name, frets: shiftedFrets, fingers: [...fingers] };
   });
 }
 
@@ -2264,6 +2894,809 @@ function updateVoicingGuide() {
   if (countEl) countEl.textContent = `(${currentVoicingIdx + 1} / ${currentVoicingsList.length})`;
 
   drawFB();
+}
+
+// ---------- Rhythm Game & Smart Fingering Trainer Engine ----------
+function getRhythmMeterInfo(meterId = rhythmMeterId) {
+  const qSec = 60 / rhythmBpm;
+  switch (meterId) {
+    case "3_4":
+      return { num: 3, den: 4, pulsesPerBar: 3, countInPulses: 3, pulseSec: qSec, subAccents: [] };
+    case "6_8":
+      // 6 eighth-note pulses per bar (3 + 3: 강-약-약 중강-약-약)
+      return { num: 6, den: 8, pulsesPerBar: 6, countInPulses: 6, pulseSec: qSec * 0.5, subAccents: [3] };
+    case "12_8":
+      // 12 eighth-note pulses per bar (3 + 3 + 3 + 3: 강-약-약 중강-약-약 중강-약-약 중강-약-약)
+      return { num: 12, den: 8, pulsesPerBar: 12, countInPulses: 6, pulseSec: qSec * 0.5, subAccents: [3, 6, 9] };
+    case "2_4":
+      return { num: 2, den: 4, pulsesPerBar: 2, countInPulses: 4, pulseSec: qSec, subAccents: [] };
+    case "5_4":
+      return { num: 5, den: 4, pulsesPerBar: 5, countInPulses: 5, pulseSec: qSec, subAccents: [3] };
+    case "7_8":
+      return { num: 7, den: 8, pulsesPerBar: 7, countInPulses: 7, pulseSec: qSec * 0.5, subAccents: [2, 4] };
+    case "4_4":
+    default:
+      return { num: 4, den: 4, pulsesPerBar: 4, countInPulses: 4, pulseSec: qSec, subAccents: [2] };
+  }
+}
+
+function setActiveFingerPill(fingerIdx) {
+  document.querySelectorAll("#fingerGuideBar .finger-pill").forEach(pill => {
+    const f = parseInt(pill.getAttribute("data-finger"), 10);
+    pill.classList.toggle("active", fingerIdx === f);
+  });
+}
+
+function showRhythmJudgment(tier, offsetMs = null) {
+  const banner = $("rhythmJudgeBanner");
+  if (!banner) return;
+
+  banner.classList.remove("perfect", "great", "good", "miss");
+  if (!tier) {
+    banner.textContent = t("rhythmReady");
+    return;
+  }
+
+  banner.classList.add(tier);
+  let label = "";
+  if (tier === "perfect") label = t("judgePerfect");
+  else if (tier === "great") label = t("judgeGreat");
+  else if (tier === "good") label = t("judgeGood");
+  else if (tier === "miss") label = t("judgeMiss");
+
+  if (offsetMs !== null && tier !== "miss") {
+    const sign = offsetMs > 0 ? "+" : "";
+    const tag = offsetMs < -8 ? t("rhythmEarly") : (offsetMs > 8 ? t("rhythmLate") : "EXACT");
+    banner.textContent = `${label}  ${sign}${offsetMs}ms (${tag})`;
+  } else {
+    banner.textContent = label;
+  }
+}
+
+function buildRhythmCandidatePool() {
+  const numStrings = strings.length;
+  const isChordMode = (guideMode === "chord");
+  const chordPcs = isChordMode ? getChordPcs(rootPc, chordTypeVal) : [rootPc, pc(rootPc + ( isCurrentModeMinor() ? 3 : 4 )), pc(rootPc + 7)];
+
+  // 1. If an explicit CAGED Chord Voicing is selected, use its exact fretted strings (from lowest pitch string to highest)
+  if (isChordMode && voicingMode && currentVoicing && currentInstrument !== "bass") {
+    const vPool = [];
+    for (let s = numStrings - 1; s >= 0; s--) {
+      const f = currentVoicing.frets[s];
+      if (f !== null && f !== undefined) {
+        const midi = strings[s] + f;
+        const notePc = pc(midi);
+        const interval = pc(midi - rootPc);
+        const finger = (currentVoicing.fingers && currentVoicing.fingers[s] !== null)
+          ? currentVoicing.fingers[s]
+          : getRecommendedFinger(s, f, rhythmBoxId);
+        vPool.push({
+          s, fret: f, midi, pc: notePc, deg: DEG[interval],
+          finger, isRoot: notePc === rootPc, isChordTone: true
+        });
+      }
+    }
+    if (vPool.length > 0) return vPool;
+  }
+
+  // 2. Build pool inside the selected Fret Box [minF, maxF] from lowest string (6th/4th) to highest string (1st)
+  let [minF, maxF] = getFretBoxRange(rhythmBoxId);
+  const collectInRange = (lo, hi) => {
+    const pool = [];
+    for (let s = numStrings - 1; s >= 0; s--) {
+      const openMidi = strings[s];
+      for (let f = lo; f <= hi; f++) {
+        const midi = openMidi + f;
+        const notePc = pc(midi);
+        const ok = isChordMode ? chordPcs.includes(notePc) : inScale(midi);
+        if (!ok) continue;
+        const interval = pc(midi - rootPc);
+        const finger = getRecommendedFinger(s, f, rhythmBoxId);
+        pool.push({
+          s, fret: f, midi, pc: notePc, deg: DEG[interval],
+          finger, isRoot: notePc === rootPc, isChordTone: chordPcs.includes(notePc)
+        });
+      }
+    }
+    return pool;
+  };
+
+  let pool = collectInRange(minF, maxF);
+  if (pool.length < 3) {
+    pool = collectInRange(0, 12);
+  }
+  return pool;
+}
+
+function generateRhythmChart() {
+  const pool = buildRhythmCandidatePool();
+  if (pool.length === 0) return [];
+
+  const chosenNotes = [];
+  const N = pool.length;
+
+  if (rhythmDrillId === "run") {
+    // Ascending & Descending Scale/Voicing Walk
+    let idx = 0;
+    let dir = 1;
+    for (let i = 0; i < rhythmNoteCount; i++) {
+      chosenNotes.push(pool[idx]);
+      if (N > 1) {
+        if (idx + dir >= N) dir = -1;
+        else if (idx + dir < 0) dir = 1;
+        idx += dir;
+      }
+    }
+  } else if (rhythmDrillId === "seq") {
+    // 3-Note / Interval Sequence (1-2-3, 2-3-4, 3-4-5...)
+    const pattern = [];
+    if (N >= 3) {
+      for (let base = 0; base <= N - 3; base++) {
+        pattern.push(pool[base], pool[base + 1], pool[base + 2]);
+      }
+      for (let base = N - 1; base >= 2; base--) {
+        pattern.push(pool[base], pool[base - 1], pool[base - 2]);
+      }
+    } else {
+      pattern.push(...pool);
+    }
+    for (let i = 0; i < rhythmNoteCount; i++) {
+      chosenNotes.push(pattern[i % pattern.length]);
+    }
+  } else if (rhythmDrillId === "chord") {
+    // Root & Chord-Tone Arpeggio Target
+    const chordPool = pool.filter(item => item.isChordTone);
+    const activePool = chordPool.length >= 2 ? chordPool : pool;
+    const roots = activePool.filter(item => item.isRoot);
+    let idx = 0;
+    let dir = 1;
+    for (let i = 0; i < rhythmNoteCount; i++) {
+      if (i % 4 === 0 && roots.length > 0) {
+        chosenNotes.push(roots[(i / 4) % roots.length]);
+      } else {
+        chosenNotes.push(activePool[idx]);
+        if (activePool.length > 1) {
+          if (idx + dir >= activePool.length) dir = -1;
+          else if (idx + dir < 0) dir = 1;
+          idx += dir;
+        }
+      }
+    }
+  } else {
+    // Random Fret Sight-Reading with ergonomic string-jump limit (<= 2 strings)
+    let prev = pool[Math.floor(Math.random() * N)];
+    for (let i = 0; i < rhythmNoteCount; i++) {
+      chosenNotes.push(prev);
+      const neighbors = pool.filter(c => Math.abs(c.s - prev.s) <= 2 && (c.s !== prev.s || c.fret !== prev.fret));
+      const nextCandidates = neighbors.length > 0 ? neighbors : pool;
+      prev = nextCandidates[Math.floor(Math.random() * nextCandidates.length)];
+    }
+  }
+
+  // Assign beat positions according to subdivision grid
+  const beatSec = 60 / rhythmBpm;
+  const chart = [];
+  let beatPos = 0;
+  const SUBDIV_STEPS = {
+    quarter: [1.0],
+    eighth: [0.5],
+    triplet: [1 / 3, 1 / 3, 1 / 3],
+    sixteenth: [0.25],
+    shuffle: [2 / 3, 1 / 3],
+    dotted: [0.75, 0.25],
+    gallop: [0.5, 0.25, 0.25],
+    rev_gallop: [0.25, 0.25, 0.5],
+    tresillo: [0.75, 0.75, 0.5],
+    funk16: [0.25, 0.5, 0.25, 0.5, 0.5],
+    riff: [1.0, 0.5, 0.5, 0.5, 1.0, 0.5],
+    waltz: [1.0, 0.5, 0.5, 1.0]
+  };
+  const steps = SUBDIV_STEPS[rhythmSubdivId] || SUBDIV_STEPS.quarter;
+
+  for (let i = 0; i < chosenNotes.length; i++) {
+    const item = chosenNotes[i];
+    chart.push({
+      idx: i,
+      beat: beatPos,
+      t: beatPos * beatSec,
+      s: item.s,
+      fret: item.fret,
+      midi: item.midi,
+      pc: item.pc,
+      deg: item.deg,
+      finger: item.finger,
+      isRoot: item.isRoot,
+      status: "pending", // "pending" | "perfect" | "great" | "good" | "miss"
+      hitOffsetMs: null
+    });
+
+    beatPos += steps[i % steps.length];
+  }
+
+  const meter = getRhythmMeterInfo();
+  const totalSec = beatPos * beatSec;
+  rhythmTotalBeats = Math.ceil(totalSec / meter.pulseSec) + 2;
+  return chart;
+}
+
+function updateRhythmLiveStatsUI() {
+  if ($("rhythmScoreVal")) $("rhythmScoreVal").textContent = rhythmScore;
+  if ($("rhythmComboVal")) $("rhythmComboVal").textContent = rhythmCombo;
+
+  const judgedCount = rhythmCounts.perfect + rhythmCounts.great + rhythmCounts.good + rhythmCounts.miss;
+  let accPct = 100;
+  if (judgedCount > 0) {
+    const weighted = rhythmCounts.perfect * 1.0 + rhythmCounts.great * 0.8 + rhythmCounts.good * 0.5;
+    accPct = Math.round((weighted / judgedCount) * 100);
+  }
+  if ($("rhythmAccVal")) $("rhythmAccVal").textContent = `${accPct}%`;
+
+  const progressFill = $("rhythmProgressBar");
+  if (progressFill && rhythmChart.length > 0) {
+    const pct = Math.min(100, Math.round((judgedCount / rhythmChart.length) * 100));
+    progressFill.style.width = `${pct}%`;
+  }
+}
+
+function updateRhythmApproachRing(nowRel) {
+  const ring = $("rhythmApproachRing");
+  if (!ring) return;
+
+  if (!isRhythmPlaying || !rhythmCurrentTarget) {
+    ring.style.display = "none";
+    return;
+  }
+
+  // Find corresponding SVG note dot coordinates
+  const targetDot = fretboardNoteElements.find(g =>
+    parseInt(g.getAttribute("data-str"), 10) === rhythmCurrentTarget.s &&
+    parseInt(g.getAttribute("data-fret"), 10) === rhythmCurrentTarget.fret
+  );
+
+  if (!targetDot) {
+    ring.style.display = "none";
+    return;
+  }
+
+  const cx = parseFloat(targetDot.getAttribute("data-cx"));
+  const cy = parseFloat(targetDot.getAttribute("data-cy"));
+  const timeUntilHit = rhythmCurrentTarget.t - nowRel;
+  const lookahead = 1.6;
+  const clampedRatio = Math.max(0, Math.min(1, timeUntilHit / lookahead));
+  const radius = 12 + clampedRatio * 20; // shrinks from 32px down to 12px at Hit time
+
+  ring.setAttribute("cx", cx);
+  ring.setAttribute("cy", cy);
+  ring.setAttribute("r", radius.toFixed(1));
+  ring.setAttribute("stroke", FINGER_COLORS[rhythmCurrentTarget.finger] || "#38bdf8");
+  ring.style.display = "block";
+}
+
+async function startRhythmGame() {
+  ensureAudioCtx();
+  if (!running) {
+    try { await start(); } catch (e) { }
+  }
+
+  rhythmChart = generateRhythmChart();
+  if (rhythmChart.length === 0) return;
+
+  rhythmScore = 0;
+  rhythmCombo = 0;
+  rhythmMaxCombo = 0;
+  rhythmCounts = { perfect: 0, great: 0, good: 0, miss: 0 };
+  rhythmOffsets = [];
+  rhythmParticles = [];
+  rhythmLastHitTime = 0;
+  rhythmLastHitMidi = -1;
+
+  if ($("rhythmResultBox")) $("rhythmResultBox").style.display = "none";
+  if ($("rhythmProgressBar")) $("rhythmProgressBar").style.width = "0%";
+
+  const meter = getRhythmMeterInfo();
+  rhythmStartTime = audioCtx.currentTime + (meter.countInPulses * meter.pulseSec);
+  rhythmScheduledClickBeat = -meter.countInPulses;
+  isRhythmPlaying = true;
+
+  rhythmCurrentTarget = rhythmChart[0] || null;
+  rhythmNextTarget = rhythmChart[1] || null;
+  setActiveFingerPill(rhythmCurrentTarget ? rhythmCurrentTarget.finger : null);
+  showRhythmJudgment(null);
+  updateRhythmLiveStatsUI();
+  refreshDynamic();
+  updateFretboardLit();
+
+  if (rhythmRaf) cancelAnimationFrame(rhythmRaf);
+  stepRhythmGame();
+}
+
+function stopRhythmGame() {
+  isRhythmPlaying = false;
+  if (rhythmRaf) {
+    cancelAnimationFrame(rhythmRaf);
+    rhythmRaf = null;
+  }
+  rhythmCurrentTarget = null;
+  rhythmNextTarget = null;
+  setActiveFingerPill(null);
+  const ring = $("rhythmApproachRing");
+  if (ring) ring.style.display = "none";
+  refreshDynamic();
+  updateFretboardLit();
+  drawRhythmHighway(0);
+}
+
+function stepRhythmGame() {
+  if (!isRhythmPlaying || !audioCtx) return;
+
+  const nowAudio = audioCtx.currentTime;
+  const nowRel = nowAudio - rhythmStartTime;
+  const beatSec = 60 / rhythmBpm;
+
+  // 1. Schedule metronome clicks slightly ahead (70ms lookahead) with meter-aware 강·중강·약 accents
+  const meter = getRhythmMeterInfo();
+  while (rhythmScheduledClickBeat <= rhythmTotalBeats) {
+    const clickAudioTime = rhythmStartTime + (rhythmScheduledClickBeat * meter.pulseSec);
+    if (clickAudioTime <= nowAudio + 0.07) {
+      if (clickAudioTime >= nowAudio - 0.03) {
+        const pulseInBar = ((rhythmScheduledClickBeat % meter.pulsesPerBar) + meter.pulsesPerBar) % meter.pulsesPerBar;
+        const accentLevel = (pulseInBar === 0) ? 2 : (meter.subAccents.includes(pulseInBar) ? 1 : 0);
+        playMetronomeClick(accentLevel, clickAudioTime);
+      }
+      rhythmScheduledClickBeat++;
+    } else {
+      break;
+    }
+  }
+
+  // 2. Check for missed notes past the hit window (+165ms after latency compensation)
+  const effectiveNow = nowRel - (rhythmLatencyMs / 1000);
+  let targetChanged = false;
+  for (let i = 0; i < rhythmChart.length; i++) {
+    const note = rhythmChart[i];
+    if (note.status === "pending" && effectiveNow > note.t + 0.165) {
+      note.status = "miss";
+      rhythmCounts.miss++;
+      rhythmCombo = 0;
+      showRhythmJudgment("miss");
+      updateRhythmLiveStatsUI();
+      targetChanged = true;
+    }
+  }
+
+  // 3. Identify current & next pending targets for finger bar and SVG fretboard sync
+  let nextPendingIdx = -1;
+  for (let i = 0; i < rhythmChart.length; i++) {
+    if (rhythmChart[i].status === "pending") {
+      nextPendingIdx = i;
+      break;
+    }
+  }
+
+  const newCurrent = nextPendingIdx !== -1 ? rhythmChart[nextPendingIdx] : null;
+  const newNext = (nextPendingIdx !== -1 && nextPendingIdx + 1 < rhythmChart.length) ? rhythmChart[nextPendingIdx + 1] : null;
+
+  if (newCurrent !== rhythmCurrentTarget || newNext !== rhythmNextTarget || targetChanged) {
+    rhythmCurrentTarget = newCurrent;
+    rhythmNextTarget = newNext;
+    setActiveFingerPill(rhythmCurrentTarget ? rhythmCurrentTarget.finger : null);
+    updateFretboardLit();
+  }
+
+  updateRhythmApproachRing(effectiveNow);
+  renderFretboardHandOverlay(effectiveNow);
+  drawRhythmHighway(effectiveNow);
+
+  // 4. Finish session when all notes are judged and 0.6s tail has elapsed
+  const lastNote = rhythmChart[rhythmChart.length - 1];
+  if (nextPendingIdx === -1 && lastNote && effectiveNow > lastNote.t + 0.5) {
+    finishRhythmGame();
+    return;
+  }
+
+  rhythmRaf = requestAnimationFrame(stepRhythmGame);
+}
+
+function checkRhythmHit(detectedNotes, primaryF, primaryMidi, cents = 0) {
+  if (!isRhythmPlaying || !audioCtx || rhythmChart.length === 0) return;
+
+  const nowAudio = audioCtx.currentTime;
+  const effectiveNow = (nowAudio - rhythmStartTime) - (rhythmLatencyMs / 1000);
+
+  // Find earliest pending note within hit window [-165ms, +165ms]
+  let candidate = null;
+  for (let i = 0; i < rhythmChart.length; i++) {
+    const n = rhythmChart[i];
+    if (n.status !== "pending") continue;
+    const diff = effectiveNow - n.t;
+    if (diff < -0.165) break; // future notes are even further ahead
+    if (Math.abs(diff) <= 0.165) {
+      candidate = n;
+      break;
+    }
+  }
+
+  if (!candidate) return;
+
+  // Prevent a single sustained note frame from immediately consuming two identical consecutive MIDI targets within 110ms
+  if (candidate.midi === rhythmLastHitMidi && (nowAudio - rhythmLastHitTime) < 0.11) {
+    return;
+  }
+
+  // Check if any detected note matches target MIDI (or matching pitch class if harmonic octave jump)
+  const notesList = (detectedNotes && detectedNotes.length > 0) ? detectedNotes : [{ f: primaryF, midi: primaryMidi }];
+  const matched = notesList.some(n => n && n.midi !== undefined && (n.midi === candidate.midi || pc(n.midi) === candidate.pc));
+  if (!matched) return;
+
+  const offsetMs = Math.round((effectiveNow - candidate.t) * 1000);
+  const absMs = Math.abs(offsetMs);
+
+  let tier = "good";
+  let basePts = 400;
+  if (absMs <= 55) {
+    tier = "perfect";
+    basePts = 1000;
+    rhythmCounts.perfect++;
+  } else if (absMs <= 105) {
+    tier = "great";
+    basePts = 700;
+    rhythmCounts.great++;
+  } else {
+    tier = "good";
+    basePts = 400;
+    rhythmCounts.good++;
+  }
+
+  candidate.status = tier;
+  candidate.hitOffsetMs = offsetMs;
+  rhythmOffsets.push(offsetMs);
+  rhythmCombo++;
+  if (rhythmCombo > rhythmMaxCombo) rhythmMaxCombo = rhythmCombo;
+  rhythmScore += Math.round(basePts * (1 + Math.min(1.5, rhythmCombo * 0.05)));
+
+  rhythmLastHitTime = nowAudio;
+  rhythmLastHitMidi = candidate.midi;
+
+  // Spawn burst particles on Highway Hit Line
+  spawnRhythmHitParticles(candidate.s, tier, candidate.finger);
+  showRhythmJudgment(tier, offsetMs);
+  updateRhythmLiveStatsUI();
+}
+
+function spawnRhythmHitParticles(sIdx, tier, fingerIdx) {
+  const canvas = $("rhythmCanvas");
+  if (!canvas) return;
+  const H = canvas.height;
+  const numStrings = strings.length;
+  const topPad = 28, botPad = 24;
+  const usableH = H - topPad - botPad;
+  const y = topPad + sIdx * (usableH / Math.max(1, numStrings - 1));
+  const hitX = 115;
+  const color = tier === "perfect" ? "#38bdf8" : (tier === "great" ? "#22c55e" : (FINGER_COLORS[fingerIdx] || "#facc15"));
+
+  for (let i = 0; i < 12; i++) {
+    const angle = (Math.PI * 2 * i) / 12;
+    const speed = 1.8 + Math.random() * 2.5;
+    rhythmParticles.push({
+      x: hitX,
+      y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1.0,
+      color
+    });
+  }
+}
+
+function drawRhythmHighway(nowRel = 0) {
+  const canvas = $("rhythmCanvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width;
+  const H = canvas.height;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Background gradient
+  const bgGrad = ctx.createLinearGradient(0, 0, W, 0);
+  bgGrad.addColorStop(0, "#0b111c");
+  bgGrad.addColorStop(0.16, "#090e17");
+  bgGrad.addColorStop(1, "#06090f");
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  const numStrings = strings.length;
+  const topPad = 28, botPad = 24;
+  const usableH = H - topPad - botPad;
+  const hitX = 115;
+  const lookaheadSec = 2.6;
+  const pxPerSec = (W - hitX - 30) / lookaheadSec;
+  const laneY = (sIdx) => topPad + sIdx * (usableH / Math.max(1, numStrings - 1));
+
+  // 1. Draw vertical pulse, sub-accent, & bar lines according to Time Signature (4/4, 3/4, 6/8, 12/8, etc.)
+  const meter = getRhythmMeterInfo();
+  const pulseSec = meter.pulseSec;
+  const pulsesPerBar = meter.pulsesPerBar;
+  const firstPulse = Math.floor((nowRel - 0.3) / pulseSec);
+  const lastPulse = Math.ceil((nowRel + lookaheadSec) / pulseSec);
+
+  for (let pIdx = firstPulse; pIdx <= lastPulse; pIdx++) {
+    if (pIdx < 0) continue;
+    const pTime = pIdx * pulseSec;
+    const x = hitX + (pTime - nowRel) * pxPerSec;
+    if (x < 65 || x > W) continue;
+
+    const pulseInBar = pIdx % pulsesPerBar;
+    const isBar = (pulseInBar === 0);
+    const isSubAccent = meter.subAccents.includes(pulseInBar);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, topPad - 12);
+    ctx.lineTo(x, H - botPad + 10);
+    if (isBar) {
+      ctx.strokeStyle = "rgba(226, 232, 240, 0.42)";
+      ctx.lineWidth = 2.0;
+    } else if (isSubAccent) {
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.32)";
+      ctx.lineWidth = 1.4;
+      ctx.setLineDash([4, 3]);
+    } else {
+      ctx.strokeStyle = "rgba(71, 85, 105, 0.22)";
+      ctx.lineWidth = 1;
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    if (isBar) {
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = "700 10px 'IBM Plex Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(`BAR ${Math.floor(pIdx / pulsesPerBar) + 1}`, x, 13);
+    } else {
+      ctx.fillStyle = isSubAccent ? "#38bdf8" : "#475569";
+      ctx.font = "600 9.5px 'IBM Plex Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(`${pulseInBar + 1}`, x, 13);
+    }
+  }
+
+  // Draw Time Signature Emblem (e.g., 4/4, 3/4, 6/8, 12/8) at top-left of Highway
+  ctx.save();
+  ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+  ctx.strokeStyle = "rgba(56, 189, 248, 0.4)";
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.roundRect(8, 6, 30, 34, 6);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#38bdf8";
+  ctx.font = "800 13px 'Oswald', sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(String(meter.num), 23, 20);
+  ctx.beginPath();
+  ctx.moveTo(13, 23);
+  ctx.lineTo(33, 23);
+  ctx.strokeStyle = "#475569";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = "#e2e8f0";
+  ctx.fillText(String(meter.den), 23, 36);
+  ctx.restore();
+
+  // 2. Draw string lanes and left string labels
+  for (let s = 0; s < numStrings; s++) {
+    const y = laneY(s);
+    const isTargetLane = isRhythmPlaying && rhythmCurrentTarget && rhythmCurrentTarget.s === s;
+
+    if (isTargetLane) {
+      ctx.fillStyle = "rgba(56, 189, 248, 0.06)";
+      ctx.fillRect(65, y - 13, W - 65, 26);
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(65, y);
+    ctx.lineTo(W, y);
+    ctx.strokeStyle = isTargetLane ? "#38bdf8" : "#334155";
+    ctx.lineWidth = (currentInstrument === "bass") ? (1.6 + s * 0.7) : (1.0 + s * 0.4);
+    ctx.stroke();
+
+    // Left string badge (e.g., 1E, 2B, 3G...)
+    const strNote = NOTE[pc(strings[s])];
+    ctx.fillStyle = isTargetLane ? "#38bdf8" : "#94a3b8";
+    ctx.font = "700 11px 'IBM Plex Mono', monospace";
+    ctx.textAlign = "right";
+    ctx.fillText(`${s + 1}${strNote}`, 54, y + 4);
+  }
+
+  // 3. Draw Hit Zone Line & Target Receptors
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(hitX, topPad - 14);
+  ctx.lineTo(hitX, H - botPad + 14);
+  ctx.strokeStyle = "#38bdf8";
+  ctx.lineWidth = 2.5;
+  ctx.shadowColor = "#38bdf8";
+  ctx.shadowBlur = 10;
+  ctx.stroke();
+  ctx.restore();
+
+  for (let s = 0; s < numStrings; s++) {
+    const y = laneY(s);
+    ctx.beginPath();
+    ctx.arc(hitX, y, 7, 0, Math.PI * 2);
+    ctx.fillStyle = "#0b0e12";
+    ctx.fill();
+    ctx.strokeStyle = (isRhythmPlaying && rhythmCurrentTarget && rhythmCurrentTarget.s === s) ? "#facc15" : "#475569";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // 4. If idle preview, generate a preview chart so user sees the current box & finger badges immediately
+  const activeChart = (isRhythmPlaying && rhythmChart.length > 0) ? rhythmChart : generateRhythmChart();
+
+  // 5. Draw scrolling note capsules with Fret + Note/Degree + Finger Badge
+  for (let i = 0; i < activeChart.length; i++) {
+    const note = activeChart[i];
+    if (note.status === "perfect" || note.status === "great" || note.status === "good") continue;
+
+    const x = hitX + (note.t - nowRel) * pxPerSec;
+    if (x < 55 || x > W + 45) continue;
+
+    const y = laneY(note.s);
+    const isMiss = (note.status === "miss");
+    const isCurrent = (isRhythmPlaying && rhythmCurrentTarget && rhythmCurrentTarget.idx === note.idx);
+    const fingerColor = FINGER_COLORS[note.finger] || "#38bdf8";
+
+    const capW = 68;
+    const capH = 22;
+    const rx = x - capW / 2;
+    const ry = y - capH / 2;
+
+    ctx.save();
+    if (isMiss) ctx.globalAlpha = 0.35;
+
+    // Capsule body
+    ctx.beginPath();
+    ctx.roundRect(rx, ry, capW, capH, 11);
+    ctx.fillStyle = isMiss ? "#334155" : (note.isRoot ? "#dc2626" : "#0f172a");
+    ctx.fill();
+    ctx.lineWidth = isCurrent ? 2.5 : 1.8;
+    ctx.strokeStyle = isCurrent ? "#facc15" : (note.isRoot ? "#f87171" : fingerColor);
+    if (isCurrent) {
+      ctx.shadowColor = "#facc15";
+      ctx.shadowBlur = 10;
+    }
+    ctx.stroke();
+
+    // Left text inside capsule: Fret + Note/Deg (e.g., "5F·A" or "5F·1")
+    const subLabel = (labelMode === "deg") ? note.deg : NOTE[note.pc];
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "700 11px 'IBM Plex Mono', monospace";
+    ctx.textAlign = "left";
+    ctx.shadowBlur = 0;
+    ctx.fillText(`${note.fret}F·${subLabel}`, rx + 7, y + 4);
+
+    // Right Finger Badge circle inside capsule (⓪~④)
+    const badgeX = rx + capW - 12;
+    ctx.beginPath();
+    ctx.arc(badgeX, y, 8.5, 0, Math.PI * 2);
+    ctx.fillStyle = fingerColor;
+    ctx.fill();
+
+    ctx.fillStyle = "#090c10";
+    ctx.font = "800 10.5px 'Inter', sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(String(note.finger), badgeX, y + 3.8);
+
+    ctx.restore();
+  }
+
+  // 6. Update & draw hit burst particles
+  for (let i = rhythmParticles.length - 1; i >= 0; i--) {
+    const p = rhythmParticles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= 0.06;
+    if (p.life <= 0) {
+      rhythmParticles.splice(i, 1);
+      continue;
+    }
+    ctx.save();
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // 7. Count-in overlay when nowRel < 0
+  if (isRhythmPlaying && nowRel < 0) {
+    const beatsLeft = Math.ceil(Math.abs(nowRel) / pulseSec);
+    ctx.save();
+    ctx.fillStyle = "rgba(9, 12, 18, 0.55)";
+    ctx.fillRect(hitX + 10, 0, W - hitX - 10, H);
+
+    ctx.fillStyle = "#facc15";
+    ctx.font = "700 28px 'Oswald', sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(`[${meter.num}/${meter.den}] ${t("rhythmCountIn")} ${beatsLeft}`, W / 2 + 30, H / 2 - 4);
+
+    if (rhythmCurrentTarget) {
+      const fName = t("finger_" + rhythmCurrentTarget.finger);
+      ctx.fillStyle = "#38bdf8";
+      ctx.font = "600 13px 'Inter', sans-serif";
+      ctx.fillText(
+        `NEXT: ${rhythmCurrentTarget.s + 1}st String · ${rhythmCurrentTarget.fret}F (${NOTE[rhythmCurrentTarget.pc]}) — ${FINGER_BADGES[rhythmCurrentTarget.finger]} ${fName}`,
+        W / 2 + 30,
+        H / 2 + 22
+      );
+    }
+    ctx.restore();
+  }
+}
+
+function finishRhythmGame() {
+  isRhythmPlaying = false;
+  if (rhythmRaf) {
+    cancelAnimationFrame(rhythmRaf);
+    rhythmRaf = null;
+  }
+  rhythmCurrentTarget = null;
+  rhythmNextTarget = null;
+  setActiveFingerPill(null);
+  const ring = $("rhythmApproachRing");
+  if (ring) ring.style.display = "none";
+  refreshDynamic();
+  updateFretboardLit();
+  drawRhythmHighway(0);
+
+  const total = rhythmChart.length || 1;
+  const weighted = rhythmCounts.perfect * 1.0 + rhythmCounts.great * 0.8 + rhythmCounts.good * 0.5;
+  const accPct = Math.round((weighted / total) * 100);
+
+  let rank = "C";
+  let rankClass = "rank-c";
+  if (accPct >= 92) { rank = "S"; rankClass = "rank-s"; }
+  else if (accPct >= 82) { rank = "A"; rankClass = "rank-a"; }
+  else if (accPct >= 70) { rank = "B"; rankClass = "rank-b"; }
+
+  const avgOffset = rhythmOffsets.length > 0
+    ? Math.round(rhythmOffsets.reduce((a, b) => a + b, 0) / rhythmOffsets.length)
+    : 0;
+  const avgStr = avgOffset > 0 ? `+${avgOffset}ms (${t("rhythmLate")})` : `${avgOffset}ms (${avgOffset < -5 ? t("rhythmEarly") : "OK"})`;
+
+  // Weak-spot analysis (missed frets/fingers)
+  const missedNotes = rhythmChart.filter(n => n.status === "miss");
+  let weakSpotTxt = "";
+  if (missedNotes.length > 0) {
+    const sample = missedNotes[0];
+    weakSpotTxt = ` · Weak: ${sample.s + 1}st ${sample.fret}F (${FINGER_BADGES[sample.finger]} ${t("fingerShort_" + sample.finger)})`;
+  }
+
+  const badge = $("rhythmRankBadge");
+  if (badge) {
+    badge.textContent = rank;
+    badge.className = `rhythm-rank-badge ${rankClass}`;
+  }
+  if ($("resRhythmAcc")) $("resRhythmAcc").textContent = `${accPct}%`;
+  if ($("resRhythmCombo")) $("resRhythmCombo").textContent = rhythmMaxCombo;
+  if ($("resRhythmOffset")) $("resRhythmOffset").textContent = avgStr;
+  if ($("resRhythmBreakdown")) {
+    $("resRhythmBreakdown").textContent = `${rhythmCounts.perfect} / ${rhythmCounts.great} / ${rhythmCounts.good} / ${rhythmCounts.miss}`;
+  }
+  if ($("resRhythmWeakTxt")) {
+    if (missedNotes.length > 0) {
+      const sample = missedNotes[0];
+      $("resRhythmWeakTxt").textContent = `${sample.s + 1}st String · ${sample.fret}F (${NOTE[sample.pc]}) — ${FINGER_BADGES[sample.finger]} ${t("finger_" + sample.finger)}`;
+    } else {
+      $("resRhythmWeakTxt").textContent = t("rhythmWeakNone");
+    }
+  }
+  if ($("rhythmResultBox")) {
+    $("rhythmResultBox").style.display = "flex";
+  }
 }
 
 function bindEvents() {
@@ -2530,7 +3963,97 @@ function bindEvents() {
       if (dot) {
         const midi = parseInt(dot.getAttribute("data-midi"), 10);
         playMidiNote(midi);
+        if (isRhythmPlaying) {
+          checkRhythmHit([{ f: midiToFreq(midi), midi }], midiToFreq(midi), midi, 0);
+        }
       }
+    };
+    $("fb").onmousemove = e => {
+      const dot = e.target.closest(".note-dot");
+      if (dot) {
+        const s = parseInt(dot.getAttribute("data-str"), 10);
+        const fret = parseInt(dot.getAttribute("data-fret"), 10);
+        const finger = parseInt(dot.getAttribute("data-finger"), 10);
+        const notePc = parseInt(dot.getAttribute("data-pc"), 10);
+        if (!hoveredFretNote || hoveredFretNote.s !== s || hoveredFretNote.fret !== fret) {
+          hoveredFretNote = { s, fret, finger, pc: notePc };
+          if (!isRhythmPlaying) renderFretboardHandOverlay(0);
+        }
+      } else if (hoveredFretNote !== null) {
+        hoveredFretNote = null;
+        if (!isRhythmPlaying) renderFretboardHandOverlay(0);
+      }
+    };
+    $("fb").onmouseleave = () => {
+      if (hoveredFretNote !== null) {
+        hoveredFretNote = null;
+        if (!isRhythmPlaying) renderFretboardHandOverlay(0);
+      }
+    };
+  }
+
+  // Rhythm Game Controls
+  if ($("btnRhythmToggle")) {
+    $("btnRhythmToggle").onclick = () => {
+      if (isRhythmPlaying) stopRhythmGame();
+      else startRhythmGame();
+    };
+  }
+  if ($("btnRhythmRetry")) {
+    $("btnRhythmRetry").onclick = () => {
+      startRhythmGame();
+    };
+  }
+  if ($("rhythmBoxSel")) {
+    $("rhythmBoxSel").onchange = e => {
+      rhythmBoxId = e.target.value;
+      drawFB();
+      if (!isRhythmPlaying) drawRhythmHighway(0);
+    };
+  }
+  if ($("rhythmDrillSel")) {
+    $("rhythmDrillSel").onchange = e => {
+      rhythmDrillId = e.target.value;
+      if (!isRhythmPlaying) drawRhythmHighway(0);
+    };
+  }
+  if ($("rhythmMeterSel")) {
+    $("rhythmMeterSel").onchange = e => {
+      rhythmMeterId = e.target.value;
+      // For /8 meters (6/8, 12/8, 7/8), default subdivision to eighth notes so 1 note per pulse aligns naturally
+      if (["6_8", "12_8", "7_8"].includes(rhythmMeterId) && rhythmSubdivId === "quarter") {
+        rhythmSubdivId = "eighth";
+        if ($("rhythmSubdivSel")) $("rhythmSubdivSel").value = "eighth";
+      } else if (["4_4", "3_4", "2_4", "5_4"].includes(rhythmMeterId) && rhythmSubdivId === "eighth") {
+        rhythmSubdivId = "quarter";
+        if ($("rhythmSubdivSel")) $("rhythmSubdivSel").value = "quarter";
+      }
+      if (!isRhythmPlaying) drawRhythmHighway(0);
+    };
+  }
+  if ($("rhythmSubdivSel")) {
+    $("rhythmSubdivSel").onchange = e => {
+      rhythmSubdivId = e.target.value;
+      if (!isRhythmPlaying) drawRhythmHighway(0);
+    };
+  }
+  if ($("rhythmBpm")) {
+    $("rhythmBpm").oninput = e => {
+      rhythmBpm = parseInt(e.target.value, 10);
+      if ($("rhythmBpmVal")) $("rhythmBpmVal").textContent = rhythmBpm;
+      if (!isRhythmPlaying) drawRhythmHighway(0);
+    };
+  }
+  if ($("rhythmLenSel")) {
+    $("rhythmLenSel").onchange = e => {
+      rhythmNoteCount = parseInt(e.target.value, 10);
+      if (!isRhythmPlaying) drawRhythmHighway(0);
+    };
+  }
+  if ($("rhythmLatency")) {
+    $("rhythmLatency").oninput = e => {
+      rhythmLatencyMs = parseInt(e.target.value, 10);
+      if ($("rhythmLatVal")) $("rhythmLatVal").textContent = rhythmLatencyMs;
     };
   }
 }
@@ -2605,6 +4128,33 @@ function handleHashRoute() {
     if (sel && sel.value !== "bass") {
       sel.value = "bass";
       sel.dispatchEvent(new Event("change"));
+    }
+  }
+  if (hash.includes("rhythm")) {
+    setAppMode("rhythm");
+  }
+  if (hash.includes("finger")) {
+    setLabelMode("finger");
+  }
+  if (hash.includes("68")) {
+    const mSel = $("rhythmMeterSel");
+    if (mSel) {
+      mSel.value = "6_8";
+      mSel.dispatchEvent(new Event("change"));
+    }
+  }
+  if (hash.includes("chord")) {
+    const guideT = $("guideToggle");
+    if (guideT && guideMode !== "chord") guideT.click();
+    const vSel = $("voicingSel");
+    if (vSel && vSel.options.length > 1) {
+      vSel.selectedIndex = 1; // E-Shape Barre (5th fret for A)
+      vSel.dispatchEvent(new Event("change"));
+    }
+    const dSel = $("rhythmDrillSel");
+    if (dSel) {
+      dSel.value = "chord";
+      dSel.dispatchEvent(new Event("change"));
     }
   }
   if (hash.includes("drawer") || hash.includes("rec") || hash.includes("recording")) {

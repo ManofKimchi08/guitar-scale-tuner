@@ -500,6 +500,22 @@ body {
   transform: translateX(100%);
 }
 
+.chip-toggle.three-way .chip-slider {
+  width: calc(33.333% - 2px);
+}
+
+.chip-toggle.three-way.pos-0 .chip-slider {
+  transform: translateX(0%);
+}
+
+.chip-toggle.three-way.pos-1 .chip-slider {
+  transform: translateX(100%);
+}
+
+.chip-toggle.three-way.pos-2 .chip-slider {
+  transform: translateX(200%);
+}
+
 .chip-btn {
   position: relative;
   z-index: 1;
@@ -1394,4 +1410,400 @@ body {
 .note-dot.is-fifth circle {
   stroke: #38bdf8;
   stroke-width: 1.5px;
+}
+
+.note-dot.is-rhythm-target circle {
+  fill: #facc15 !important;
+  r: 14px !important;
+  stroke: #ffffff !important;
+  stroke-width: 2.5px !important;
+  filter: drop-shadow(0 0 10px #facc15);
+}
+
+.note-dot.is-rhythm-target text {
+  fill: #0b0e12 !important;
+  font-weight: 800 !important;
+}
+
+.note-dot.is-rhythm-next circle {
+  stroke: #facc15 !important;
+  stroke-width: 2px !important;
+  stroke-dasharray: 3 2;
+  opacity: 0.9;
+}
+
+.rhythm-approach-ring {
+  pointer-events: none;
+  fill: none;
+  stroke: #38bdf8;
+  stroke-width: 2.5px;
+  filter: drop-shadow(0 0 6px #38bdf8);
+}
+
+/* ======================================================== */
+/* 7. RHYTHM GAME & FRETBOARD TRAINER ARENA                 */
+/* ======================================================== */
+.rhythm-arena-card {
+  margin-bottom: 16px;
+  background: linear-gradient(180deg, #131822 0%, #0d1118 100%);
+  border: 1px solid #263244;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rhythm-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.rhythm-title-group,
+.rhythm-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rhythm-icon {
+  font-size: 18px;
+}
+
+.rhythm-title,
+.rhythm-badge {
+  font-family: var(--disp);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #ffffff;
+}
+
+.rhythm-sub {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.rhythm-live-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rhythm-stat-pill {
+  background: #090c10;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.rhythm-stat-pill small {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.rhythm-stat-pill b {
+  font-family: var(--disp);
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.rhythm-stat-pill.combo b {
+  color: #facc15;
+}
+
+.rhythm-stat-pill.acc b {
+  color: var(--ok);
+}
+
+.rhythm-controls-bar {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  background: #0a0e14;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.rhythm-controls-bar .compact-field {
+  flex: 1;
+  min-width: 96px;
+}
+
+.rhythm-controls-bar .bpm-field {
+  flex: 0 0 105px;
+  min-width: 100px;
+}
+
+.rhythm-controls-bar .bpm-field input[type="range"] {
+  width: 100%;
+  accent-color: var(--tone);
+  cursor: pointer;
+  margin-top: 6px;
+}
+
+/* Live Left-Hand Finger Indicator Bar */
+.finger-guide-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  background: #090c11;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.finger-pills-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.finger-bar-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tone);
+  margin-right: 4px;
+}
+
+.finger-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #121721;
+  border: 1px solid #242e3e;
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+  transition: all 0.15s ease;
+}
+
+.finger-pill .f-badge {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.finger-pill.f0 { color: #cbd5e1; border-color: rgba(148, 163, 184, 0.4); }
+.finger-pill.f1 { color: #38bdf8; border-color: rgba(56, 189, 248, 0.4); }
+.finger-pill.f2 { color: #22c55e; border-color: rgba(34, 197, 94, 0.4); }
+.finger-pill.f3 { color: #f59e0b; border-color: rgba(245, 158, 11, 0.4); }
+.finger-pill.f4 { color: #ec4899; border-color: rgba(236, 72, 153, 0.4); }
+
+.finger-pill.active {
+  color: #ffffff;
+  transform: translateY(-1px) scale(1.05);
+  font-weight: 700;
+}
+
+.finger-pill.f0.active {
+  background: rgba(148, 163, 184, 0.22);
+  border-color: #cbd5e1;
+  box-shadow: 0 0 12px rgba(203, 213, 225, 0.35);
+}
+
+.finger-pill.f1.active {
+  background: rgba(56, 189, 248, 0.22);
+  border-color: #38bdf8;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.45);
+}
+
+.finger-pill.f2.active {
+  background: rgba(34, 197, 94, 0.22);
+  border-color: #22c55e;
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.45);
+}
+
+.finger-pill.f3.active {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: #f59e0b;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.45);
+}
+
+.finger-pill.f4.active {
+  background: rgba(236, 72, 153, 0.22);
+  border-color: #ec4899;
+  box-shadow: 0 0 12px rgba(236, 72, 153, 0.45);
+}
+
+.rhythm-judge-banner {
+  margin-left: auto;
+  font-family: var(--disp);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  text-align: right;
+}
+
+.rhythm-judge-banner.perfect {
+  color: #38bdf8;
+  text-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+}
+
+.rhythm-judge-banner.great {
+  color: #22c55e;
+  text-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+}
+
+.rhythm-judge-banner.good {
+  color: #facc15;
+}
+
+.rhythm-judge-banner.miss {
+  color: #ef4444;
+}
+
+/* Scrolling Highway Canvas */
+.rhythm-highway-wrap {
+  position: relative;
+  background: #070a0f;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+#rhythmCanvas {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.rhythm-progress-track {
+  width: 100%;
+  height: 5px;
+  background: #0f172a;
+}
+
+.rhythm-progress-bar,
+.rhythm-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #38bdf8, #22c55e);
+  transition: width 0.1s linear;
+}
+
+/* Session Result Box */
+.rhythm-result-box {
+  background: #0a0e15;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 10px;
+  padding: 14px 16px;
+  animation: fadeIn 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rhythm-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.rhythm-result-title {
+  font-family: var(--disp);
+  font-size: 17px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.rhythm-result-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+@media(max-width: 720px) {
+  .rhythm-result-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.rhythm-weak-spot {
+  background: #090c10;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.rhythm-weak-spot strong {
+  color: #facc15;
+  margin-left: 4px;
+}
+
+.rhythm-result-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.rhythm-rank-badge {
+  width: 54px;
+  height: 54px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #38bdf8, #2563eb);
+  color: #ffffff;
+  font-family: var(--disp);
+  font-size: 32px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.4);
+}
+
+.rhythm-rank-badge.rank-s {
+  background: linear-gradient(135deg, #facc15, #f59e0b);
+  color: #0b0e12;
+  box-shadow: 0 0 20px rgba(250, 204, 21, 0.5);
+}
+
+.rhythm-rank-badge.rank-a {
+  background: linear-gradient(135deg, #38bdf8, #22c55e);
+}
+
+.rhythm-rank-badge.rank-b {
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+}
+
+.rhythm-rank-badge.rank-c {
+  background: linear-gradient(135deg, #64748b, #475569);
+}
+
+.rhythm-result-title-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rhythm-result-title-box strong {
+  font-size: 14px;
+  color: #ffffff;
+}
+
+.rhythm-result-breakdown {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--muted);
 }

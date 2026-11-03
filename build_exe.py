@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 import subprocess
 
 def build():
@@ -8,7 +9,9 @@ def build():
     print("===================================================")
 
     cmd = [
-        "pyinstaller",
+        sys.executable,
+        "-m",
+        "PyInstaller",
         "--noconfirm",
         "--onedir",
         "--windowed",
@@ -23,6 +26,9 @@ def build():
 
     print("Running command:", " ".join(cmd))
     subprocess.check_call(cmd)
+    # Remove intermediate build/ folder so users don't accidentally click the incomplete exe in build/
+    if os.path.isdir("build"):
+        shutil.rmtree("build", ignore_errors=True)
     print("\n✅ Build complete! Executable generated at: dist/GuitarScaleTuner/GuitarScaleTuner.exe")
 
 if __name__ == "__main__":
