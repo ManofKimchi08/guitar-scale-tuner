@@ -1,6 +1,6 @@
 # 📖 Guitar Scale Tuner - 기술 명세서 & 시스템 아키텍처 (Technical Documentation)
 
-본 문서는 **Guitar Scale Tuner (Scales, heard.) v2.1.2**의 전체 소프트웨어 구조, 오디오 신호 처리(DSP) 알고리즘, 적응형 샘플레이트 협상 시스템, 3-Tier 레코딩 엔진, 그리고 프론트엔드 최적화 기법을 기술적으로 상세히 서술한 엔지니어링 명세서입니다.
+본 문서는 **Guitar Scale Tuner (Scales, heard.) v2.3.0**의 전체 소프트웨어 구조, 오디오 신호 처리(DSP) 알고리즘, 적응형 샘플레이트 협상 시스템, 3-Tier 레코딩 엔진, 3D 원근 지판·하이브리드 ASIO 진단 아키텍처, 그리고 보안 및 패키징 기법을 기술적으로 상세히 서술한 엔지니어링 명세서입니다.
 
 ---
 
@@ -10,7 +10,7 @@
 3. [지능형 적응형 샘플레이트 협상 시스템 (Adaptive Rate Negotiation)](#3-지능형-적응형-샘플레이트-협상-시스템-adaptive-rate-negotiation)
 4. [3-Tier 레코딩 스튜디오 & 스마트 연주 분석 엔진](#4-3-tier-레코딩-스튜디오--스마트-연주-분석-엔진)
 5. [4현 베이스 기타(Bass Guitar) 및 30Hz 초저음역대 최적화](#5-4현-베이스-기타bass-guitar-및-30hz-초저음역대-최적화)
-6. [프론트엔드 렌더링 최적화 & 반응형 UI/UX](#6-프론트엔드-렌더링-최적화--반응형-uiux)
+6. [프론트엔드 렌더링 최적화, 3D 지판 & 하이브리드 ASIO 브릿지 UI](#6-프론트엔드-렌더링-최적화-3d-지판--하이브리드-asio-브릿지-ui)
 7. [보안 및 독립 패키징 (Packaging & Security)](#7-보안-및-독립-패키징-packaging--security)
 
 ---
@@ -162,7 +162,7 @@ $$M = \left\lfloor \frac{1400}{\Delta f} \right\rfloor - \left\lfloor \frac{30}{
 
 ---
 
-## 6. 프론트엔드 렌더링 최적화 & 반응형 UI/UX
+## 6. 프론트엔드 렌더링 최적화, 3D 지판 & 하이브리드 ASIO 브릿지 UI
 
 ### 6.1 DOM Thrashing 제거 (CSS 클래스 토글 구조)
 - 기존: 초당 60~80회의 오디오 콜백마다 SVG 지판 요소 전체를 `innerHTML = ""`로 파괴하고 수백 개의 SVG DOM 노드를 재생성하여 심각한 프레임 드롭과 메모리 누수 유발.
@@ -170,22 +170,37 @@ $$M = \left\lfloor \frac{1400}{\Delta f} \right\rfloor - \left\lfloor \frac{30}{
 
 ### 6.2 글래스모피즘 사이드 드로어 & 딥링크 라우팅
 - 우측 상단 ⚙️ 버튼을 통해 슬라이드되는 사이드 드로어 내에 5개 아코디언 카드(튜너, 잼, 레코더, 스캐너, 오디오 상세 설정)를 집약 배치.
-- URL Hash 기반 딥링크 라우팅(`#bass`, `#drawer`, `#recording`)을 지원하여 특정 악기나 모드로 즉시 진입 가능.
+- URL Hash 기반 딥링크 라우팅(`#bass`, `#drawer`, `#recording`, `#3d`, `#3d-asio`)을 지원하여 특정 악기, 3D 뷰 또는 ASIO 진단 팝오버로 즉시 진입 가능.
+
+### 6.3 12-TET 실제 기타 프렛 비례 모델 및 3D 원근 지판 엔진
+- **12-TET 로그/등비 프렛 위치 계산**:
+  실제 기타의 스케일 길이 $L$ 에 대한 $n$ 번째 프렛의 거리를 평균율 물리 공식 $d(n) = L \cdot (1 - 2^{-n/12})$ 기반으로 정규화하여 고프렛(12~22F)으로 갈수록 프렛 간격이 정밀하게 좁아지는 실제 지판 비율을 구현했습니다.
+- **CPU/GPU 친화적 3D SVG 뷰 & 3축 기즈모**:
+  `2D 평면`, `3D Studio (38°)`, `Deep 3D (52°)` 시점 전환과 드래그 기반 Pitch/Yaw 원근 회전, 실시간 각도 표시 및 3D 축 기즈모를 제공합니다. 음정 노트는 3D 입체 퍽(Extruded Puck)과 넥 테마(`Carbon`, `Rosewood`, `Maple`, `Synth`)로 렌더링됩니다.
+
+### 6.4 하이브리드 2+4 스마트 ASIO 브릿지 진단 아키텍처
+- **웹 배포 무설치 Fallback (`initDeviceSel`)**: GitHub Pages 등 HTTPS 원격 웹 환경에서는 로컬 브릿지 프로브(`probeAsioBridgeSilent`) 실패 또는 미실행 시 자동으로 브라우저 내장 Web Audio 마이크(`mic_default`)로 전환되며, `navigator.mediaDevices.enumerateDevices()`에는 500ms 타임아웃 가드를 적용해 초기 UI 지연을 방지합니다.
+- **인라인 진단 팝오버 & 1.5초 백그라운드 레이더**: 사용자가 ASIO 장치를 선택하거나 상태 배지를 클릭하면 3-노드 연결 상태 흐름도(`오디오 인터페이스 → ASIO Bridge 도우미 → 웹 브라우저 3D 지판`)와 1.5초 간격 자동 재감지 레이더를 실행해 로컬 브릿지가 실행되는 즉시 자동 연결합니다.
 
 ---
 
 ## 7. 보안 및 독립 패키징 (Packaging & Security)
 
-### 7.1 경로 탐색(Path Traversal) 공격 방어
-로컬 HTTP 서버(`run_https_server.py`)의 `translate_path` 메소드에서 상위 디렉터리 접근 정규화 시 `.git`, `.env`, `.pem`, `.key` 등 민감 파일 확장자 접근을 정밀 차단하고, 루트 상대 경로(`.`, `..`)는 정상 허용하여 404 에러를 방지했습니다.
+### 7.1 경로 탐색(Path Traversal) 및 심볼릭 링크 방어
+로컬 HTTP 서버(`run_https_server.py`)의 `translate_path()`에서 `os.path.realpath()`로 실제 경로를 정규화한 뒤 `os.path.commonpath()`로 루트 디렉터리(`base_dir`) 내부 포함 여부를 강제 검증합니다. 이를 통해 `..` 상위 경로 탈출, 심볼릭 링크 우회, `.git`, `.env`, `.pem`, `.key` 등 민감 파일 노출을 원천 차단하고 디렉터리 목록 조회(`list_directory`)는 `403 Forbidden`으로 거부합니다.
 
-### 7.2 Windows 독립 실행 파일 빌드 (`build_exe.py`)
+### 7.2 WebSocket CSWSH Origin 화이트리스트, 입력 검증 및 CSP
+- **CSWSH(Cross-Site WebSocket Hijacking) 방어 (`asio_server.py`)**: 로컬 WebSocket 서버(`127.0.0.1:8765`)는 `allowed_origins` 정규식 화이트리스트를 통해 `localhost`, `127.0.0.1` 및 공식 배포 도메인(`https://manofkimchi08.github.io`)에서 온 연결만 수락하고, 임의의 외부 웹사이트가 로컬 마이크·녹음 제어에 접근하는 것을 HTTP 403으로 차단합니다.
+- **수치 입력 검증 (`math.isfinite`)**: WebSocket 제어 패킷(`set_ref_pitch`, `set_monitoring`, `set_sensitivity`)에 `NaN`/`Inf` 비정상 부동소수점이 유입되어 오디오 버퍼를 오염시키지 않도록 `math.isfinite()` 및 범위 클램핑을 적용했습니다.
+- **프론트엔드 XSS 방어 및 CSP (`index.html`, `src/main.js`)**: 오디오 장치명·오류 메시지·파일명 등 동적 텍스트 렌더링에 `textContent`를 일관 적용하고, `<meta http-equiv="Content-Security-Policy">` (`script-src 'self'`, `connect-src 'self' ws://127.0.0.1:8765 ws://localhost:8765`) 및 외부 링크 `rel="noopener noreferrer"` 속성을 강제했습니다.
+
+### 7.3 Windows 독립 실행 파일 빌드 (`build_exe.py`)
 - PyInstaller 플래그: `--onedir --windowed --name GuitarScaleTuner --icon favicon.ico`
 - 번들링 리소스: `index.html`, `src/` 디렉터리, `favicon.ico`, `favicon.png` 포함.
 - 다크 스튜디오 일렉트릭 블루 지판 및 픽 형상의 멀티 해상도(16x16 ~ 256x256) 아이콘을 EXE 실행 파일 바이너리 및 브라우저 탭에 일체형으로 내장.
 
 ---
 
-*문서 작성일: 2026년 10월 24일*  
-*소프트웨어 버전: Guitar Scale Tuner v2.1.2*  
+*문서 작성일: 2026년 11월 14일*  
+*소프트웨어 버전: Guitar Scale Tuner v2.3.0*  
 *작성자: Advanced Agentic Engineer (Antigravity)*

@@ -4,6 +4,34 @@
 
 ---
 
+## 🌐 [v2.3.0] - 3D 스튜디오 지판, 하이브리드 스마트 ASIO 진단 독, GitHub Pages 무설치 웹 배포 & 보안 강화 (2026-11-14)
+
+### 📌 개요
+실제 기타 넥의 **12-TET 프렛 비례($2^{-n/12}$)와 3D 원근 회전 지판(3D Studio Fretboard)**, 설치 없이 브라우저로 바로 접속 가능한 **GitHub Pages 라이브 웹 앱**, **하이브리드 2+4 스마트 ASIO 브릿지 진단 독**, 그리고 **웹-로컬 WebSocket `Origin` 화이트리스트·심볼릭 링크 차단·CSP(Content-Security-Policy) 보안 하드닝**을 적용한 메이저 업데이트입니다.
+
+### 📸 주요 화면 미리보기
+| 🧊 3D 스튜디오 지판 (Carbon Theme · 12-TET 실제 비례) | ⚡ 하이브리드 2+4 스마트 ASIO 진단 & 연결 도우미 |
+| :---: | :---: |
+| ![3D Studio Fretboard](docs/screenshots/screenshot_main.png) | ![Hybrid ASIO Smart Popover](docs/screenshots/screenshot_asio_hybrid.png) |
+
+### 🛠️ 주요 변경사항
+* **🧊 3D 스튜디오 지판 & 12-TET 실제 기타 프렛 비례 (`src/main.js`, `src/style.css`, `index.html`)**:
+  - **12-TET 등비수열 프렛 비례 ($2^{-n/12}$)**: 1프렛부터 22프렛까지 실제 기타 스케일 길이 공식에 따라 프렛 간격이 자연스럽게 좁아지도록 SVG 좌표를 재설계했습니다.
+  - **3가지 시점 프리셋 & 인터랙티브 드래그 궤도**: `2D 평면`, `3D Studio (38°)`, `Deep 3D (52°)` 프리셋 전환, 마우스 드래그 기반 Pitch/Yaw 3D 회전, 실시간 각도 배지, 원클릭 `시점 리셋`, 우측 상단 **3D 축 기즈모(Gizmo)**를 탑재했습니다.
+  - **입체 3D 노트 퍽(Extruded Pucks) & 4종 스튜디오 넥 테마**: Antigravity 다크 카본 테마에 맞춘 `Carbon`, `Rosewood`, `Maple`, `Synth` 4종 지판 테마와 3D 그림자·입체 림이 적용된 음정 노트를 렌더링합니다.
+* **🌐 GitHub Pages 무설치 웹 배포 & 하이브리드 2+4 스마트 ASIO 진단 독 (`index.html`, `src/main.js`, `src/style.css`)**:
+  - **무설치 라이브 웹 실행 (`https://manofkimchi08.github.io/guitar-scale-tuner/`)**: HTTPS 웹 환경 접속 시 로컬 ASIO 브릿지가 없으면 자동으로 브라우저 기본 마이크(`mic_default` · `웹 마이크 사용 중`)로 즉시 전환되어 설치 없이 바로 사용할 수 있습니다.
+  - **상단 인라인 스마트 ASIO 진단 팝오버 (하이브리드 2+4)**: 드롭다운에서 `⚡ ASIO` 선택 또는 상태 배지(`ASIO 확인` / `웹 마이크 사용 중`) 클릭 시 상단 바 직하단에 비차단(Non-blocking) 팝오버가 열립니다.
+  - **3-노드 신호 연결 진단 & 1.5초 백그라운드 레이더**: `오디오 인터페이스 → ASIO Bridge 도우미 → 웹 브라우저 3D 지판` 흐름도와 `1.5초` 간격 백그라운드 자동 감지, 2단계 설치 안내 카드(`Bridge 도우미 .exe` / `ASIO4ALL`), 원클릭 `설치 없이 브라우저 기본 마이크로 즉시 전환` 버튼, 자동 전환 체크박스를 제공합니다.
+  - **웹 초기 구동 안정화**: `src/main.js`의 언어 식별자 참조 오류(`currentLang` → `LANG`)를 수정하고 `enumerateDevices()` 500ms 타임아웃 가드를 추가해 HTTPS 페이지에서 웹 마이크 옵션이 지연 없이 즉시 표시되도록 개선했습니다.
+* **🔒 보안 강화 (CSWSH, Path Traversal, 수치 검증 & CSP) (`asio_server.py`, `run_https_server.py`, `index.html`)**:
+  - **WebSocket Origin 화이트리스트 확장 (CSWSH 방어)**: `asio_server.py`의 `allowed_origins`에 `localhost` / `127.0.0.1` 외 공식 웹 배포 도메인(`https://manofkimchi08.github.io`)만 허용하고 타 외부 사이트의 로컬 웹소켓 접근을 차단(403)합니다.
+  - **루프백 전용 바인딩 & 수치 입력 검증**: 모든 로컬 서버를 `127.0.0.1`에만 바인딩하고, WebSocket 제어 메시지(`set_ref_pitch`, `set_monitoring`, `set_sensitivity`)에 `math.isfinite()` 검증을 추가해 `NaN`/`Inf` 입력을 차단했습니다.
+  - **심볼릭 링크·상위 경로 탈출 방어 강화**: `run_https_server.py`의 `translate_path()`에 `os.path.realpath()` 및 `os.path.commonpath()` 검증을 도입해 루트 디렉터리 외부 접근 및 민감 파일(`.git`, `.env`, `.pem`, `.key`) 노출을 차단합니다.
+  - **CSP 및 안전한 외부 링크 속성**: `index.html`에 엄격한 `Content-Security-Policy` 메타 태그(`script-src 'self'`, `connect-src 'self' ws://127.0.0.1:8765 ws://localhost:8765`)를 적용하고 외부 링크에 `rel="noopener noreferrer"`를 적용했습니다.
+
+---
+
 ## 🎮 [v2.2.0] - 리듬 & 지판·운지 트레이너, 7종 박자표·11종 리듬 패턴 및 하이브리드 왼손 아바타 (2026-11-03)
 
 ### 📌 개요

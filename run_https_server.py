@@ -12,20 +12,22 @@ if sys.stderr is None:
 class CustomHTTPRequestHandler(SimpleHTTPRequestHandler):
     def translate_path(self, path):
         clean_path = super().translate_path(path)
-        base_dir = getattr(self, 'directory', None) or os.getcwd()
+        base_dir = os.path.realpath(getattr(self, 'directory', None) or os.getcwd())
+        real_clean = os.path.realpath(clean_path)
         try:
-            rel_path = os.path.relpath(clean_path, base_dir)
+            if os.path.commonpath([real_clean, base_dir]) != base_dir:
+                return os.path.join(base_dir, "__forbidden__")
+            rel_path = os.path.relpath(real_clean, base_dir)
         except Exception:
-            return ""
+            return os.path.join(base_dir, "__forbidden__")
         parts = rel_path.split(os.sep)
         for p in parts:
-            # Skip current and parent path indicators
-            if p in ('.', '..', ''):
+            if p in ('.', ''):
                 continue
-            # Block hidden directories/files (.git, .env) and sensitive credentials (.pem, .key)
-            if p.startswith('.') or p.endswith('.pem') or p.endswith('.key'):
-                return ""  # Invalid path to block access
-        return clean_path
+            # Block parent traversal, hidden directories/files (.git, .env), and sensitive credentials (.pem, .key)
+            if p == '..' or p.startswith('.') or p.endswith('.pem') or p.endswith('.key'):
+                return os.path.join(base_dir, "__forbidden__")
+        return real_clean
 
     def list_directory(self, path):
         self.send_error(403, "Directory listing is disabled")

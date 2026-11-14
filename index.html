@@ -4,6 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' ws://127.0.0.1:8765 ws://localhost:8765;">
   <title>Scales, heard. 🎸</title>
   <meta name="description" content="Fretboard scale guide with live guitar & bass pitch recognition.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -777,7 +778,7 @@
             </div>
             <p class="asio-install-desc">브라우저와 내 PC의 ASIO 오디오 장치를 연결해 주는 로컬 브릿지 도우미입니다.</p>
           </div>
-          <a id="btnDownloadAsioBridge" class="asio-btn-primary" href="https://github.com/ManofKimchi08/guitar-scale-tuner/releases/latest" target="_blank" rel="noopener">
+          <a id="btnDownloadAsioBridge" class="asio-btn-primary" href="https://github.com/ManofKimchi08/guitar-scale-tuner/releases/latest" target="_blank" rel="noopener noreferrer">
             📥 Bridge 도우미 다운로드 (.exe)
           </a>
         </div>
@@ -790,7 +791,7 @@
             </div>
             <p class="asio-install-desc">전용 드라이버(Focusrite 등)가 없다면 범용 ASIO4ALL을 함께 설치하세요.</p>
           </div>
-          <a id="btnOpenAsio4All" class="asio-btn-secondary" href="https://asio4all.org/" target="_blank" rel="noopener">
+          <a id="btnOpenAsio4All" class="asio-btn-secondary" href="https://asio4all.org/" target="_blank" rel="noopener noreferrer">
             🔧 ASIO4ALL 공식 사이트
           </a>
         </div>

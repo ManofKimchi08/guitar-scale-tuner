@@ -3,7 +3,7 @@
 **エレキギター＆ベースの実音をリアルタイムで聴き取る、超低遅延フレットボード・スケールガイド、リズムゲーム＆スマート運指トレーナー**
 
 [![Live Web App](https://img.shields.io/badge/Live%20Web%20App-Try%20Without%20Install-38bdf8?style=flat&logo=googlechrome&logoColor=white)](https://manofkimchi08.github.io/guitar-scale-tuner/)
-[![Release](https://img.shields.io/badge/Release-v2.2.0-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
+[![Release](https://img.shields.io/badge/Release-v2.3.0-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Web%20%7C%20Windows-brightgreen.svg)](https://manofkimchi08.github.io/guitar-scale-tuner/)
 
@@ -14,17 +14,30 @@
 
 ## 📸 スクリーンショット & UIツアー (Screenshots)
 
+| 🧊 3Dスタジオ指板 (`Carbon` テーマ · 12-TET 実比率) | ⚡ ハイブリッド 2+4 スマート ASIO 診断ドック |
+| :---: | :---: |
+| ![3D Studio Fretboard](docs/screenshots/screenshot_main.png) | ![Hybrid ASIO Smart Popover](docs/screenshots/screenshot_asio_hybrid.png) |
+
 | 🎮 リズム＆指板・運指トレーナー (`4/4拍子` スケールラン + ハイブリッド左手アバター) | 🖐️ `6/8拍子` 複合拍子ハイウェイ + CAGEDバレーコード(`1 BARRE`) 運指ガイド |
 | :---: | :---: |
 | ![Rhythm Game & Hand Avatar](docs/screenshots/screenshot_rhythm_game.png) | ![6/8 Rhythm & CAGED Barre Chord Hand](docs/screenshots/screenshot_rhythm_68_barre.png) |
 
-| 🎸 6弦ギター指板 & リアルタイムピッチHUD | 🎸 4弦ベースギター (1-5-8 グルーヴガイド) | 🎙️ 3-Tier レコーディングスタジオ & 指板シンクロ再生 |
-| :---: | :---: | :---: |
-| ![6-String Guitar View](docs/screenshots/screenshot_main.png) | ![4-String Bass View](docs/screenshots/screenshot_bass.png) | ![Recording Studio Drawer](docs/screenshots/screenshot_recording.png) |
+| 🎸 4弦ベースギター (1-5-8 グルーヴガイド) | 🎙️ 3-Tier レコーディングスタジオ & 指板シンクロ再生 |
+| :---: | :---: |
+| ![4-String Bass View](docs/screenshots/screenshot_bass.png) | ![Recording Studio Drawer](docs/screenshots/screenshot_recording.png) |
 
 ---
 
-## 🌟 主な機能 (v2.2.0)
+## 🌟 主な機能 (v2.3.0)
+
+### 0. 🧊 3Dスタジオ指板＆ハイブリッド 2+4 スマートASIOドック (v2.3.0 新機能)
+- **実物ギターと同じ 12-TET フレット比率 ($2^{-n/12}$)**: 1フレットから22フレットまで平均律スケール公式に従って間隔が自然に狭まり、実機に近い視認性を実現しました。
+- **インタラクティブ3D回転＆4種ネックテーマ**: **`2D平面`**・**`3D Studio (38°)`**・**`Deep 3D (52°)`** の切り替え、ドラッグによるPitch/Yaw角度回転、ワンクリック視点リセット、右上 **3D軸ギズモ**、立体3Dノートパックと4種ネックテーマ(`Carbon`, `Rosewood`, `Maple`, `Synth`)を備えています。
+- **インストール不要のライブWeb版＆自動フォールバック**: [https://manofkimchi08.github.io/guitar-scale-tuner/](https://manofkimchi08.github.io/guitar-scale-tuner/) へアクセスすると、ローカルブリッジ未検出時は自動でブラウザ標準マイク (`mic_default`) に切り替わり、即座に演奏を始められます。
+- **インライン ASIO 診断ポップオーバー**: `⚡ ASIO` を選択またはステータスバッジをクリックすると、**3ノード信号接続フロー**、**1.5秒バックグラウンド自動検出レーダー**、**2段階インストール案内**、ワンクリックのブラウザマイク切替ボタンが表示されます。
+- **セキュリティ＆ローカルブリッジ分離 (Security Hardening)**:
+  - **WebSocket Origin ホワイトリスト (CSWSH防御)**: `ws://127.0.0.1:8765` は `localhost` / `127.0.0.1` / `https://manofkimchi08.github.io` からの接続のみを許可し、不正な外部サイトからの接続を拒否(HTTP 403)します。
+  - **ループバック限定＆堅牢化**: すべてのローカルサーバーを `127.0.0.1` に限定バインドし、`os.path.realpath` + `commonpath` によるシンボリックリンク/ディレクトリトラバーサル防止、`math.isfinite()` 数値検証、`textContent` XSS対策、`Content-Security-Policy` (CSP) ヘッダーを適用しました。
 
 ### 1. 🎮 リズム＆指板・運指トレーナー (`Rhythm & Fretboard Hero`)
 - **60fps 6弦/4弦ノートハイウェイ(Note Highway)**: Web Audio APIのハードウェアクロック(`audioCtx.currentTime`)に完全同期した水平スクロールTABハイウェイと、下部SVG指板上の収縮アプローチリング(Approach Ring)がリアルタイムに連動します。
@@ -70,7 +83,7 @@
 3. **ハイブリッドASIOブリッジモード (任意)**: 上部ドロップダウンから **`⚡ ASIO`** を選ぶと、PC上のローカルASIOブリッジ(`127.0.0.1:8765`)を自動診断します。未導入の場合はスマート診断ポップオーバーが表示され、超低遅延ブリッジ(`.exe`)を導入するか、ワンクリックでブラウザ標準マイクへ切り替えてすぐ演奏できます。
 
 ### 方法 A: Windows ローカル実行ファイル
-1. [Releasesページ](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)から最新の `GuitarScaleTuner-v2.2.0-windows-x64.zip` をダウンロードして解凍するか、リポジトリをクローンします。
+1. [Releasesページ](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)から最新の `GuitarScaleTuner-v2.3.0-windows-x64.zip` をダウンロードして解凍するか、リポジトリをクローンします。
 2. フォルダ内の **`GuitarScaleTuner.exe`** (または `Run_GuitarScaleTuner.bat`) をダブルクリックするだけで、Pythonのインストールなしで即座に起動します。
 
 ### 方法 B: ソースコードから実行

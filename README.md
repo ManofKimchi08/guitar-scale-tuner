@@ -3,29 +3,46 @@
 A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic fingering trainer** in the browser and desktop that **listens to your real electric & bass guitar** in real-time.
 
 [![Live Web App](https://img.shields.io/badge/Live%20Web%20App-Try%20Without%20Install-38bdf8?style=flat&logo=googlechrome&logoColor=white)](https://manofkimchi08.github.io/guitar-scale-tuner/)
-[![Release](https://img.shields.io/badge/Release-v2.2.0-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
+[![Release](https://img.shields.io/badge/Release-v2.3.0-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Web%20%7C%20Windows-brightgreen.svg)](https://manofkimchi08.github.io/guitar-scale-tuner/)
 
 > 🌐 **Live Web App (No Install)**: **[https://manofkimchi08.github.io/guitar-scale-tuner/](https://manofkimchi08.github.io/guitar-scale-tuner/)**  
 > 🗣️ **Language / 언어 / 言語**: **[🇺🇸 English](README.md)** | **[🇰🇷 한국어 전문 (Korean)](README.ko.md)** | **[🇯🇵 日本語全文 (Japanese)](README.ja.md)**  
-> 🔽 **In-Page Quick Jump**: [🇺🇸 English](#-key-features-v220) · [🇰🇷 한국어 설명](#-한국어-설명-korean-overview) · [🇯🇵 日本語説明](#-日本語説明-japanese-overview)
+> 🔽 **In-Page Quick Jump**: [🇺🇸 English](#-key-features-v230) · [🇰🇷 한국어 설명](#-한국어-설명-korean-overview) · [🇯🇵 日本語説明](#-日本語説明-japanese-overview)
 
 ---
 
 ## 📸 Screenshots & UI Tour
 
+| 🧊 3D Studio Fretboard (`Carbon` Theme · Realistic 12-TET Scale) | ⚡ Hybrid 2+4 Smart ASIO Diagnostic & Setup Dock |
+| :---: | :---: |
+| ![3D Studio Fretboard](docs/screenshots/screenshot_main.png) | ![Hybrid ASIO Smart Popover](docs/screenshots/screenshot_asio_hybrid.png) |
+
 | 🎮 Rhythm & Fretboard Trainer (Scale Run + Hybrid Hand Avatar) | 🖐️ 6/8 Time Signature + CAGED Barre Chord Hand Guide |
 | :---: | :---: |
 | ![Rhythm Game & Hand Avatar](docs/screenshots/screenshot_rhythm_game.png) | ![6/8 Rhythm & CAGED Barre Chord Hand](docs/screenshots/screenshot_rhythm_68_barre.png) |
 
-| 🎸 6-String Guitar Fretboard & HUD | 🎸 4-String Bass Guitar (1-5-8 Groove Guide) | 🎙️ 3-Tier Recording Studio & Synced Replay |
-| :---: | :---: | :---: |
-| ![6-String Guitar View](docs/screenshots/screenshot_main.png) | ![4-String Bass View](docs/screenshots/screenshot_bass.png) | ![Recording Studio Drawer](docs/screenshots/screenshot_recording.png) |
+| 🎸 4-String Bass Guitar (1-5-8 Groove Guide) | 🎙️ 3-Tier Recording Studio & Synced Replay |
+| :---: | :---: |
+| ![4-String Bass View](docs/screenshots/screenshot_bass.png) | ![Recording Studio Drawer](docs/screenshots/screenshot_recording.png) |
 
 ---
 
-## 🌟 Key Features (v2.2.0)
+## 🌟 Key Features (v2.3.0)
+
+### 0. 🧊 3D Studio Fretboard & Hybrid 2+4 Smart ASIO Dock (New in v2.3.0)
+- **Realistic 12-TET Fret Proportions ($2^{-n/12}$)**: Fret spacing accurately narrows down the neck toward the body following the physical 12-tone equal temperament formula.
+- **Interactive 3D Perspective Modes**: Switch between **`2D Flat`**, **`3D Studio (38°)`**, and **`Deep 3D (52°)`**, drag to orbit **Pitch / Yaw** freely with live angle readouts, reset the camera in one click, and inspect orientation with the top-right **3D Axis Gizmo**.
+- **3D Extruded Note Pucks & 4 Studio Neck Themes**: Combines an Antigravity dark carbon palette with tactile 3D shadowed pucks and **`Carbon`**, **`Rosewood`**, **`Maple`**, and **`Synth`** neck styles.
+- **Zero-Install Web Deployment & Smart ASIO Fallback**: Opening the [Live Web App](https://manofkimchi08.github.io/guitar-scale-tuner/) over `https://` automatically switches to browser Web Audio mic input (`mic_default`) when no local bridge is active, so anyone can press **`▶ START MIC`** immediately without downloading anything.
+- **Inline Hybrid 2+4 ASIO Setup Popover**: Selecting `⚡ ASIO` or clicking the status badge anchors a non-blocking popover right below the selector displaying:
+  - A live **3-Node Signal Flow Diagram** (`Audio Interface → ASIO Bridge Helper → Web 3D Fretboard`).
+  - A **`1.5s` background auto-detect radar** that connects automatically as soon as the local bridge launches.
+  - **2-Step Installer Cards** (Bridge helper `.exe` & ASIO4ALL driver), a one-click **Switch to Browser Mic** button, and a remembered auto-fallback preference.
+- **Security & Local Bridge Isolation**:
+  - **WebSocket `Origin` Allowlist (CSWSH Defense)**: Local `ws://127.0.0.1:8765` strictly permits only `localhost`, `127.0.0.1`, and `https://manofkimchi08.github.io`, blocking unauthorized external websites (HTTP 403).
+  - **Loopback-Only Binding & Hardening**: Binds all local servers strictly to `127.0.0.1`, enforces `os.path.realpath` + `commonpath` symlink/path traversal protection, validates numerical WebSocket controls with `math.isfinite()`, sanitizes UI text via `textContent`, and enforces a strict `Content-Security-Policy` (CSP) meta header.
 
 ### 1. 🎮 Rhythm & Fretboard Hero (`리듬 & 지판·운지 트레이너`)
 - **60fps 6-String / 4-String Note Highway**: Scrolling horizontal string highway synchronized to the Web Audio API hardware clock (`audioCtx.currentTime`).
@@ -63,9 +80,14 @@ A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic f
 
 > 📄 **전체 한국어 문서는 [README.ko.md](README.ko.md)에서도 보실 수 있습니다.**
 
-**Scales, heard. (Guitar Scale Tuner v2.2.0)** 는 실제 일렉트릭 기타와 베이스 기타 소리를 실시간으로 인식하는 초저지연 **지판 스케일 가이드, 리듬 게임 & 인체공학적 운지 트레이너**입니다.
+**Scales, heard. (Guitar Scale Tuner v2.3.0)** 는 실제 일렉트릭 기타와 베이스 기타 소리를 실시간으로 인식하는 초저지연 **3D 지판 스케일 가이드, 리듬 게임 & 인체공학적 운지 트레이너**입니다.
 
-### ✨ v2.2.0 핵심 업데이트
+### ✨ v2.3.0 핵심 업데이트
+1. **🧊 3D 스튜디오 지판 & 실제 12-TET 프렛 비례 ($2^{-n/12}$)**: `2D 평면`, `3D Studio (38°)`, `Deep 3D (52°)` 시점, 드래그 Pitch/Yaw 회전과 3D 축 기즈모, 입체 3D 노트 퍽, 4종 넥 테마(`Carbon`, `Rosewood`, `Maple`, `Synth`)를 지원합니다.
+2. **⚡ 무설치 웹 배포 & 하이브리드 2+4 스마트 ASIO 진단 독**: GitHub Pages(`https://manofkimchi08.github.io/guitar-scale-tuner/`) 접속 시 웹 마이크(`mic_default`)로 즉시 동작하며, `⚡ ASIO` 선택 시 3-노드 신호 흐름도, `1.5초` 백그라운드 레이더, 2단계 설치 안내 및 원클릭 웹 마이크 전환 팝오버를 제공합니다.
+3. **🔒 보안 하드닝**: WebSocket `Origin` 화이트리스트(`localhost`, `127.0.0.1`, `https://manofkimchi08.github.io`) CSWSH 방어, 루프백 전용 바인딩, `realpath` 경로 탈출 차단, `math.isfinite()` 입력 검증 및 `Content-Security-Policy`를 적용했습니다.
+
+### ✨ v2.2.0 주요 기능
 1. **🎮 리듬 & 지판·운지 트레이너 (`Rhythm & Fretboard Hero`)**
    - **60fps 6현/4현 노트 하이웨이**: 상단 수평 타브 하이웨이에서 프렛 번호·음이름·추천 손가락 번호(`⓪~④`)가 결합된 캡슐 노트가 흐르고, 하단 지판의 목표 프렛에 타이밍 수축 링(Approach Ring)이 동기화됩니다.
    - **7종 박자표(`박자표 Time Signature`) 지원**: **4/4박**(`강-약-중강-약`), **3/4박**(`강-약-약` 왈츠), **6/8박**(`[3+3]` 겹두박자), **12/8박**(`[3+3+3+3]` 슬로우 록·블루스), **2/4박**, **5/4박(`3+2`)**, **7/8박(`2+2+3`)**과 **3단계 메트로놈 강세음(`강박 1320Hz`, `중강박 980Hz`, `약박 740Hz`)** 및 하이웨이 마디선·중강박 점선 가이드를 지원합니다.
@@ -83,9 +105,14 @@ A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic f
 
 > 📄 **日本語の完全なドキュメントは [README.ja.md](README.ja.md) でもご覧いただけます。**
 
-**Scales, heard. (Guitar Scale Tuner v2.2.0)** は、エレキギター＆ベースの実音をリアルタイムで聴き取る超低遅延の**フレットボード・スケールガイド、リズムゲーム＆スマート運指トレーナー**です。
+**Scales, heard. (Guitar Scale Tuner v2.3.0)** は、エレキギター＆ベースの実音をリアルタイムで聴き取る超低遅延の**3Dフレットボード・スケールガイド、リズムゲーム＆スマート運指トレーナー**です。
 
-### ✨ v2.2.0 主な新機能
+### ✨ v2.3.0 主なアップデート
+1. **🧊 3Dスタジオ指板＆実物12-TETフレット比率 ($2^{-n/12}$)**: `2D平面`、`3D Studio (38°)`、`Deep 3D (52°)` 視点、ドラッグによるPitch/Yaw回転と3D軸ギズモ、立体3Dノートパック、4種のネックテーマ(`Carbon`, `Rosewood`, `Maple`, `Synth`)を搭載しました。
+2. **⚡ インストール不要のWeb版＆ハイブリッド2+4スマートASIO診断ドック**: GitHub Pages (`https://manofkimchi08.github.io/guitar-scale-tuner/`) へアクセスするとブラウザ標準マイク (`mic_default`) へ自動切替し、`⚡ ASIO` 選択時は3ノード信号フロー、1.5秒自動検出レーダー、2ステップ導入ガイドを表示します。
+3. **🔒 セキュリティ強化**: WebSocket `Origin` ホワイトリスト (`localhost`, `127.0.0.1`, `https://manofkimchi08.github.io`) によるCSWSH対策、ループバック限定バインド、`realpath` パストラバーサル防止、`math.isfinite()` 検証、およびCSPヘッダーを適用しています。
+
+### ✨ v2.2.0 主な機能
 1. **🎮 リズム＆指板・運指トレーナー (`Rhythm & Fretboard Hero`)**
    - **60fps 6弦/4弦ノートハイウェイ**: 水平スクロールするTABハイウェイにフレット番号・音名・推奨指番号(`⓪〜④`)のカプセルノートが流れ、下部SVG指板のターゲットフレットに収縮アプローチリングが完全同期します。
    - **7種類の拍子記号 (`Time Signature`) に対応**: **4/4拍子**(`強・弱・中強・弱`)、**3/4拍子**(`強・弱・弱` ワルツ)、**6/8拍子**(`[3+3]` 複合拍子)、**12/8拍子**(`[3+3+3+3]` スローロック・ブルース)、**2/4拍子**、**5/4拍子(`3+2`)**、**7/8拍子(`2+2+3`)**、および**3段階のメトロノーム強拍アクセント(`強拍 1320Hz`・`中強拍 980Hz`・`弱拍 740Hz`)**と小節グリッドを搭載。
@@ -107,7 +134,7 @@ A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic f
 3. **Optional Hybrid ASIO Bridge Mode**: Selecting **`⚡ ASIO`** in the top bar automatically probes for the local ASIO bridge (`ws://127.0.0.1:8765`). If not installed yet, a compact Smart ASIO Diagnostic Dock opens right below the selector so you can either download the helper `.exe` for ultra-low-latency polyphonic detection or switch right back to your browser microphone with one click.
 
 ### Option A: Windows One-Click Executable
-1. Download and extract the latest release archive (`GuitarScaleTuner-v2.2.0-windows-x64.zip`) from [Releases](https://github.com/ManofKimchi08/guitar-scale-tuner/releases), or clone the repository.
+1. Download and extract the latest release archive (`GuitarScaleTuner-v2.3.0-windows-x64.zip`) from [Releases](https://github.com/ManofKimchi08/guitar-scale-tuner/releases), or clone the repository.
 2. Double-click **`GuitarScaleTuner.exe`** (or `Run_GuitarScaleTuner.bat`) in the root folder. No Python installation required!
 
 ### Option B: Run from Source

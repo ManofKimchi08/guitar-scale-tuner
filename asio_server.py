@@ -431,21 +431,24 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                     msg_type = data.get("type")
                     if msg_type == "set_ref_pitch":
                         val = float(data.get("value", 440.0))
-                        if 425.0 <= val <= 455.0:
+                        if math.isfinite(val) and 425.0 <= val <= 455.0:
                             logger.info(f"Updating reference pitch to {val}Hz")
                             ref_pitch_val = val
                             A_matrix, AtA_matrix = precompute_A(sample_rate, buffer_size, val)
                     elif msg_type == "set_monitoring":
                         monitor_enabled = bool(data.get("enabled", False))
-                        monitor_volume = min(1.0, max(0.0, float(data.get("volume", 0.7))))
+                        raw_vol = float(data.get("volume", 0.7))
+                        if math.isfinite(raw_vol):
+                            monitor_volume = min(1.0, max(0.0, raw_vol))
                         logger.info(f"Updated monitoring: enabled={monitor_enabled}, vol={monitor_volume}")
                     elif msg_type == "set_browser_recording":
                         browser_rec_streaming = bool(data.get("enabled", False))
                         logger.info(f"Updated browser recording PCM stream: enabled={browser_rec_streaming}")
                     elif msg_type == "set_sensitivity":
                         val = float(data.get("value", 0.012))
-                        sens_thr = max(0.001, min(0.1, val))
-                        logger.info(f"Updated sensitivity threshold to {sens_thr}")
+                        if math.isfinite(val):
+                            sens_thr = max(0.001, min(0.1, val))
+                            logger.info(f"Updated sensitivity threshold to {sens_thr}")
                     elif msg_type == "get_asio_devices":
                         await websocket.send(await get_device_payload())
                     elif msg_type == "select_asio_device":
@@ -495,7 +498,10 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                 browser_rec_streaming = False
             logger.info(f"Client disconnected from {websocket.remote_address}")
 
-    allowed_origins = [re.compile(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"), None]
+    allowed_origins = [
+        re.compile(r"^(https?://(localhost|127\.0\.0\.1)(:\d+)?|https://manofkimchi08\.github\.io)$"),
+        None
+    ]
     server = await websockets.serve(ws_handler, host, port, origins=allowed_origins)
     logger.info(f"WebSocket server started on ws://{host}:{port}")
 
