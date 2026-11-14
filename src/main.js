@@ -147,6 +147,7 @@ function setLang(l) {
   rebuildScaleSel();
   rebuildTuningSel();
   rebuildDeviceDropdown();
+  updateAsioStatusBadge();
   listOutputDevices();
   refreshDynamic();
   if (!isJamPlaying && $("jamBarCounter")) {
@@ -526,10 +527,11 @@ let currentAsioDeviceId = null;
 let asioBridgeAvailable = false;
 let asioAutoDetectTimer = null;
 let asioPopoverOpen = false;
+let currentAsioBadgeState = "warn";
 
 function getWebMicDefaultLabel() {
-  if (currentLang === "ko") return "브라우저 기본 마이크 / USB 인터페이스 (무설치)";
-  if (currentLang === "ja") return "ブラウザ標準マイク / USBインターフェース (インストール不要)";
+  if (LANG === "ko") return "브라우저 기본 마이크 / USB 인터페이스 (무설치)";
+  if (LANG === "ja") return "ブラウザ標準マイク / USBインターフェース (インストール不要)";
   return "Browser Default Mic / USB Interface (No Install)";
 }
 
@@ -568,22 +570,6 @@ async function rebuildDeviceDropdown() {
   defaultMicOpt.value = "mic_default";
   defaultMicOpt.textContent = `🎙️ ${getWebMicDefaultLabel()}`;
   micGroup.appendChild(defaultMicOpt);
-
-  let micDevices = [];
-  if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-    try {
-      const d = await navigator.mediaDevices.enumerateDevices();
-      micDevices = d.filter(x => x.kind === "audioinput");
-    } catch (e) { }
-  }
-
-  micDevices.forEach((x, i) => {
-    if (!x.deviceId || x.deviceId === "default") return;
-    const o = document.createElement("option");
-    o.value = "mic_dev_" + x.deviceId;
-    o.textContent = `🎙️ ${x.label || ("Microphone " + (i + 1))}`;
-    micGroup.appendChild(o);
-  });
   sel.appendChild(micGroup);
 
   if (currentAsioDeviceId !== null && currentAsioDeviceId !== undefined && (!prevValue || prevValue === "asio_ws" || prevValue.startsWith("asio_dev_"))) {
@@ -594,9 +580,33 @@ async function rebuildDeviceDropdown() {
     sel.value = sel.options[0].value;
   }
   sel.disabled = false;
+
+  let micDevices = [];
+  if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+    try {
+      const d = await Promise.race([
+        navigator.mediaDevices.enumerateDevices(),
+        new Promise(r => setTimeout(() => r([]), 500))
+      ]);
+      micDevices = (d || []).filter(x => x.kind === "audioinput");
+    } catch (e) { }
+  }
+
+  micDevices.forEach((x, i) => {
+    if (!x.deviceId || x.deviceId === "default") return;
+    const o = document.createElement("option");
+    o.value = "mic_dev_" + x.deviceId;
+    o.textContent = `🎙️ ${x.label || ("Microphone " + (i + 1))}`;
+    micGroup.appendChild(o);
+  });
+
+  if (prevValue && Array.from(sel.options).some(o => o.value === prevValue)) {
+    sel.value = prevValue;
+  }
 }
 
-function updateAsioStatusBadge(state) {
+function updateAsioStatusBadge(state = currentAsioBadgeState) {
+  currentAsioBadgeState = state;
   const pill = $("asioStatusBadge");
   const txt = $("asioStatusTxt");
   if (!pill || !txt) return;
@@ -604,13 +614,13 @@ function updateAsioStatusBadge(state) {
   pill.classList.remove("is-ok", "is-warn", "is-web");
   if (state === "ok") {
     pill.classList.add("is-ok");
-    txt.textContent = currentLang === "ja" ? "ASIO 接続済" : (currentLang === "en" ? "ASIO Connected" : "ASIO 연결됨");
+    txt.textContent = LANG === "ja" ? "ASIO 接続済" : (LANG === "en" ? "ASIO Connected" : "ASIO 연결됨");
   } else if (state === "web") {
     pill.classList.add("is-web");
-    txt.textContent = currentLang === "ja" ? "Webマイク" : (currentLang === "en" ? "Web Mic Active" : "웹 마이크 사용 중");
+    txt.textContent = LANG === "ja" ? "Webマイク" : (LANG === "en" ? "Web Mic Active" : "웹 마이크 사용 중");
   } else {
     pill.classList.add("is-warn");
-    txt.textContent = currentLang === "ja" ? "ASIO 未検出" : (currentLang === "en" ? "ASIO Setup" : "ASIO 미감지 · 설정");
+    txt.textContent = LANG === "ja" ? "ASIO 未検出" : (LANG === "en" ? "ASIO Setup" : "ASIO 미감지 · 설정");
   }
 }
 
@@ -5534,17 +5544,17 @@ async function initDeviceSel() {
   if (chk) chk.checked = autoFallbackPref;
 
   await rebuildDeviceDropdown();
+  const isRemoteWeb = window.location.protocol === "https:";
+  if ((autoFallbackPref || isRemoteWeb) && $("deviceSel")) {
+    $("deviceSel").value = "mic_default";
+    updateAsioStatusBadge("web");
+  }
+
   const ok = await probeAsioBridgeSilent(550);
   if (ok) {
     updateAsioStatusBadge("ok");
-  } else {
-    const isRemoteWeb = window.location.protocol === "https:";
-    if ((autoFallbackPref || isRemoteWeb) && $("deviceSel")) {
-      $("deviceSel").value = "mic_default";
-      updateAsioStatusBadge("web");
-    } else {
-      updateAsioStatusBadge("warn");
-    }
+  } else if (!(autoFallbackPref || isRemoteWeb)) {
+    updateAsioStatusBadge("warn");
   }
 }
 
