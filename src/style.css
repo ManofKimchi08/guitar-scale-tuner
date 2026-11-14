@@ -1,18 +1,18 @@
 :root {
-  --bg: #0b0e12;
-  --panel: #13171f;
-  --panel-2: #181e28;
-  --line: #222a36;
-  --line-light: #2e3948;
-  --ink: #e8edf5;
-  --muted: #7a889b;
+  --bg: #0d0d0f;
+  --panel: #151518;
+  --panel-2: #1d1d22;
+  --line: #28282f;
+  --line-light: #383842;
+  --ink: #f4f4f6;
+  --muted: #9ca3af;
   --root: #ef4444;
   --tone: #38bdf8;
   --hit: #ffffff;
   --ok: #22c55e;
-  --no: #64748b;
-  --accent: #3b82f6;
-  --accent-hover: #60a5fa;
+  --no: #71717a;
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
   --disp: "Oswald", "Arial Narrow", sans-serif;
   --mono: "IBM Plex Mono", "Courier New", monospace;
   --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
@@ -1806,4 +1806,979 @@ body {
   font-family: var(--mono);
   font-size: 11.5px;
   color: var(--muted);
+}
+
+
+/* ======================================================== */
+/* 8. ON-FRETBOARD RHYTHM TRAINER (PROPOSAL 5 HYBRID)       */
+/* ======================================================== */
+.rhythm-arena-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid rgba(56, 189, 248, 0.25);
+}
+
+.rhythm-beat-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #080b10;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 5px 12px;
+  box-shadow: inset 0 0 12px rgba(15, 23, 42, 0.6);
+}
+
+.rhythm-meter-emblem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 32px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  border-radius: 6px;
+  font-family: var(--disp);
+  line-height: 1;
+}
+
+.rhythm-meter-emblem .meter-num {
+  font-size: 12px;
+  font-weight: 800;
+  color: #38bdf8;
+  border-bottom: 1px solid #334155;
+  width: 20px;
+  text-align: center;
+  padding-bottom: 1px;
+}
+
+.rhythm-meter-emblem .meter-den {
+  font-size: 12px;
+  font-weight: 800;
+  color: #e2e8f0;
+  padding-top: 1px;
+}
+
+.rhythm-bar-counter {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: #facc15;
+  background: rgba(250, 204, 21, 0.1);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  border-radius: 6px;
+  padding: 3px 8px;
+  min-width: 54px;
+  text-align: center;
+}
+
+.rhythm-beat-leds {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.beat-led {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  color: #64748b;
+  transition: all 0.08s ease;
+}
+
+.beat-led.accent-strong {
+  border-color: rgba(250, 204, 21, 0.45);
+  color: #fde047;
+}
+
+.beat-led.accent-sub {
+  border-color: rgba(56, 189, 248, 0.45);
+  color: #7dd3fc;
+}
+
+.beat-led.active {
+  transform: scale(1.12);
+  color: #090c10;
+  font-weight: 800;
+}
+
+.beat-led.accent-strong.active {
+  background: #facc15;
+  border-color: #fef08a;
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.85);
+}
+
+.beat-led.accent-sub.active {
+  background: #38bdf8;
+  border-color: #bae6fd;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.85);
+}
+
+.beat-led.accent-weak.active {
+  background: #22c55e;
+  border-color: #86efac;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.75);
+}
+
+.beat-group-sep {
+  width: 1px;
+  height: 14px;
+  background: rgba(148, 163, 184, 0.35);
+  margin: 0 2px;
+}
+
+.note-dot.is-rhythm-next2 circle {
+  stroke: #c084fc !important;
+  stroke-width: 1.8px !important;
+  stroke-dasharray: 2 2;
+  opacity: 0.78;
+}
+
+.rhythm-arena-dock .rhythm-top-bar {
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+
+.rhythm-arena-dock .rhythm-title-wrap {
+  flex: 1 1 auto;
+  min-width: 180px;
+}
+
+.rhythm-arena-dock .rhythm-sub {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 900px) {
+  .rhythm-arena-dock .rhythm-top-bar {
+    flex-wrap: wrap;
+  }
+}
+
+
+/* ======================================================== */
+/* 5. ANTIGRAVITY NEUTRAL CARBON & PROPOSAL 5 REMASTER      */
+/* ======================================================== */
+body {
+  background:
+    radial-gradient(ellipse 80% 45% at 50% 0%, rgba(255, 255, 255, 0.03), transparent 70%),
+    linear-gradient(180deg, #0d0d0f 0%, #09090b 100%);
+}
+
+.studio-header,
+.panel,
+.fretboard-card,
+.tuner-card {
+  background: var(--panel);
+  border-color: var(--line);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.36);
+}
+
+.power,
+.compact-select,
+.hud-badge,
+.meter,
+.f-sel-group select,
+.seg-group,
+.mode-switch-bar,
+.fb-svg-container,
+.rhythm-game-panel,
+.rhythm-hud-pill,
+.rhythm-beat-strip,
+.rhythm-ctrl-group,
+.rhythm-legend-strip,
+.side-drawer,
+.accordion-item,
+.btn-settings-prominent,
+.quiz-stats-pill,
+.chord-quiz-hint {
+  background-color: #111114;
+  border-color: var(--line);
+}
+
+.fb-svg-container {
+  background: linear-gradient(180deg, #101013 0%, #0c0c0e 100%);
+  border: 1px solid #26262c;
+}
+
+.rhythm-game-panel {
+  background: linear-gradient(180deg, #16161a 0%, #111114 100%);
+  border-color: #2c2c34;
+}
+
+.led {
+  background: #3f3f46;
+}
+
+.seg-btn.active,
+.mode-btn.active {
+  background: #27272e;
+  color: #f4f4f6;
+  border-color: #3f3f48;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+
+.btn-primary-action {
+  background: linear-gradient(135deg, #27272f 0%, #1c1c22 100%);
+  border: 1px solid #40404c;
+  color: #f4f4f6;
+}
+
+.btn-primary-action:hover {
+  background: linear-gradient(135deg, #32323d 0%, #24242c 100%);
+  border-color: #6366f1;
+}
+
+.btn-primary-action.danger {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.55);
+  color: #fca5a5;
+}
+
+.btn-settings-prominent {
+  background: #18181d;
+  border-color: #2f2f38;
+  color: #e4e4e7;
+}
+
+.btn-settings-prominent:hover {
+  background: #23232b;
+  border-color: #464655;
+}
+
+/* 4-Way Neck Wood & Theme Switcher */
+.neck-theme-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: #101013;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.neck-theme-btn {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #a1a1aa;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3.5px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.neck-theme-btn:hover {
+  color: #f4f4f6;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.neck-theme-btn.active {
+  background: #24242b;
+  color: #ffffff;
+  border-color: #3f3f4a;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+
+/* Left HUD Arc Strobe Pitch Gauge */
+.hud-main-display {
+  gap: 12px;
+  align-items: center;
+}
+
+.hud-arc-box {
+  width: 112px;
+  height: 66px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #101013;
+  border: 1px solid #26262d;
+  border-radius: 10px;
+  padding: 3px 4px 1px;
+}
+
+.hud-arc-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Neck Wood Theme Variants */
+body[data-neck-wood="rosewood"] .neck-theme-btn[data-wood="rosewood"].active {
+  border-color: rgba(217, 119, 6, 0.55);
+  color: #fde68a;
+}
+
+body[data-neck-wood="maple"] .neck-theme-btn[data-wood="maple"].active {
+  border-color: rgba(250, 204, 21, 0.65);
+  color: #fef08a;
+}
+
+body[data-neck-wood="maple"] .fretboard-card .fb-svg-container {
+  background: linear-gradient(180deg, #171410 0%, #110f0c 100%);
+  border-color: #3a3122;
+}
+
+body[data-neck-wood="cyber"] .neck-theme-btn[data-wood="cyber"].active {
+  border-color: rgba(192, 132, 252, 0.7);
+  color: #e9d5ff;
+}
+
+body[data-neck-wood="cyber"] .fretboard-card .fb-svg-container {
+  background: radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.1), #0b0912 75%);
+  border-color: rgba(168, 85, 247, 0.35);
+}
+
+@media (max-width: 720px) {
+  .neck-theme-bar {
+    order: 10;
+    width: 100%;
+    justify-content: space-between;
+  }
+  .neck-theme-btn {
+    flex: 1;
+    text-align: center;
+    padding: 4px 4px;
+  }
+  .hud-arc-box {
+    width: 96px;
+    height: 58px;
+  }
+}
+
+
+/* ======================================================== */
+/* 6. 3D FRETBOARD PROPOSAL 4 (SIGNATURE 3D STUDIO MASTER)  */
+/* ======================================================== */
+.fb-view3d-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  background: #101013;
+  border: 1px solid #26262e;
+  border-radius: 9px;
+}
+
+.fb-view3d-presets {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.v3d-preset-btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #9ca3af;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.v3d-preset-btn:hover {
+  color: #f4f4f6;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.v3d-preset-btn.active {
+  background: rgba(56, 189, 248, 0.16);
+  color: #7dd3fc;
+  border-color: rgba(56, 189, 248, 0.45);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.15);
+}
+
+.fb-view3d-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.v3d-cam-readout {
+  color: #e4e4e7;
+  background: #18181d;
+  border: 1px solid #2c2c35;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-weight: 700;
+}
+
+.v3d-reset-btn {
+  appearance: none;
+  background: #18181d;
+  border: 1px solid #32323c;
+  color: #d4d4d8;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.v3d-reset-btn:hover {
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+.v3d-drag-hint {
+  color: #71717a;
+}
+
+#fb.is-3d-orbit {
+  cursor: grab;
+  user-select: none;
+}
+
+#fb.is-3d-orbit.dragging {
+  cursor: grabbing;
+}
+
+/* 3D Cylinder Note Puck States (.note-cap ellipse preserves perspective rx/ry ratio) */
+.note-dot .note-cap {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.1s ease, fill 0.1s ease;
+}
+
+.note-dot:hover .note-cap {
+  transform: scale(1.16);
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.65));
+}
+
+.note-dot.is-lit .note-cap {
+  fill: var(--hit) !important;
+  transform: scale(1.22);
+  filter: drop-shadow(0 0 6px #ffffff);
+}
+
+.note-dot.is-jam .note-cap {
+  fill: #ffaa00 !important;
+  stroke: #ffffff;
+  stroke-width: 2px;
+  transform: scale(1.18);
+}
+
+.note-dot.is-fifth .note-cap {
+  stroke: #38bdf8;
+  stroke-width: 1.5px;
+}
+
+.note-dot.is-rhythm-target .note-cap {
+  fill: #facc15 !important;
+  stroke: #ffffff !important;
+  stroke-width: 2.4px !important;
+  transform: scale(1.18);
+  filter: drop-shadow(0 0 10px #facc15);
+}
+
+.note-dot.is-rhythm-next .note-cap {
+  stroke: #38bdf8 !important;
+  stroke-width: 2px !important;
+  stroke-dasharray: 3 2;
+  opacity: 0.94;
+}
+
+.note-dot.is-rhythm-next2 .note-cap {
+  stroke: #c084fc !important;
+  stroke-width: 1.8px !important;
+  stroke-dasharray: 2 2;
+  opacity: 0.85;
+}
+
+
+/* ==========================================================================
+   SECTION 7: Hybrid 2+4 Smart ASIO Driver Check & Popover Dock
+   ========================================================================== */
+.asio-device-field-wrap {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.asio-device-field-wrap .compact-select {
+  max-width: 190px;
+}
+
+.compact-select.asio-alert-ring {
+  border-color: #f59e0b !important;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.24), 0 0 14px rgba(56, 189, 248, 0.22);
+  color: #fde68a;
+}
+
+.asio-status-pill {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.16s ease;
+  border: 1px solid #353949;
+  background: #17181f;
+  color: #d4d4d8;
+}
+
+.asio-status-pill:hover {
+  filter: brightness(1.14);
+}
+
+.asio-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #71717a;
+}
+
+.asio-status-pill.is-warn {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #fde68a;
+}
+
+.asio-status-pill.is-warn .asio-status-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 7px #f59e0b;
+}
+
+.asio-status-pill.is-ok {
+  background: rgba(34, 197, 94, 0.14);
+  border-color: rgba(34, 197, 94, 0.5);
+  color: #86efac;
+}
+
+.asio-status-pill.is-ok .asio-status-dot {
+  background: #22c55e;
+  box-shadow: 0 0 7px #22c55e;
+}
+
+.asio-status-pill.is-web {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.45);
+  color: #7dd3fc;
+}
+
+.asio-status-pill.is-web .asio-status-dot {
+  background: #38bdf8;
+  box-shadow: 0 0 7px #38bdf8;
+}
+
+/* Floating Non-Blocking Popover anchored directly below #deviceSel */
+.asio-smart-popover-wrap {
+  position: fixed;
+  z-index: 1250;
+  width: 560px;
+  max-width: calc(100vw - 24px);
+  font-family: var(--sans);
+}
+
+.asio-popover-arrow {
+  position: absolute;
+  top: -7px;
+  left: 260px;
+  width: 14px;
+  height: 14px;
+  background: #1a1b22;
+  border-left: 1px solid rgba(245, 158, 11, 0.72);
+  border-top: 1px solid rgba(245, 158, 11, 0.72);
+  transform: rotate(45deg);
+  z-index: 2;
+}
+
+.asio-smart-popover-card {
+  position: relative;
+  background: linear-gradient(180deg, #191a21 0%, #111217 100%);
+  border: 1px solid rgba(245, 158, 11, 0.65);
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.82), 0 0 28px rgba(245, 158, 11, 0.14);
+  color: #f4f4f5;
+}
+
+.asio-smart-popover-card.is-connected {
+  border-color: rgba(34, 197, 94, 0.65);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.82), 0 0 28px rgba(34, 197, 94, 0.14);
+}
+
+.asio-card-top-glow {
+  position: absolute;
+  top: 0;
+  left: 24px;
+  right: 24px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #38bdf8, #f59e0b, transparent);
+  border-radius: 2px;
+}
+
+.asio-popover-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.asio-popover-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.asio-popover-title {
+  font-size: 14.5px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+
+.asio-diag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.asio-diag-badge.is-missing {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  color: #fbbf24;
+}
+
+.asio-diag-badge.is-ok {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  color: #4ade80;
+}
+
+.asio-close-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: 1px solid #2e3240;
+  background: #1a1c24;
+  color: #a1a1aa;
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.asio-close-btn:hover {
+  color: #ffffff;
+  border-color: #52525b;
+}
+
+/* 3-Node Visual Signal Flow Diagram */
+.asio-signal-flow {
+  background: #0c0d11;
+  border: 1px solid #242734;
+  border-radius: 11px;
+  padding: 10px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.asio-flow-node {
+  flex: 1;
+  background: #151720;
+  border: 1px solid #2b2f3c;
+  border-radius: 9px;
+  padding: 7px 6px;
+  text-align: center;
+}
+
+.asio-flow-node.ok {
+  border-color: rgba(34, 197, 94, 0.45);
+}
+
+.asio-flow-node.missing {
+  flex: 1.15;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1.5px dashed rgba(239, 68, 68, 0.72);
+}
+
+.asio-flow-node.ready {
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.asio-flow-icon {
+  font-size: 15px;
+  margin-bottom: 2px;
+}
+
+.asio-flow-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: #e4e4e7;
+}
+
+.asio-flow-sub {
+  font-size: 10px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.asio-flow-node.ok .asio-flow-sub { color: #4ade80; }
+.asio-flow-node.missing .asio-flow-sub { color: #f87171; }
+.asio-flow-node.ready .asio-flow-sub { color: #38bdf8; }
+
+.asio-flow-conn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 26px;
+}
+
+.asio-conn-arrow {
+  font-size: 12px;
+  font-weight: 800;
+  color: #64748b;
+}
+
+.asio-conn-lbl {
+  font-size: 9px;
+  color: #64748b;
+}
+
+.asio-flow-conn.broken .asio-conn-arrow { color: #ef4444; }
+.asio-flow-conn.broken .asio-conn-lbl { color: #f87171; }
+.asio-flow-conn.connected .asio-conn-arrow { color: #22c55e; }
+.asio-flow-conn.connected .asio-conn-lbl { color: #4ade80; }
+
+/* Background Auto-Detection Radar Banner */
+.asio-radar-strip {
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 11.3px;
+  color: #bae6fd;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.asio-radar-strip.is-ok {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.38);
+  color: #bbf7d0;
+}
+
+.asio-radar-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+/* 2-Step Install Grid */
+.asio-install-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  margin-bottom: 11px;
+}
+
+.asio-install-box {
+  background: #101116;
+  border: 1px solid #282b38;
+  border-radius: 10px;
+  padding: 10px 11px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.asio-install-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.asio-install-title {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.asio-tag-req {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  color: #fbbf24;
+  white-space: nowrap;
+}
+
+.asio-tag-opt {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #7dd3fc;
+  white-space: nowrap;
+}
+
+.asio-install-desc {
+  font-size: 10.8px;
+  color: #94a3b8;
+  line-height: 1.42;
+  margin: 0;
+}
+
+.asio-btn-primary,
+.asio-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  text-decoration: none;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+}
+
+.asio-btn-primary {
+  background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+  color: #ffffff;
+  border: 1px solid rgba(125, 211, 252, 0.4);
+  box-shadow: 0 5px 15px rgba(14, 165, 233, 0.25);
+}
+
+.asio-btn-primary:hover {
+  filter: brightness(1.08);
+}
+
+.asio-btn-secondary {
+  background: #1d2029;
+  color: #e4e4e7;
+  border: 1px solid #353949;
+}
+
+.asio-btn-secondary:hover {
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+/* Footer Quick-Switch Bar */
+.asio-footer-bar {
+  border-top: 1px solid #222531;
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.asio-footer-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.asio-btn-webmic {
+  flex: 1;
+  background: rgba(56, 189, 248, 0.09);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 8px;
+  padding: 8px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #7dd3fc;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.asio-btn-webmic:hover {
+  background: rgba(56, 189, 248, 0.16);
+  color: #bae6fd;
+}
+
+.asio-btn-rescan {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: #07120b;
+  border: 1px solid rgba(134, 239, 172, 0.45);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 11.5px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.asio-btn-rescan:hover {
+  filter: brightness(1.08);
+}
+
+.asio-auto-fallback-chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #a1a1aa;
+  cursor: pointer;
+}
+
+.asio-auto-fallback-chk input {
+  accent-color: #38bdf8;
+  width: 13px;
+  height: 13px;
 }

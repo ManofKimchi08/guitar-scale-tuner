@@ -2,11 +2,13 @@
 
 **실제 일렉트릭 기타와 베이스 기타 소리를 실시간으로 듣고 반응하는 초저지연 지판 스케일 가이드, 리듬 게임 & 스마트 운지 트레이너**
 
+[![Live Web App](https://img.shields.io/badge/Live%20Web%20App-%EB%AC%B4%EC%84%A4%EC%B9%98%20%EC%9B%B9%20%EC%8B%A4%ED%96%89-38bdf8?style=flat&logo=googlechrome&logoColor=white)](https://manofkimchi08.github.io/guitar-scale-tuner/)
 [![Release](https://img.shields.io/badge/Release-v2.2.0-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Web-brightgreen.svg)]()
+[![Platform](https://img.shields.io/badge/Platform-Web%20%7C%20Windows-brightgreen.svg)](https://manofkimchi08.github.io/guitar-scale-tuner/)
 
-> 🌐 **Language / 언어 / 言語**: **[🇺🇸 English](README.md)** | **[🇰🇷 한국어](README.ko.md)** | **[🇯🇵 日本語](README.ja.md)**
+> 🌐 **웹에서 바로 실행 (설치 불필요)**: **[https://manofkimchi08.github.io/guitar-scale-tuner/](https://manofkimchi08.github.io/guitar-scale-tuner/)**  
+> 🗣️ **Language / 언어 / 言語**: **[🇺🇸 English](README.md)** | **[🇰🇷 한국어](README.ko.md)** | **[🇯🇵 日本語](README.ja.md)**
 
 ---
 
@@ -62,7 +64,12 @@
 
 ## 🚀 빠른 시작 (Quick Start)
 
-### 방법 A: Windows 무설치 원클릭 실행 파일 (권장)
+### 🌐 방법 0: 설치 없는 라이브 웹 버전 (가장 간편)
+1. 크롬/엣지 브라우저로 **[https://manofkimchi08.github.io/guitar-scale-tuner/](https://manofkimchi08.github.io/guitar-scale-tuner/)** 주소에 접속합니다.
+2. 별도 설치 없이 **`▶ 마이크 시작`**을 누르면 PC 마이크 또는 USB 오디오 인터페이스 입력으로 3D 지판, 리듬 트레이너, 튜너를 즉시 사용할 수 있습니다.
+3. **하이브리드 ASIO 브릿지 모드 (선택)**: 상단 입력 장치에서 **`⚡ ASIO`**를 선택하면 내 PC의 로컬 ASIO 브릿지 실행 여부를 자동 진단합니다. 미설치 시 스마트 안내 팝오버가 열려 초저지연 브릿지(`.exe`)를 설치하거나 원클릭으로 브라우저 마이크로 전환해 연주할 수 있습니다.
+
+### 방법 A: Windows 로컬 패키지 실행
 1. [Releases 페이지](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)에서 최신 `GuitarScaleTuner-v2.2.0-windows-x64.zip` 파일을 다운로드하여 압축을 해제하거나 저장소를 클론합니다.
 2. 폴더 안의 **`GuitarScaleTuner.exe`** (또는 `Run_GuitarScaleTuner.bat`)를 더블클릭하면 파이썬 설치 없이 즉시 실행됩니다.
 

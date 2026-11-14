@@ -523,6 +523,15 @@ async function getStream(id) {
 
 let currentAsioDevices = [];
 let currentAsioDeviceId = null;
+let asioBridgeAvailable = false;
+let asioAutoDetectTimer = null;
+let asioPopoverOpen = false;
+
+function getWebMicDefaultLabel() {
+  if (currentLang === "ko") return "브라우저 기본 마이크 / USB 인터페이스 (무설치)";
+  if (currentLang === "ja") return "ブラウザ標準マイク / USBインターフェース (インストール不要)";
+  return "Browser Default Mic / USB Interface (No Install)";
+}
 
 async function rebuildDeviceDropdown() {
   const sel = $("deviceSel");
@@ -531,7 +540,7 @@ async function rebuildDeviceDropdown() {
   const prevValue = sel.value;
   sel.innerHTML = "";
 
-  // 1. ASIO & Audio Interfaces (Python Server)
+  // 1. ASIO & Audio Interfaces (Local Bridge)
   if (currentAsioDevices && currentAsioDevices.length > 0) {
     const asioGroup = document.createElement("optgroup");
     asioGroup.label = t("optAsioDeviceGroup");
@@ -551,7 +560,15 @@ async function rebuildDeviceDropdown() {
     sel.appendChild(asioOpt);
   }
 
-  // 2. Web Audio Direct Microphones (Browser)
+  // 2. Web Audio Direct Microphones (Browser - Always Available Without Install)
+  const micGroup = document.createElement("optgroup");
+  micGroup.label = t("optMicDeviceGroup");
+
+  const defaultMicOpt = document.createElement("option");
+  defaultMicOpt.value = "mic_default";
+  defaultMicOpt.textContent = `🎙️ ${getWebMicDefaultLabel()}`;
+  micGroup.appendChild(defaultMicOpt);
+
   let micDevices = [];
   if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
     try {
@@ -560,18 +577,14 @@ async function rebuildDeviceDropdown() {
     } catch (e) { }
   }
 
-  if (micDevices.length > 0) {
-    const micGroup = document.createElement("optgroup");
-    micGroup.label = t("optMicDeviceGroup");
-
-    micDevices.forEach((x, i) => {
-      const o = document.createElement("option");
-      o.value = "mic_dev_" + x.deviceId;
-      o.textContent = `🎙️ ${x.label || ("Microphone " + (i + 1))}`;
-      micGroup.appendChild(o);
-    });
-    sel.appendChild(micGroup);
-  }
+  micDevices.forEach((x, i) => {
+    if (!x.deviceId || x.deviceId === "default") return;
+    const o = document.createElement("option");
+    o.value = "mic_dev_" + x.deviceId;
+    o.textContent = `🎙️ ${x.label || ("Microphone " + (i + 1))}`;
+    micGroup.appendChild(o);
+  });
+  sel.appendChild(micGroup);
 
   if (currentAsioDeviceId !== null && currentAsioDeviceId !== undefined && (!prevValue || prevValue === "asio_ws" || prevValue.startsWith("asio_dev_"))) {
     sel.value = "asio_dev_" + currentAsioDeviceId;
@@ -581,6 +594,229 @@ async function rebuildDeviceDropdown() {
     sel.value = sel.options[0].value;
   }
   sel.disabled = false;
+}
+
+function updateAsioStatusBadge(state) {
+  const pill = $("asioStatusBadge");
+  const txt = $("asioStatusTxt");
+  if (!pill || !txt) return;
+
+  pill.classList.remove("is-ok", "is-warn", "is-web");
+  if (state === "ok") {
+    pill.classList.add("is-ok");
+    txt.textContent = currentLang === "ja" ? "ASIO 接続済" : (currentLang === "en" ? "ASIO Connected" : "ASIO 연결됨");
+  } else if (state === "web") {
+    pill.classList.add("is-web");
+    txt.textContent = currentLang === "ja" ? "Webマイク" : (currentLang === "en" ? "Web Mic Active" : "웹 마이크 사용 중");
+  } else {
+    pill.classList.add("is-warn");
+    txt.textContent = currentLang === "ja" ? "ASIO 未検出" : (currentLang === "en" ? "ASIO Setup" : "ASIO 미감지 · 설정");
+  }
+}
+
+function refreshAsioDiagnosticView(bridgeOk) {
+  const pop = $("asioSmartPopover");
+  if (!pop) return;
+  const card = pop.querySelector(".asio-smart-popover-card");
+  const diagBadge = $("asioDiagBadge");
+  const nodeBridge = $("asioNodeBridge");
+  const nodeBridgeSub = $("asioNodeBridgeSub");
+  const nodeDriverSub = $("asioNodeDriverSub");
+  const conn2Wrap = $("asioConn2Wrap");
+  const conn2Arrow = $("asioConn2Arrow");
+  const conn2Lbl = $("asioConn2Lbl");
+  const conn1Lbl = $("asioConn1Lbl");
+  const radarBanner = $("asioRadarBanner");
+  const radarTxt = $("asioRadarTxt");
+
+  const asioHwDevs = (currentAsioDevices || []).filter(d => d.is_asio);
+
+  if (bridgeOk) {
+    if (card) card.classList.add("is-connected");
+    if (diagBadge) {
+      diagBadge.className = "asio-diag-badge is-ok";
+      diagBadge.textContent = "● 연결됨";
+    }
+    if (nodeBridge) nodeBridge.className = "asio-flow-node ok";
+    if (nodeBridgeSub) nodeBridgeSub.textContent = "● 실행 중 (127.0.0.1:8765)";
+    if (conn2Wrap) conn2Wrap.className = "asio-flow-conn connected";
+    if (conn2Arrow) conn2Arrow.textContent = "➔";
+    if (conn2Lbl) conn2Lbl.textContent = "연결됨";
+    if (conn1Lbl) conn1Lbl.textContent = asioHwDevs.length > 0 ? "인식" : "확인";
+    if (nodeDriverSub) {
+      nodeDriverSub.textContent = asioHwDevs.length > 0
+        ? `● ${asioHwDevs.length}개 ASIO 장치 감지`
+        : "⚠ ASIO 드라이버 미감지 (2단계 확인)";
+    }
+    if (radarBanner) radarBanner.classList.add("is-ok");
+    if (radarTxt) {
+      radarTxt.innerHTML = asioHwDevs.length > 0
+        ? "<strong>연결 완료!</strong> ASIO 브릿지와 오디오 인터페이스가 정상 인식되었습니다."
+        : "<strong>ASIO Bridge 연결됨!</strong> 전용 ASIO 드라이버가 안 보이면 2단계 ASIO4ALL을 확인하세요.";
+    }
+  } else {
+    if (card) card.classList.remove("is-connected");
+    if (diagBadge) {
+      diagBadge.className = "asio-diag-badge is-missing";
+      diagBadge.textContent = "● 미감지";
+    }
+    if (nodeBridge) nodeBridge.className = "asio-flow-node missing";
+    if (nodeBridgeSub) nodeBridgeSub.textContent = "● 미감지 (설치 필요)";
+    if (conn2Wrap) conn2Wrap.className = "asio-flow-conn broken";
+    if (conn2Arrow) conn2Arrow.textContent = "✕";
+    if (conn2Lbl) conn2Lbl.textContent = "단절";
+    if (conn1Lbl) conn1Lbl.textContent = "대기";
+    if (nodeDriverSub) nodeDriverSub.textContent = "ASIO 드라이버";
+    if (radarBanner) radarBanner.classList.remove("is-ok");
+    if (radarTxt) {
+      radarTxt.innerHTML = "<strong>백그라운드 자동 감지 중...</strong> 프로그램을 설치·실행하면 창을 닫지 않아도 즉시 자동 연결됩니다.";
+    }
+  }
+}
+
+function probeAsioBridgeSilent(timeoutMs = 700) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    asioBridgeAvailable = true;
+    return Promise.resolve(true);
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    let testWs = null;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      asioBridgeAvailable = ok;
+      if (testWs && testWs.readyState <= WebSocket.OPEN) {
+        try { testWs.close(); } catch (e) { }
+      }
+      resolve(ok);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    try {
+      testWs = new WebSocket("ws://127.0.0.1:8765");
+      testWs.onopen = () => {
+        setTimeout(() => {
+          clearTimeout(timer);
+          finish(true);
+        }, 120);
+      };
+      testWs.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data);
+          if (data.type === "asio_device_list") {
+            currentAsioDevices = data.devices || [];
+            currentAsioDeviceId = data.current_device_id;
+            rebuildDeviceDropdown();
+            clearTimeout(timer);
+            finish(true);
+          }
+        } catch (e) { }
+      };
+      testWs.onerror = () => {
+        clearTimeout(timer);
+        finish(false);
+      };
+    } catch (e) {
+      clearTimeout(timer);
+      finish(false);
+    }
+  });
+}
+
+function positionAsioSmartPopover() {
+  const pop = $("asioSmartPopover");
+  const arrow = $("asioPopoverArrow");
+  const sel = $("deviceSel");
+  if (!pop || pop.style.display === "none" || !sel) return;
+
+  const r = sel.getBoundingClientRect();
+  const popW = Math.min(560, window.innerWidth - 24);
+  pop.style.width = `${popW}px`;
+  const selCenterX = r.left + r.width / 2;
+  const left = Math.max(12, Math.min(window.innerWidth - popW - 12, selCenterX - popW * 0.56));
+  const top = Math.round(r.bottom + 11);
+
+  pop.style.left = `${Math.round(left)}px`;
+  pop.style.top = `${top}px`;
+  if (arrow) {
+    const arrowLeft = Math.max(18, Math.min(popW - 32, selCenterX - left - 7));
+    arrow.style.left = `${Math.round(arrowLeft)}px`;
+  }
+}
+
+function openAsioSmartPopover() {
+  const pop = $("asioSmartPopover");
+  const sel = $("deviceSel");
+  if (!pop) return;
+
+  asioPopoverOpen = true;
+  pop.style.display = "block";
+  if (sel) sel.classList.add("asio-alert-ring");
+  refreshAsioDiagnosticView(asioBridgeAvailable);
+  requestAnimationFrame(positionAsioSmartPopover);
+
+  if (asioAutoDetectTimer) clearInterval(asioAutoDetectTimer);
+  asioAutoDetectTimer = setInterval(async () => {
+    if (!asioPopoverOpen) return;
+    const wasAvail = asioBridgeAvailable;
+    const ok = await probeAsioBridgeSilent(600);
+    refreshAsioDiagnosticView(ok);
+    if (ok) {
+      updateAsioStatusBadge("ok");
+      if (!wasAvail && running) {
+        try { await connect($("deviceSel") ? $("deviceSel").value : "asio_ws"); } catch (e) { }
+      }
+    }
+  }, 2200);
+}
+
+function closeAsioSmartPopover() {
+  const pop = $("asioSmartPopover");
+  const sel = $("deviceSel");
+  asioPopoverOpen = false;
+  if (pop) pop.style.display = "none";
+  if (sel) sel.classList.remove("asio-alert-ring");
+  if (asioAutoDetectTimer) {
+    clearInterval(asioAutoDetectTimer);
+    asioAutoDetectTimer = null;
+  }
+}
+
+function toggleAsioSmartPopover() {
+  if (asioPopoverOpen) {
+    closeAsioSmartPopover();
+    return;
+  }
+  openAsioSmartPopover();
+  probeAsioBridgeSilent(650).then(ok => {
+    refreshAsioDiagnosticView(ok);
+    const selVal = $("deviceSel") ? $("deviceSel").value : "";
+    if (ok) updateAsioStatusBadge("ok");
+    else if (selVal.startsWith("mic_")) updateAsioStatusBadge("web");
+    else updateAsioStatusBadge("warn");
+  });
+}
+
+async function switchToBrowserMicAndStart(shouldStart = true) {
+  const sel = $("deviceSel");
+  if (sel) {
+    if (!Array.from(sel.options).some(o => o.value === "mic_default")) {
+      await rebuildDeviceDropdown();
+    }
+    const firstMic = Array.from(sel.options).find(o => o.value === "mic_default" || o.value.startsWith("mic_dev_"));
+    if (firstMic) sel.value = firstMic.value;
+  }
+  updateAsioStatusBadge("web");
+  closeAsioSmartPopover();
+  if ($("err")) $("err").textContent = "";
+
+  if (shouldStart) {
+    if (running) {
+      try { await connect($("deviceSel").value); } catch (e) { if ($("err")) $("err").textContent = e.message; }
+    } else {
+      await start();
+    }
+  }
 }
 
 async function listDevices() {
@@ -803,126 +1039,605 @@ let fretboardNoteElements = [];
 let fretboardGeom = null;
 let hoveredFretNote = null;
 let handAnchorFretSmoothed = null;
+let currentNeckWood = "ebony";
+let fbViewMode = "studio"; // "2d" | "studio" | "deep" | "custom"
+let fbTiltDeg = 38;
+let fbYawDeg = -6;
+let isDragging3dCam = false;
+let wasDragged3d = false;
+let dragStartX = 0, dragStartY = 0, dragStartTilt = 38, dragStartYaw = -6;
+
+function updateCam3dUI() {
+  const readout = $("fbCamReadout");
+  if (readout) {
+    readout.textContent = fbTiltDeg <= 1.5 && Math.abs(fbYawDeg) <= 1.5
+      ? "2D FLAT (0°)"
+      : `PITCH ${Math.round(fbTiltDeg)}° · YAW ${Math.round(fbYawDeg)}°`;
+  }
+  document.querySelectorAll(".v3d-preset-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.getAttribute("data-view3d") === fbViewMode);
+  });
+  const fb = $("fb");
+  if (fb) {
+    fb.classList.toggle("is-3d-orbit", fbTiltDeg > 1.5 || Math.abs(fbYawDeg) > 1.5);
+  }
+}
+
+function setFbViewMode(mode) {
+  fbViewMode = mode;
+  if (mode === "2d") {
+    fbTiltDeg = 0;
+    fbYawDeg = 0;
+  } else if (mode === "deep") {
+    fbTiltDeg = 52;
+    fbYawDeg = 0;
+  } else {
+    fbViewMode = "studio";
+    fbTiltDeg = 38;
+    fbYawDeg = -6;
+  }
+  updateCam3dUI();
+  drawFB();
+}
+
+function setNeckWood(wood) {
+  const valid = ["ebony", "rosewood", "maple", "cyber"];
+  currentNeckWood = valid.includes(wood) ? wood : "ebony";
+  document.body.setAttribute("data-neck-wood", currentNeckWood);
+  document.querySelectorAll(".neck-theme-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.getAttribute("data-wood") === currentNeckWood);
+  });
+  drawFB();
+}
 
 function renderStaticFretboard() {
   const fb = $("fb"); if (!fb) return;
   fb.innerHTML = "";
   fretboardNoteElements = [];
+  updateCam3dUI();
 
   const frets = 15;
   const numStrings = strings.length;
-  const W = 840, H = 240, marginX = 40, marginY = 24;
-  const usableW = W - marginX * 2, usableH = H - marginY * 2;
+  const W = 960, H = 310;
+  const ns = "http://www.w3.org/2000/svg";
+  const is3D = (fbTiltDeg > 1.5 || Math.abs(fbYawDeg) > 1.5);
+  const tiltRad = is3D ? (fbTiltDeg * Math.PI) / 180 : 0;
+  const yawRad = is3D ? (fbYawDeg * Math.PI) / 180 : 0;
+  const camDist = fbViewMode === "deep" ? 450 : (fbTiltDeg > 45 ? 470 : 620);
 
-  const fretX = [];
-  if (isLeftHand) {
-    for (let i = 0; i <= frets; i++) {
-      fretX.push(W - marginX - (usableW * (i / frets)));
-    }
-  } else {
-    for (let i = 0; i <= frets; i++) {
-      fretX.push(marginX + (usableW * (i / frets)));
-    }
-  }
+  const showHandArea = (appMode === "rhythm") || (labelMode === "finger") || (guideMode === "chord" && voicingMode && currentInstrument !== "bass");
+  const cxScreen = 478;
+  const cyScreen = is3D ? (showHandArea ? 132 : 158) : (showHandArea ? 116 : 152);
+  const dirSign = isLeftHand ? -1 : 1;
 
+  // SVG <defs> for 3D Guitar Neck Woods, Pearloid Inlays, Lighting, & Rhythm Gradients
+  const defs = document.createElementNS(ns, "defs");
+  defs.innerHTML = `
+    <linearGradient id="woodGrad_ebony" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#222229"/>
+      <stop offset="28%" stop-color="#141418"/>
+      <stop offset="68%" stop-color="#19191f"/>
+      <stop offset="100%" stop-color="#0d0d10"/>
+    </linearGradient>
+    <linearGradient id="woodGrad_rosewood" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#542c1c"/>
+      <stop offset="32%" stop-color="#3a1c10"/>
+      <stop offset="72%" stop-color="#472315"/>
+      <stop offset="100%" stop-color="#28120a"/>
+    </linearGradient>
+    <linearGradient id="woodGrad_maple" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#efd49c"/>
+      <stop offset="35%" stop-color="#e1ba70"/>
+      <stop offset="72%" stop-color="#e8c788"/>
+      <stop offset="100%" stop-color="#cfa256"/>
+    </linearGradient>
+    <linearGradient id="woodGrad_cyber" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#22193c"/>
+      <stop offset="38%" stop-color="#110c21"/>
+      <stop offset="75%" stop-color="#1b1332"/>
+      <stop offset="100%" stop-color="#0a0714"/>
+    </linearGradient>
+    <linearGradient id="bodyCutawayGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1c1c23"/>
+      <stop offset="55%" stop-color="#111115"/>
+      <stop offset="100%" stop-color="#08080a"/>
+    </linearGradient>
+    <linearGradient id="neckBackWoodGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#52525b"/>
+      <stop offset="45%" stop-color="#27272e"/>
+      <stop offset="100%" stop-color="#0e0e11"/>
+    </linearGradient>
+    <radialGradient id="pearlInlayGrad" cx="35%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="55%" stop-color="#cbd5e1"/>
+      <stop offset="100%" stop-color="#64748b"/>
+    </radialGradient>
+    <linearGradient id="rhythmPillarGrad" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#facc15" stop-opacity="0.52"/>
+      <stop offset="55%" stop-color="#facc15" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#facc15" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="rhythmLaserGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#facc15"/>
+      <stop offset="55%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#c084fc"/>
+    </linearGradient>
+    <filter id="glow3dSoft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  `;
+  fb.appendChild(defs);
+
+  const neckThemes = {
+    ebony:    { fill: "url(#woodGrad_ebony)",    binding: "#9ca3af", border: "#3f3f4a", sideWall: "#18181f", sideDot: "#f4f4f5", fret: "#d4d4d8", nut: "#fef3c7", inlayAlpha: "0.52", numCol: "#71717a" },
+    rosewood: { fill: "url(#woodGrad_rosewood)", binding: "#fef3c7", border: "#b45309", sideWall: "#451a03", sideDot: "#18181b", fret: "#e4e4e7", nut: "#fef3c7", inlayAlpha: "0.85", numCol: "#a8a29e" },
+    maple:    { fill: "url(#woodGrad_maple)",    binding: "#92400e", border: "#92400e", sideWall: "#b45309", sideDot: "#18181b", fret: "#71717a", nut: "#fef9c3", inlayAlpha: "0.55", numCol: "#a1a1aa" },
+    cyber:    { fill: "url(#woodGrad_cyber)",    binding: "#a78bfa", border: "#7c3aed", sideWall: "#2e1065", sideDot: "#38bdf8", fret: "#67e8f9", nut: "#e9d5ff", inlayAlpha: "0.65", numCol: "#a78bfa" }
+  };
+  const nt = neckThemes[currentNeckWood] || neckThemes.ebony;
+
+  // 12-TET Logarithmic Fret Ratios (0..15)
+  const physMax = 1 - Math.pow(2, -frets / 12);
+  const fretRatio = [];
+  const ratioOfFret = (f) => {
+    const p = (1 - Math.pow(2, -Math.max(0, Math.min(frets, f)) / 12)) / physMax;
+    return 0.88 * p + 0.12 * (Math.max(0, Math.min(frets, f)) / frets);
+  };
   for (let i = 0; i <= frets; i++) {
-    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    line.setAttribute("x1", fretX[i]); line.setAttribute("y1", marginY);
-    line.setAttribute("x2", fretX[i]); line.setAttribute("y2", H - marginY);
-    line.setAttribute("stroke", i === 0 ? "#cbd5e1" : "#475569");
-    line.setAttribute("stroke-width", i === 0 ? "5" : "2");
-    fb.appendChild(line);
-
-    if (i > 0) {
-      const num = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      num.setAttribute("x", (fretX[i - 1] + fretX[i]) / 2);
-      num.setAttribute("y", H - 6);
-      num.setAttribute("class", "fret-num");
-      num.setAttribute("data-fret", i);
-      num.textContent = i;
-      fb.appendChild(num);
-    }
+    fretRatio.push(ratioOfFret(i));
   }
 
-  const singleMarkers = [3, 5, 7, 9, 15];
-  const doubleMarkers = [12];
+  // World Coordinate Geometry (wx along neck -370..+370, wy across strings, wz height)
+  const neckHalfLen = 370;
+  const nutHalfNeck = 54;
+  const endHalfNeck = 66;
+  const nutHalfStr = 46;
+  const endHalfStr = 58;
 
-  singleMarkers.forEach(f => {
-    if (f <= frets) {
-      const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      circle.setAttribute("cx", (fretX[f - 1] + fretX[f]) / 2);
-      circle.setAttribute("cy", H / 2);
-      circle.setAttribute("r", "5");
-      circle.setAttribute("fill", "#334155");
-      fb.appendChild(circle);
+  const wxAtRatio = (t) => dirSign * (-neckHalfLen + (neckHalfLen * 2) * t);
+  const halfNeckAt = (t) => nutHalfNeck + (endHalfNeck - nutHalfNeck) * t;
+  const halfStrAt = (t) => nutHalfStr + (endHalfStr - nutHalfStr) * t;
+  const strYWorld = (sIdx, t) => {
+    const hs = halfStrAt(t);
+    return -hs + sIdx * ((hs * 2) / Math.max(1, numStrings - 1));
+  };
+
+  // True 3D Perspective Camera Projection (collapses cleanly to 2D Flat when !is3D)
+  const project3D = (wx, wy, wz = 0) => {
+    if (!is3D) {
+      return { x: cxScreen + wx, y: cyScreen + wy, scale: 1, depth: 0 };
     }
-  });
+    const normY = wy / 68;
+    const archZ = 10 * (1 - normY * normY);
+    const zTotal = wz + archZ;
 
-  doubleMarkers.forEach(f => {
-    if (f <= frets) {
-      const cx = (fretX[f - 1] + fretX[f]) / 2;
-      const c1 = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      c1.setAttribute("cx", cx); c1.setAttribute("cy", marginY + usableH * 0.25);
-      c1.setAttribute("r", "5"); c1.setAttribute("fill", "#334155");
-      fb.appendChild(c1);
+    const x1 = wx * Math.cos(yawRad) - wy * Math.sin(yawRad);
+    const y1 = wx * Math.sin(yawRad) + wy * Math.cos(yawRad);
+    const z1 = zTotal;
 
-      const c2 = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      c2.setAttribute("cx", cx); c2.setAttribute("cy", marginY + usableH * 0.75);
-      c2.setAttribute("r", "5"); c2.setAttribute("fill", "#334155");
-      fb.appendChild(c2);
+    const y2 = y1 * Math.cos(tiltRad) - z1 * Math.sin(tiltRad);
+    const z2 = y1 * Math.sin(tiltRad) + z1 * Math.cos(tiltRad);
+
+    const persp = camDist / Math.max(140, camDist - z2);
+    return {
+      x: cxScreen + x1 * persp,
+      y: cyScreen + y2 * persp,
+      scale: persp,
+      depth: z2
+    };
+  };
+
+  const noteWorldCoord = (sIdx, fNum) => {
+    if (fNum <= 0) {
+      return { wx: dirSign * (-neckHalfLen - 19), wy: strYWorld(sIdx, 0), t: 0 };
     }
-  });
-
-  const stringY = (sIdx) => marginY + (sIdx * (usableH / Math.max(1, numStrings - 1)));
-  const fretCenterX = (fNum) => {
-    const clamped = Math.max(0, Math.min(frets, fNum));
-    if (clamped === 0) return isLeftHand ? (W - marginX + 15) : (marginX - 15);
+    const clamped = Math.min(frets, fNum);
     const lo = Math.floor(clamped);
     const hi = Math.min(frets, lo + 1);
     const frac = clamped - lo;
-    const cLo = lo === 0 ? (isLeftHand ? W - marginX + 15 : marginX - 15) : (fretX[lo - 1] + fretX[lo]) / 2;
-    const cHi = (fretX[hi - 1] + fretX[hi]) / 2;
-    return cLo + (cHi - cLo) * frac;
+    const tLo = lo === 0 ? 0 : (ratioOfFret(lo - 1) + ratioOfFret(lo)) / 2;
+    const tHi = (ratioOfFret(hi - 1) + ratioOfFret(hi)) / 2;
+    const t = tLo + (tHi - tLo) * frac;
+    return { wx: wxAtRatio(t), wy: strYWorld(sIdx, t), t };
   };
 
-  fretboardGeom = { fretX, stringY, fretCenterX, marginX, marginY, W, neckH: H, fullH: 302, frets, numStrings };
+  const projectNote = (sIdx, fNum, wz = 7) => {
+    const { wx, wy, t } = noteWorldCoord(sIdx, fNum);
+    const p = project3D(wx, wy, wz);
+    return { cx: p.x, cy: p.y, scale: p.scale, wx, wy, t };
+  };
 
-  // Highlight active Fret Box Zone when in Rhythm Mode
+  const fretX = fretRatio.map(t => project3D(wxAtRatio(t), 0, 0).x);
+  const stringY = (sIdx, fNum = 7) => projectNote(sIdx, fNum, is3D ? 7 : 0).cy;
+  const fretCenterX = (fNum) => projectNote(Math.floor(numStrings / 2), fNum, is3D ? 7 : 0).cx;
+
+  fretboardGeom = {
+    fretX, fretRatio, stringY, fretCenterX, project3D, projectNote, noteWorldCoord,
+    wxAtRatio, halfNeckAt, halfStrAt, strYWorld, ratioOfFret, dirSign,
+    is3D, tiltRad, yawRad, W, neckH: H, fullH: H, frets, numStrings, cyScreen
+  };
+
+  // ==============================================================
+  // LAYER 0 (3D ONLY): Floor Shadow, Cutaway Body & Headstock, Side Slab & Dots
+  // ==============================================================
+  if (is3D) {
+    // 0a. Ambient studio drop-shadow below 3D neck
+    const shPts = [
+      project3D(wxAtRatio(0), -nutHalfNeck - 2, -24),
+      project3D(wxAtRatio(1), -endHalfNeck - 2, -24),
+      project3D(wxAtRatio(1), endHalfNeck + 4, -24),
+      project3D(wxAtRatio(0), nutHalfNeck + 4, -24)
+    ];
+    const shPoly = document.createElementNS(ns, "polygon");
+    shPoly.setAttribute("points", shPts.map(p => `${p.x.toFixed(1)},${(p.y + 14).toFixed(1)}`).join(" "));
+    shPoly.setAttribute("fill", "rgba(0,0,0,0.52)");
+    shPoly.setAttribute("filter", "url(#glow3dSoft)");
+    fb.appendChild(shPoly);
+
+    // 0b. Guitar Body Cutaway Silhouette & Neck Pickup at High-Fret End (15F+)
+    const xCut = dirSign * (neckHalfLen - 26);
+    const pNT = project3D(xCut, -endHalfNeck + 1, -2);
+    const pNB = project3D(xCut, endHalfNeck - 1, -2);
+    const pH1 = project3D(dirSign * (neckHalfLen + 78), -128, -8);
+    const pH2 = project3D(dirSign * (neckHalfLen + 115), -110, -10);
+    const pH3 = project3D(dirSign * (neckHalfLen + 115), 118, -10);
+    const pH4 = project3D(dirSign * (neckHalfLen + 45), 98, -8);
+    const bodyPath = document.createElementNS(ns, "path");
+    bodyPath.setAttribute(
+      "d",
+      `M ${pNT.x.toFixed(1)} ${pNT.y.toFixed(1)} ` +
+      `Q ${(pNT.x + dirSign * 24).toFixed(1)} ${(pNT.y - 54).toFixed(1)} ${pH1.x.toFixed(1)} ${pH1.y.toFixed(1)} ` +
+      `L ${pH2.x.toFixed(1)} ${pH2.y.toFixed(1)} L ${pH3.x.toFixed(1)} ${pH3.y.toFixed(1)} ` +
+      `Q ${pH4.x.toFixed(1)} ${pH4.y.toFixed(1)} ${pNB.x.toFixed(1)} ${pNB.y.toFixed(1)} Z`
+    );
+    bodyPath.setAttribute("fill", "url(#bodyCutawayGrad)");
+    bodyPath.setAttribute("stroke", "#2a2a33");
+    bodyPath.setAttribute("stroke-width", "1.4");
+    fb.appendChild(bodyPath);
+
+    // Neck Pickup Silhouette
+    const pkX1 = dirSign * (neckHalfLen + 26);
+    const pkX2 = dirSign * (neckHalfLen + 56);
+    const pkPts = [
+      project3D(pkX1, -50, 2), project3D(pkX2, -50, 2),
+      project3D(pkX2, 50, 2), project3D(pkX1, 50, 2)
+    ];
+    const pkPoly = document.createElementNS(ns, "polygon");
+    pkPoly.setAttribute("points", pkPts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" "));
+    pkPoly.setAttribute("fill", "#15151a");
+    pkPoly.setAttribute("stroke", "#3f3f4a");
+    pkPoly.setAttribute("stroke-width", "1.2");
+    fb.appendChild(pkPoly);
+    for (let s = 0; s < numStrings; s++) {
+      const pp = project3D((pkX1 + pkX2) / 2, -40 + s * (80 / Math.max(1, numStrings - 1)), 3);
+      const pole = document.createElementNS(ns, "ellipse");
+      pole.setAttribute("cx", pp.x.toFixed(1));
+      pole.setAttribute("cy", pp.y.toFixed(1));
+      pole.setAttribute("rx", "3");
+      pole.setAttribute("ry", (2.8 * Math.cos(tiltRad)).toFixed(1));
+      pole.setAttribute("fill", "#a1a1aa");
+      fb.appendChild(pole);
+    }
+
+    // 0c. Angled Left/Right Headstock Transition & Tuning Pegs at Nut (0F-)
+    const xNut = wxAtRatio(0);
+    const pNT0 = project3D(xNut, -nutHalfNeck, 0);
+    const pNB0 = project3D(xNut, nutHalfNeck, 0);
+    const pHT = project3D(dirSign * (-neckHalfLen - 92), -nutHalfNeck - 16, -24);
+    const pHB = project3D(dirSign * (-neckHalfLen - 92), nutHalfNeck + 4, -24);
+    const headPoly = document.createElementNS(ns, "polygon");
+    headPoly.setAttribute("points", `${pNT0.x.toFixed(1)},${pNT0.y.toFixed(1)} ${pHT.x.toFixed(1)},${pHT.y.toFixed(1)} ${pHB.x.toFixed(1)},${pHB.y.toFixed(1)} ${pNB0.x.toFixed(1)},${pNB0.y.toFixed(1)}`);
+    headPoly.setAttribute("fill", currentNeckWood === "rosewood" ? "#2e160d" : (currentNeckWood === "maple" ? "#b48a46" : "#141418"));
+    headPoly.setAttribute("stroke", "#32323c");
+    headPoly.setAttribute("stroke-width", "1.4");
+    fb.appendChild(headPoly);
+
+    for (let s = 0; s < numStrings; s++) {
+      const p0 = project3D(xNut, strYWorld(s, 0), 4.5);
+      const pPeg = project3D(dirSign * (-neckHalfLen - 25 - s * 10.5), -nutHalfNeck - 2, -16);
+      const stHead = document.createElementNS(ns, "line");
+      stHead.setAttribute("x1", p0.x.toFixed(1)); stHead.setAttribute("y1", p0.y.toFixed(1));
+      stHead.setAttribute("x2", pPeg.x.toFixed(1)); stHead.setAttribute("y2", pPeg.y.toFixed(1));
+      stHead.setAttribute("stroke", "#71717a"); stHead.setAttribute("stroke-width", "1.05");
+      fb.appendChild(stHead);
+
+      const pegC = document.createElementNS(ns, "ellipse");
+      pegC.setAttribute("cx", pPeg.x.toFixed(1)); pegC.setAttribute("cy", pPeg.y.toFixed(1));
+      pegC.setAttribute("rx", "4.2"); pegC.setAttribute("ry", "2.8");
+      pegC.setAttribute("fill", "#d4d4d8"); pegC.setAttribute("stroke", "#27272a"); pegC.setAttribute("stroke-width", "0.9");
+      fb.appendChild(pegC);
+    }
+
+    // 0d. 3D Front Neck Thickness Slab + Binding + Glowing Side Position Dots facing the player!
+    const segs = 26;
+    for (let i = 0; i < segs; i++) {
+      const t0 = i / segs, t1 = (i + 1) / segs;
+      const x0 = wxAtRatio(t0), x1 = wxAtRatio(t1);
+      const y0 = halfNeckAt(t0), y1 = halfNeckAt(t1);
+      const tl = project3D(x0, y0, 0), tr = project3D(x1, y1, 0);
+      const bl = project3D(x0, y0, -6.5), br = project3D(x1, y1, -6.5);
+      const wBL = project3D(x0, y0 - 2, -19), wBR = project3D(x1, y1 - 2, -19);
+
+      const bindPoly = document.createElementNS(ns, "polygon");
+      bindPoly.setAttribute("points", `${tl.x.toFixed(1)},${tl.y.toFixed(1)} ${tr.x.toFixed(1)},${tr.y.toFixed(1)} ${br.x.toFixed(1)},${br.y.toFixed(1)} ${bl.x.toFixed(1)},${bl.y.toFixed(1)}`);
+      bindPoly.setAttribute("fill", nt.binding);
+      bindPoly.setAttribute("fill-opacity", currentNeckWood === "rosewood" ? "0.9" : "0.62");
+      fb.appendChild(bindPoly);
+
+      const wallPoly = document.createElementNS(ns, "polygon");
+      wallPoly.setAttribute("points", `${bl.x.toFixed(1)},${bl.y.toFixed(1)} ${br.x.toFixed(1)},${br.y.toFixed(1)} ${wBR.x.toFixed(1)},${wBR.y.toFixed(1)} ${wBL.x.toFixed(1)},${wBL.y.toFixed(1)}`);
+      wallPoly.setAttribute("fill", nt.sideWall);
+      fb.appendChild(wallPoly);
+    }
+
+    // Side Position Dots along the front binding strip (3, 5, 7, 9, 12 double, 15)
+    [3, 5, 7, 9, 15].forEach(f => {
+      const mr = (fretRatio[f - 1] + fretRatio[f]) / 2;
+      const sp = project3D(wxAtRatio(mr), halfNeckAt(mr), -3.3);
+      const sd = document.createElementNS(ns, "circle");
+      sd.setAttribute("cx", sp.x.toFixed(1)); sd.setAttribute("cy", sp.y.toFixed(1));
+      sd.setAttribute("r", "2.1"); sd.setAttribute("fill", nt.sideDot); sd.setAttribute("opacity", "0.92");
+      fb.appendChild(sd);
+    });
+    {
+      const mr = (fretRatio[11] + fretRatio[12]) / 2;
+      [-4, 4].forEach(dx => {
+        const sp = project3D(wxAtRatio(mr) + dx, halfNeckAt(mr), -3.3);
+        const sd = document.createElementNS(ns, "circle");
+        sd.setAttribute("cx", sp.x.toFixed(1)); sd.setAttribute("cy", sp.y.toFixed(1));
+        sd.setAttribute("r", "2.0"); sd.setAttribute("fill", currentNeckWood === "ebony" ? "#38bdf8" : nt.sideDot);
+        fb.appendChild(sd);
+      });
+    }
+
+    // 15F C-Shape Curved Cross-Section End-Cap
+    const xEndCap = wxAtRatio(1);
+    const hwCap = halfNeckAt(1);
+    const capPts = [];
+    for (let k = 0; k <= 12; k++) {
+      const yy = -hwCap + (2 * hwCap * k) / 12;
+      capPts.push(project3D(xEndCap, yy, 0));
+    }
+    capPts.push(project3D(xEndCap, hwCap - 2, -19));
+    capPts.push(project3D(xEndCap, -hwCap + 2, -19));
+    const capPoly = document.createElementNS(ns, "polygon");
+    capPoly.setAttribute("points", capPts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" "));
+    capPoly.setAttribute("fill", nt.sideWall);
+    capPoly.setAttribute("stroke", nt.border);
+    capPoly.setAttribute("stroke-width", "1.1");
+    fb.appendChild(capPoly);
+  }
+
+  // ==============================================================
+  // LAYER 1: Tapered & Curved Fingerboard Surface
+  // ==============================================================
+  {
+    const topPts = [], botPts = [];
+    const boardSegs = is3D ? 20 : 2;
+    for (let i = 0; i <= boardSegs; i++) {
+      const t = i / boardSegs;
+      const wx = wxAtRatio(t);
+      const hw = halfNeckAt(t);
+      topPts.push(project3D(wx, -hw, 0));
+      botPts.unshift(project3D(wx, hw, 0));
+    }
+    const boardPoly = document.createElementNS(ns, "polygon");
+    boardPoly.setAttribute("points", [...topPts, ...botPts].map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" "));
+    boardPoly.setAttribute("fill", nt.fill);
+    boardPoly.setAttribute("stroke", nt.border);
+    boardPoly.setAttribute("stroke-width", "1.5");
+    boardPoly.setAttribute("stroke-linejoin", "round");
+    fb.appendChild(boardPoly);
+
+    // Specular arch crest sheen in 3D mode
+    if (is3D && currentNeckWood !== "maple") {
+      const cr1 = project3D(wxAtRatio(0), -11, 0.4);
+      const cr2 = project3D(wxAtRatio(1), -11, 0.4);
+      const cr3 = project3D(wxAtRatio(1), 11, 0.4);
+      const cr4 = project3D(wxAtRatio(0), 11, 0.4);
+      const crest = document.createElementNS(ns, "polygon");
+      crest.setAttribute("points", [cr1, cr2, cr3, cr4].map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" "));
+      crest.setAttribute("fill", "rgba(255,255,255,0.035)");
+      fb.appendChild(crest);
+    }
+  }
+
+  // ==============================================================
+  // LAYER 2: 3D Slotted Bone Nut (0F), Arched Metallic Frets, & Fret Numbers
+  // ==============================================================
+  for (let i = 0; i <= frets; i++) {
+    const t = fretRatio[i];
+    const wx = wxAtRatio(t);
+    const hw = halfNeckAt(t);
+
+    if (i === 0) {
+      if (is3D) {
+        const dxN = dirSign * 4.5;
+        const nTL = project3D(wx - dxN, -hw, 4.5), nTR = project3D(wx + dxN * 0.4, -hw, 4.5);
+        const nBR = project3D(wx + dxN * 0.4, hw, 4.5), nBL = project3D(wx - dxN, hw, 4.5);
+        const nFB = project3D(wx + dxN * 0.4, hw, 0), nFBL = project3D(wx - dxN, hw, 0);
+        const nutTop = document.createElementNS(ns, "polygon");
+        nutTop.setAttribute("points", `${nTL.x.toFixed(1)},${nTL.y.toFixed(1)} ${nTR.x.toFixed(1)},${nTR.y.toFixed(1)} ${nBR.x.toFixed(1)},${nBR.y.toFixed(1)} ${nBL.x.toFixed(1)},${nBL.y.toFixed(1)}`);
+        nutTop.setAttribute("fill", nt.nut); nutTop.setAttribute("stroke", "#a8a29e"); nutTop.setAttribute("stroke-width", "0.8");
+        fb.appendChild(nutTop);
+        const nutFront = document.createElementNS(ns, "polygon");
+        nutFront.setAttribute("points", `${nBL.x.toFixed(1)},${nBL.y.toFixed(1)} ${nBR.x.toFixed(1)},${nBR.y.toFixed(1)} ${nFB.x.toFixed(1)},${nFB.y.toFixed(1)} ${nFBL.x.toFixed(1)},${nFBL.y.toFixed(1)}`);
+        nutFront.setAttribute("fill", "#d6d3d1");
+        fb.appendChild(nutFront);
+      } else {
+        const pT = project3D(wx, -hw, 0), pB = project3D(wx, hw, 0);
+        const nut = document.createElementNS(ns, "line");
+        nut.setAttribute("x1", pT.x); nut.setAttribute("y1", pT.y);
+        nut.setAttribute("x2", pB.x); nut.setAttribute("y2", pB.y);
+        nut.setAttribute("stroke", nt.nut); nut.setAttribute("stroke-width", "5.2");
+        fb.appendChild(nut);
+      }
+    } else {
+      const steps = is3D ? 8 : 1;
+      let dWire = "", dShadow = "";
+      for (let k = 0; k <= steps; k++) {
+        const yy = -hw + (2 * hw * k) / steps;
+        const pW = project3D(wx, yy, is3D ? 1.5 : 0);
+        const pS = project3D(wx + dirSign * 2, yy, 0.2);
+        dWire += (k === 0 ? "M " : "L ") + `${pW.x.toFixed(1)} ${pW.y.toFixed(1)} `;
+        dShadow += (k === 0 ? "M " : "L ") + `${pS.x.toFixed(1)} ${pS.y.toFixed(1)} `;
+      }
+      const fShad = document.createElementNS(ns, "path");
+      fShad.setAttribute("d", dShadow); fShad.setAttribute("fill", "none");
+      fShad.setAttribute("stroke", "rgba(0,0,0,0.58)"); fShad.setAttribute("stroke-width", "2.2");
+      fb.appendChild(fShad);
+
+      const fLine = document.createElementNS(ns, "path");
+      fLine.setAttribute("d", dWire); fLine.setAttribute("fill", "none");
+      fLine.setAttribute("stroke", nt.fret); fLine.setAttribute("stroke-width", "1.95");
+      fLine.setAttribute("stroke-opacity", "0.75"); fLine.setAttribute("stroke-linecap", "round");
+      fb.appendChild(fLine);
+
+      // Fret numbers along top edge (and bottom edge in flat 2D)
+      const mt = (fretRatio[i - 1] + t) / 2;
+      const mpTop = project3D(wxAtRatio(mt), -halfNeckAt(mt) - (is3D ? 21 : 13), 0);
+      const numTop = document.createElementNS(ns, "text");
+      numTop.setAttribute("x", mpTop.x.toFixed(1));
+      numTop.setAttribute("y", mpTop.y.toFixed(1));
+      numTop.setAttribute("class", "fret-num");
+      numTop.setAttribute("data-fret", i);
+      numTop.setAttribute("fill", nt.numCol);
+      numTop.setAttribute("font-size", (10.5 * mpTop.scale).toFixed(1));
+      numTop.textContent = i;
+      fb.appendChild(numTop);
+
+      if (!is3D) {
+        const mpBot = project3D(wxAtRatio(mt), halfNeckAt(mt) + 13, 0);
+        const numBot = document.createElementNS(ns, "text");
+        numBot.setAttribute("x", mpBot.x.toFixed(1));
+        numBot.setAttribute("y", mpBot.y.toFixed(1));
+        numBot.setAttribute("class", "fret-num");
+        numBot.setAttribute("data-fret", i);
+        numBot.setAttribute("fill", nt.numCol);
+        numBot.textContent = i;
+        fb.appendChild(numBot);
+      }
+    }
+  }
+
+  // ==============================================================
+  // LAYER 3: Pearloid Inlays & Tapered Rhythm Box Zone
+  // ==============================================================
+  const inlayFill = currentNeckWood === "maple" ? "#27272a" : "url(#pearlInlayGrad)";
+  const ryRatio = is3D ? Math.max(0.35, Math.cos(tiltRad)) : 1.0;
+
+  [3, 5, 7, 9, 15].forEach(f => {
+    if (f <= frets) {
+      const mt = (fretRatio[f - 1] + fretRatio[f]) / 2;
+      const p = project3D(wxAtRatio(mt), 0, 0.2);
+      const rx = (f >= 15 ? 4.5 : 5.3) * p.scale;
+      const el = document.createElementNS(ns, "ellipse");
+      el.setAttribute("cx", p.x.toFixed(1)); el.setAttribute("cy", p.y.toFixed(1));
+      el.setAttribute("rx", rx.toFixed(1)); el.setAttribute("ry", (rx * ryRatio).toFixed(1));
+      el.setAttribute("fill", inlayFill); el.setAttribute("fill-opacity", nt.inlayAlpha);
+      fb.appendChild(el);
+    }
+  });
+  {
+    const mt = (fretRatio[11] + fretRatio[12]) / 2;
+    const wx12 = wxAtRatio(mt);
+    const y1W = strYWorld(Math.min(1, numStrings - 1), mt);
+    const y2W = strYWorld(Math.max(0, numStrings - 2), mt);
+    const offset1 = (strYWorld(1, mt) + strYWorld(2, mt)) / 2;
+    const offset2 = (strYWorld(Math.max(0, numStrings - 3), mt) + strYWorld(numStrings - 2, mt)) / 2;
+    const ys = numStrings <= 4 ? [-18, 18] : [offset1, offset2];
+    ys.forEach(yy => {
+      const p = project3D(wx12, yy, 0.2);
+      const rx = 4.8 * p.scale;
+      const el = document.createElementNS(ns, "ellipse");
+      el.setAttribute("cx", p.x.toFixed(1)); el.setAttribute("cy", p.y.toFixed(1));
+      el.setAttribute("rx", rx.toFixed(1)); el.setAttribute("ry", (rx * ryRatio).toFixed(1));
+      el.setAttribute("fill", inlayFill); el.setAttribute("fill-opacity", nt.inlayAlpha);
+      fb.appendChild(el);
+    });
+  }
+
+  // Highlight active Tapered 3D Fret Box Zone when in Rhythm Mode
   if (appMode === "rhythm") {
     const [bMin, bMax] = getFretBoxRange(rhythmBoxId);
-    const xStart = bMin === 0 ? fretX[0] : fretX[bMin - 1];
-    const xEnd = fretX[Math.min(frets, bMax)];
-    const rectX = Math.min(xStart, xEnd);
-    const rectW = Math.abs(xEnd - xStart);
-    const boxRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    boxRect.setAttribute("x", rectX);
-    boxRect.setAttribute("y", marginY - 8);
-    boxRect.setAttribute("width", rectW);
-    boxRect.setAttribute("height", usableH + 16);
-    boxRect.setAttribute("rx", "6");
-    boxRect.setAttribute("fill", "rgba(56, 189, 248, 0.07)");
-    boxRect.setAttribute("stroke", "rgba(56, 189, 248, 0.35)");
-    boxRect.setAttribute("stroke-dasharray", "4 3");
-    fb.appendChild(boxRect);
+    const tA = bMin === 0 ? 0 : fretRatio[bMin - 1];
+    const tB = fretRatio[Math.min(frets, bMax)];
+    const xA = wxAtRatio(tA), xB = wxAtRatio(tB);
+    const hA = halfNeckAt(tA) - 2, hB = halfNeckAt(tB) - 2;
+    const p1 = project3D(xA, -hA, 0.6), p2 = project3D(xB, -hB, 0.6);
+    const p3 = project3D(xB, hB, 0.6), p4 = project3D(xA, hA, 0.6);
+    const boxPath = document.createElementNS(ns, "polygon");
+    boxPath.setAttribute("id", "rhythmBoxZoneRect");
+    boxPath.setAttribute("points", [p1, p2, p3, p4].map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" "));
+    boxPath.setAttribute("fill", "rgba(56, 189, 248, 0.08)");
+    boxPath.setAttribute("stroke", "rgba(56, 189, 248, 0.45)");
+    boxPath.setAttribute("stroke-dasharray", "4 3");
+    fb.appendChild(boxPath);
   }
 
+  // On-Fretboard Rhythm Back Layer (Fret Cell Energy Fill & Column Pulse rendered under strings/notes)
+  const rhythmBackLayer = document.createElementNS(ns, "g");
+  rhythmBackLayer.setAttribute("id", "fretboardRhythmBackLayer");
+  rhythmBackLayer.style.pointerEvents = "none";
+  fb.appendChild(rhythmBackLayer);
+
+  // ==============================================================
+  // LAYER 4: Floating 3D Strings Casting Real Wood Surface Shadows
+  // ==============================================================
   for (let s = 0; s < numStrings; s++) {
-    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    const y = stringY(s);
-    line.setAttribute("x1", marginX); line.setAttribute("y1", y);
-    line.setAttribute("x2", W - marginX); line.setAttribute("y2", y);
-    line.setAttribute("stroke", "#94a3b8");
-    const strokeW = (currentInstrument === "bass") ? (2.0 + s * 1.2) : (1.0 + s * 0.5);
+    const x0W = wxAtRatio(0), x1W = wxAtRatio(1);
+    const y0W = strYWorld(s, 0), y1W = strYWorld(s, 1);
+    const strokeW = (currentInstrument === "bass") ? (2.1 + s * 1.05) : (1.0 + s * 0.45);
+    const isWound = (currentInstrument === "bass") || (s >= 3);
+
+    if (is3D) {
+      const sh0 = project3D(x0W, y0W + 1.5, 0.2);
+      const sh1 = project3D(x1W, y1W + 1.5, 0.2);
+      const sShadow = document.createElementNS(ns, "line");
+      sShadow.setAttribute("x1", sh0.x.toFixed(1)); sShadow.setAttribute("y1", (sh0.y + 3).toFixed(1));
+      sShadow.setAttribute("x2", sh1.x.toFixed(1)); sShadow.setAttribute("y2", (sh1.y + 3).toFixed(1));
+      sShadow.setAttribute("stroke", "rgba(0,0,0,0.48)"); sShadow.setAttribute("stroke-width", strokeW + 0.5);
+      fb.appendChild(sShadow);
+    }
+
+    const p0 = project3D(x0W, y0W, is3D ? 4.5 : 0);
+    const p1 = project3D(x1W, y1W, is3D ? 4.5 : 0);
+    const line = document.createElementNS(ns, "line");
+    line.setAttribute("x1", p0.x.toFixed(1)); line.setAttribute("y1", p0.y.toFixed(1));
+    line.setAttribute("x2", p1.x.toFixed(1)); line.setAttribute("y2", p1.y.toFixed(1));
+    line.setAttribute("stroke", currentNeckWood === "maple" ? "#52525b" : (isWound ? "#cbd5e1" : "#f4f4f5"));
     line.setAttribute("stroke-width", strokeW);
+    line.setAttribute("stroke-opacity", isWound ? "0.8" : "0.88");
     fb.appendChild(line);
+
+    if (isWound) {
+      const coil = document.createElementNS(ns, "line");
+      coil.setAttribute("x1", p0.x.toFixed(1)); coil.setAttribute("y1", p0.y.toFixed(1));
+      coil.setAttribute("x2", p1.x.toFixed(1)); coil.setAttribute("y2", p1.y.toFixed(1));
+      coil.setAttribute("stroke", currentNeckWood === "rosewood" ? "#d97706" : "#71717a");
+      coil.setAttribute("stroke-width", strokeW * 0.7);
+      coil.setAttribute("stroke-dasharray", "2.2 1.4");
+      coil.setAttribute("stroke-opacity", "0.62");
+      fb.appendChild(coil);
+    }
   }
 
-  // Hybrid Hand Back Layer (Palm, Knuckles, and 2-Segment Finger Bones rendered UNDER note dots so text is never occluded)
-  const handBackLayer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  // Dynamic 3D String Vibration Layer
+  const stringVibeLayer = document.createElementNS(ns, "g");
+  stringVibeLayer.setAttribute("id", "fretboardStringVibeLayer");
+  stringVibeLayer.style.pointerEvents = "none";
+  fb.appendChild(stringVibeLayer);
+
+  // Hybrid Hand Back Layer (Palm, Knuckles, and 2-Segment Finger Bones rendered UNDER note pucks)
+  const handBackLayer = document.createElementNS(ns, "g");
   handBackLayer.setAttribute("id", "fretboardHandBackLayer");
   handBackLayer.style.pointerEvents = "none";
   fb.appendChild(handBackLayer);
 
+  // ==============================================================
+  // LAYER 5: Scale/Chord Notes as 3D Beveled Cylinder Pucks (Sorted Back -> Front)
+  // ==============================================================
   const isChordMode = (guideMode === "chord");
   if (!isChordMode) {
     voicingMode = false;
@@ -930,9 +1645,10 @@ function renderStaticFretboard() {
   }
   currentChordPcs = isChordMode ? getChordPcs(rootPc, chordTypeVal) : [];
 
+  const puckRyScale = is3D ? Math.max(0.48, Math.cos(tiltRad) * 0.84) : 1.0;
+
   for (let s = 0; s < numStrings; s++) {
     const openMidi = strings[s];
-    const y = stringY(s);
 
     for (let f = 0; f <= frets; f++) {
       const midi = openMidi + f;
@@ -940,57 +1656,76 @@ function renderStaticFretboard() {
       const isRoot = (notePc === rootPc);
       const inCurrentScale = inScale(midi);
       const inCurrentChord = isChordMode && currentChordPcs.includes(notePc);
-
       const isVisibleTone = isChordMode ? inCurrentChord : inCurrentScale;
 
       let isVoicingNote = false;
       if (voicingMode && currentVoicing && currentInstrument !== "bass") {
         const targetFret = currentVoicing.frets[s];
-        if (targetFret !== null && targetFret === f) {
-          isVoicingNote = true;
-        }
+        if (targetFret !== null && targetFret === f) isVoicingNote = true;
       }
 
       if (voicingMode && !isVoicingNote) continue;
       if (!isVisibleTone && !voicingMode) continue;
 
-      const cx = f === 0 ? (isLeftHand ? W - marginX + 15 : marginX - 15) : (fretX[f - 1] + fretX[f]) / 2;
+      const pBase = projectNote(s, f, is3D ? 2.2 : 0);
+      const pTop = projectNote(s, f, is3D ? 7.2 : 0);
+      const rx = (f >= 12 ? 9.2 : 10.2) * pTop.scale;
+      const ry = rx * puckRyScale;
       const fingerNum = getRecommendedFinger(s, f);
 
-      const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      const g = document.createElementNS(ns, "g");
       let classes = "note-dot";
       if (isRoot) classes += " is-root";
       const interval = pc(midi - rootPc);
-      if (currentInstrument === "bass" && interval === 7) {
-        classes += " is-fifth"; // 5th degree groove accent for bass
-      }
+      if (currentInstrument === "bass" && interval === 7) classes += " is-fifth";
+
       g.setAttribute("class", classes);
       g.setAttribute("data-midi", midi);
       g.setAttribute("data-pc", notePc);
       g.setAttribute("data-str", s);
       g.setAttribute("data-fret", f);
-      g.setAttribute("data-cx", cx);
-      g.setAttribute("data-cy", y);
+      g.setAttribute("data-cx", pTop.cx.toFixed(1));
+      g.setAttribute("data-cy", pTop.cy.toFixed(1));
       g.setAttribute("data-finger", fingerNum);
 
-      const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      circle.setAttribute("cx", cx); circle.setAttribute("cy", y);
-      circle.setAttribute("r", "11");
+      let fill = isRoot ? "var(--root)" : "var(--tone)";
+      let rimFill = isRoot ? "#991b1b" : "#0369a1";
 
-      let fill = "var(--tone)";
-      if (isRoot) fill = "var(--root)";
-      circle.setAttribute("fill", fill);
-      if (labelMode === "finger") {
-        circle.setAttribute("stroke", FINGER_COLORS[fingerNum] || "#ffffff");
-        circle.setAttribute("stroke-width", "2.2");
+      if (is3D) {
+        const rim = document.createElementNS(ns, "ellipse");
+        rim.setAttribute("class", "note-rim");
+        rim.setAttribute("cx", pBase.cx.toFixed(1));
+        rim.setAttribute("cy", (pBase.cy + 1.4).toFixed(1));
+        rim.setAttribute("rx", rx.toFixed(1));
+        rim.setAttribute("ry", ry.toFixed(1));
+        rim.setAttribute("fill", rimFill);
+        rim.setAttribute("stroke", "rgba(0,0,0,0.65)");
+        rim.setAttribute("stroke-width", "1");
+        g.appendChild(rim);
       }
-      g.appendChild(circle);
 
-      const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      text.setAttribute("x", cx); text.setAttribute("y", y + 4);
+      const cap = document.createElementNS(ns, "ellipse");
+      cap.setAttribute("class", "note-cap");
+      cap.setAttribute("cx", pTop.cx.toFixed(1));
+      cap.setAttribute("cy", pTop.cy.toFixed(1));
+      cap.setAttribute("rx", rx.toFixed(1));
+      cap.setAttribute("ry", ry.toFixed(1));
+      cap.setAttribute("fill", fill);
+      if (labelMode === "finger") {
+        cap.setAttribute("stroke", FINGER_COLORS[fingerNum] || "#ffffff");
+        cap.setAttribute("stroke-width", "2.1");
+      } else if (currentNeckWood === "maple") {
+        cap.setAttribute("stroke", "#18181b");
+        cap.setAttribute("stroke-width", "1.5");
+      }
+      g.appendChild(cap);
+
+      const text = document.createElementNS(ns, "text");
+      text.setAttribute("x", pTop.cx.toFixed(1));
+      text.setAttribute("y", (pTop.cy + 3.4).toFixed(1));
       text.setAttribute("text-anchor", "middle");
       text.setAttribute("fill", "#ffffff");
-      text.setAttribute("font-size", labelMode === "finger" ? "12px" : "11px");
+      text.setAttribute("font-size", `${((f >= 12 ? 9.2 : (labelMode === "finger" ? 10.6 : 10.0)) * pTop.scale).toFixed(1)}px`);
       text.setAttribute("font-weight", "bold");
 
       let label = NOTE[notePc];
@@ -1004,17 +1739,106 @@ function renderStaticFretboard() {
     }
   }
 
-  // Hybrid Hand Tip Layer (Fingertip Pads, Nail Crescents, Barre Bars, and Motion Trajectory Arcs)
-  const handTipLayer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  // Hybrid Hand Tip Layer (Fingertip Pads, Nail Crescents, Barre Bars)
+  const handTipLayer = document.createElementNS(ns, "g");
   handTipLayer.setAttribute("id", "fretboardHandTipLayer");
   handTipLayer.style.pointerEvents = "none";
   fb.appendChild(handTipLayer);
 
-  const approachRing = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  const approachRing = document.createElementNS(ns, "ellipse");
   approachRing.setAttribute("id", "rhythmApproachRing");
   approachRing.setAttribute("class", "rhythm-approach-ring");
   approachRing.style.display = "none";
   fb.appendChild(approachRing);
+
+  // On-Fretboard Rhythm Front Layer (3D Z-Pillar, Trajectory Arc + Ground Shadow, Orb, Popups)
+  const rhythmFrontLayer = document.createElementNS(ns, "g");
+  rhythmFrontLayer.setAttribute("id", "fretboardRhythmFrontLayer");
+  rhythmFrontLayer.style.pointerEvents = "none";
+  fb.appendChild(rhythmFrontLayer);
+
+  // 3D Camera Orbit Axis Gizmo in top-right corner when 3D view is active
+  if (is3D) {
+    const gx = 918, gy = 40;
+    const gBox = document.createElementNS(ns, "g");
+    gBox.setAttribute("opacity", "0.9");
+    gBox.style.pointerEvents = "none";
+    const bg = document.createElementNS(ns, "circle");
+    bg.setAttribute("cx", gx); bg.setAttribute("cy", gy); bg.setAttribute("r", "24");
+    bg.setAttribute("fill", "rgba(16,16,20,0.8)"); bg.setAttribute("stroke", "#2e2e38"); bg.setAttribute("stroke-width", "1.2");
+    gBox.appendChild(bg);
+
+    const ring = document.createElementNS(ns, "ellipse");
+    ring.setAttribute("cx", gx); ring.setAttribute("cy", gy);
+    ring.setAttribute("rx", "17"); ring.setAttribute("ry", (17 * Math.max(0.35, Math.cos(tiltRad))).toFixed(1));
+    ring.setAttribute("fill", "none"); ring.setAttribute("stroke", "#38bdf8");
+    ring.setAttribute("stroke-width", "1"); ring.setAttribute("stroke-dasharray", "3 2"); ring.setAttribute("opacity", "0.65");
+    gBox.appendChild(ring);
+
+    const axes = [
+      [gx + 15 * Math.cos(yawRad), gy + 15 * Math.sin(yawRad) * Math.cos(tiltRad), "#ef4444"],
+      [gx, gy - 16 * Math.sin(tiltRad), "#22c55e"],
+      [gx - 12 * Math.sin(yawRad), gy + 12 * Math.cos(yawRad) * Math.cos(tiltRad), "#38bdf8"]
+    ];
+    axes.forEach(([ax, ay, col]) => {
+      const ln = document.createElementNS(ns, "line");
+      ln.setAttribute("x1", gx); ln.setAttribute("y1", gy);
+      ln.setAttribute("x2", ax.toFixed(1)); ln.setAttribute("y2", ay.toFixed(1));
+      ln.setAttribute("stroke", col); ln.setAttribute("stroke-width", "2"); ln.setAttribute("stroke-linecap", "round");
+      gBox.appendChild(ln);
+    });
+    fb.appendChild(gBox);
+  }
+}
+
+function updateStringVibrationOverlay(rNow) {
+  const layer = $("fretboardStringVibeLayer");
+  if (!layer || !fretboardGeom) return;
+  layer.innerHTML = "";
+  if (!fretboardGeom.is3D) return;
+
+  let activeS = null, activeFret = 0, vibeColor = "#facc15";
+  if (appMode === "rhythm" && rNow) {
+    activeS = rNow.s;
+    activeFret = rNow.fret;
+    vibeColor = FINGER_COLORS[rNow.finger] || "#facc15";
+  } else if (litPcs.length > 0) {
+    const hitDot = fretboardNoteElements.find(g => litPcs.includes(parseInt(g.getAttribute("data-pc"), 10)));
+    if (hitDot) {
+      activeS = parseInt(hitDot.getAttribute("data-str"), 10);
+      activeFret = parseInt(hitDot.getAttribute("data-fret"), 10);
+      vibeColor = "#38bdf8";
+    }
+  }
+  if (activeS === null || activeS === undefined) return;
+
+  const { project3D, wxAtRatio, strYWorld, ratioOfFret } = fretboardGeom;
+  const ns = "http://www.w3.org/2000/svg";
+  const tStart = activeFret <= 0 ? 0 : (ratioOfFret(activeFret - 1) + ratioOfFret(activeFret)) / 2;
+  const wxStart = wxAtRatio(tStart), wxEnd = wxAtRatio(1);
+
+  let dTop = "", dBot = "";
+  const steps = 16;
+  for (let k = 0; k <= steps; k++) {
+    const u = k / steps;
+    const t = tStart + (1 - tStart) * u;
+    const wx = wxStart + (wxEnd - wxStart) * u;
+    const wy = strYWorld(activeS, t);
+    const amp = Math.sin(u * Math.PI) * 5.2;
+    const ptT = project3D(wx, wy, 4.5 + amp);
+    const ptB = project3D(wx, wy, 4.5 - amp);
+    dTop += (k === 0 ? "M " : "L ") + `${ptT.x.toFixed(1)} ${ptT.y.toFixed(1)} `;
+    dBot += (k === 0 ? "M " : "L ") + `${ptB.x.toFixed(1)} ${ptB.y.toFixed(1)} `;
+  }
+  const pT = document.createElementNS(ns, "path");
+  pT.setAttribute("d", dTop); pT.setAttribute("fill", "none");
+  pT.setAttribute("stroke", vibeColor); pT.setAttribute("stroke-width", "2.1"); pT.setAttribute("opacity", "0.75");
+  layer.appendChild(pT);
+
+  const pB = document.createElementNS(ns, "path");
+  pB.setAttribute("d", dBot); pB.setAttribute("fill", "none");
+  pB.setAttribute("stroke", "#38bdf8"); pB.setAttribute("stroke-width", "2.1"); pB.setAttribute("opacity", "0.68");
+  layer.appendChild(pB);
 }
 
 function renderFretboardHandOverlay(nowRel = 0) {
@@ -1029,8 +1853,13 @@ function renderFretboardHandOverlay(nowRel = 0) {
   const shouldShowHand = (appMode === "rhythm") || (labelMode === "finger") || isChordVoicingActive || (hoveredFretNote !== null);
   if (!shouldShowHand) return;
 
-  const { fretCenterX, stringY, neckH, frets, numStrings } = fretboardGeom;
+  const {
+    neckH, frets, numStrings,
+    project3D, projectNote, noteWorldCoord, halfNeckAt, halfStrAt, is3D, tiltRad
+  } = fretboardGeom;
   const ns = "http://www.w3.org/2000/svg";
+  const zNoteTop = is3D ? 7.2 : 0;
+  const ryScale3d = is3D ? Math.max(0.48, Math.cos(tiltRad) * 0.84) : 1.0;
 
   // 1. Determine active finger target(s), next target, and optional Barre chord info
   const activeByFinger = { 1: null, 2: null, 3: null, 4: null };
@@ -1084,7 +1913,7 @@ function renderFretboardHandOverlay(nowRel = 0) {
     }
   } else if (appMode === "rhythm") {
     // Idle Rhythm Mode Preview: show 1st note (ACTIVE) and 2nd note (NEXT) of preview chart
-    const previewChart = generateRhythmChart();
+    const previewChart = getCachedRhythmPreviewChart();
     primaryActive = hoveredFretNote || previewChart[0] || null;
     nextTarget = hoveredFretNote ? null : (previewChart[1] || null);
     if (primaryActive) {
@@ -1134,27 +1963,39 @@ function renderFretboardHandOverlay(nowRel = 0) {
   }
 
   const anchorF = handAnchorFretSmoothed;
+  const knucklePos = {};
   const knuckleX = {};
+  const knuckleYMap = {};
   for (let fIdx = 1; fIdx <= 4; fIdx++) {
-    knuckleX[fIdx] = fretCenterX(anchorF + (fIdx - 1));
+    const fn = Math.max(0.4, Math.min(frets, anchorF + (fIdx - 1)));
+    const wc = noteWorldCoord(numStrings - 1, fn);
+    const kp = project3D(wc.wx, halfNeckAt(wc.t) + (is3D ? 25 : 24), is3D ? -4 : 0);
+    const kyVal = Math.min(neckH - 42, kp.y);
+    knucklePos[fIdx] = { x: kp.x, y: kyVal, scale: kp.scale };
+    knuckleX[fIdx] = kp.x;
+    knuckleYMap[fIdx] = kyVal;
   }
-  const knuckleY = neckH + 14; // y = 254
-  const palmBottomY = neckH + 56; // y = 296
+  const leftIdx = knuckleX[1] <= knuckleX[4] ? 1 : 4;
+  const rightIdx = leftIdx === 1 ? 4 : 1;
+  const leftKY = knuckleYMap[leftIdx];
+  const rightKY = knuckleYMap[rightIdx];
+  const knuckleYAvg = (leftKY + rightKY) * 0.5;
+  const palmBottomY = Math.min(neckH - 6, knuckleYAvg + 38);
 
   // 3. Draw Translucent Ghost Palm & Thumb Silhouette in backLayer
   const leftEdgeX = Math.min(knuckleX[1], knuckleX[4]) - 18;
   const rightEdgeX = Math.max(knuckleX[1], knuckleX[4]) + 18;
-  const palmW = Math.max(90, rightEdgeX - leftEdgeX);
   const palmCenterX = (leftEdgeX + rightEdgeX) / 2;
   const thumbSideX = isLeftHand ? (rightEdgeX + 14) : (leftEdgeX - 14);
+  const thumbKY = isLeftHand ? rightKY : leftKY;
 
   const palmPath = document.createElementNS(ns, "path");
   const dPalm = `
-    M ${leftEdgeX + 8} ${knuckleY - 4}
-    Q ${palmCenterX} ${knuckleY - 10} ${rightEdgeX - 8} ${knuckleY - 4}
-    Q ${rightEdgeX + 6} ${knuckleY + 12} ${rightEdgeX - 4} ${palmBottomY - 6}
-    Q ${palmCenterX} ${palmBottomY + 4} ${leftEdgeX + 4} ${palmBottomY - 6}
-    Q ${leftEdgeX - 6} ${knuckleY + 12} ${leftEdgeX + 8} ${knuckleY - 4}
+    M ${leftEdgeX + 8} ${leftKY - 4}
+    Q ${palmCenterX} ${knuckleYAvg - 10} ${rightEdgeX - 8} ${rightKY - 4}
+    Q ${rightEdgeX + 6} ${rightKY + 10} ${rightEdgeX - 4} ${palmBottomY - 5}
+    Q ${palmCenterX} ${palmBottomY + 4} ${leftEdgeX + 4} ${palmBottomY - 5}
+    Q ${leftEdgeX - 6} ${leftKY + 10} ${leftEdgeX + 8} ${leftKY - 4}
     Z
   `;
   palmPath.setAttribute("d", dPalm);
@@ -1168,7 +2009,7 @@ function renderFretboardHandOverlay(nowRel = 0) {
   const thumbPath = document.createElementNS(ns, "path");
   thumbPath.setAttribute(
     "d",
-    `M ${thumbBaseX} ${knuckleY + 18} Q ${thumbSideX} ${knuckleY - 6} ${thumbBaseX + (isLeftHand ? -4 : 4)} ${knuckleY - 12}`
+    `M ${thumbBaseX} ${thumbKY + 16} Q ${thumbSideX} ${thumbKY - 6} ${thumbBaseX + (isLeftHand ? -4 : 4)} ${thumbKY - 12}`
   );
   thumbPath.setAttribute("fill", "none");
   thumbPath.setAttribute("stroke", "rgba(148, 163, 184, 0.45)");
@@ -1176,15 +2017,15 @@ function renderFretboardHandOverlay(nowRel = 0) {
   thumbPath.setAttribute("stroke-linecap", "round");
   backLayer.appendChild(thumbPath);
 
-  // Palm Position Label (e.g., "🖐️ POS 5F~8F")
+  // Palm Position Label (e.g., "🖐️ HAND POS: 5F ~ 8F")
   const minDispF = Math.round(anchorF);
   const maxDispF = Math.min(frets, minDispF + 3);
   const palmLbl = document.createElementNS(ns, "text");
   palmLbl.setAttribute("x", palmCenterX);
-  palmLbl.setAttribute("y", palmBottomY - 8);
+  palmLbl.setAttribute("y", palmBottomY - 6);
   palmLbl.setAttribute("text-anchor", "middle");
   palmLbl.setAttribute("fill", "#94a3b8");
-  palmLbl.setAttribute("font-size", "10px");
+  palmLbl.setAttribute("font-size", "9.5px");
   palmLbl.setAttribute("font-family", "var(--mono)");
   palmLbl.setAttribute("font-weight", "600");
   palmLbl.textContent = barreInfo
@@ -1208,14 +2049,15 @@ function renderFretboardHandOverlay(nowRel = 0) {
     const isSameAsActive = activeByFinger[nf] && activeByFinger[nf].s === nextTarget.s && activeByFinger[nf].fret === nextTarget.fret;
     if (!isSameAsActive) {
       const kx = knuckleX[nf];
-      const ky = knuckleY;
-      const ntx = fretCenterX(nextTarget.fret);
-      const nty = stringY(nextTarget.s);
+      const ky = knuckleYMap[nf];
+      const pNext = projectNote(nextTarget.s, nextTarget.fret, zNoteTop);
+      const ntx = pNext.cx;
+      const nty = pNext.cy;
       const { jx, jy } = computeJoint(nf, kx, ky, ntx, nty);
       const fColor = FINGER_COLORS[nf] || "#38bdf8";
 
       const ghostBone = document.createElementNS(ns, "path");
-      ghostBone.setAttribute("d", `M ${kx} ${ky} L ${jx} ${jy} L ${ntx} ${nty}`);
+      ghostBone.setAttribute("d", `M ${kx.toFixed(1)} ${ky.toFixed(1)} L ${jx.toFixed(1)} ${jy.toFixed(1)} L ${ntx.toFixed(1)} ${nty.toFixed(1)}`);
       ghostBone.setAttribute("fill", "none");
       ghostBone.setAttribute("stroke", fColor);
       ghostBone.setAttribute("stroke-width", "6");
@@ -1225,14 +2067,15 @@ function renderFretboardHandOverlay(nowRel = 0) {
       ghostBone.setAttribute("opacity", "0.45");
       backLayer.appendChild(ghostBone);
 
-      // Motion Trajectory Arc from primaryActive to nextTarget
-      if (primaryActive && (primaryActive.s !== nextTarget.s || primaryActive.fret !== nextTarget.fret)) {
-        const curX = fretCenterX(primaryActive.fret);
-        const curY = stringY(primaryActive.s);
+      // Motion Trajectory Arc from primaryActive to nextTarget (flat guide when not playing rhythm arc)
+      if (!isRhythmPlaying && appMode !== "rhythm" && primaryActive && (primaryActive.s !== nextTarget.s || primaryActive.fret !== nextTarget.fret)) {
+        const pCur = projectNote(primaryActive.s, primaryActive.fret, zNoteTop);
+        const curX = pCur.cx;
+        const curY = pCur.cy;
         const ctrlX = (curX + ntx) / 2;
         const ctrlY = Math.min(curY, nty) - 22;
         const arc = document.createElementNS(ns, "path");
-        arc.setAttribute("d", `M ${curX} ${curY} Q ${ctrlX} ${ctrlY} ${ntx} ${nty}`);
+        arc.setAttribute("d", `M ${curX.toFixed(1)} ${curY.toFixed(1)} Q ${ctrlX.toFixed(1)} ${ctrlY.toFixed(1)} ${ntx.toFixed(1)} ${nty.toFixed(1)}`);
         arc.setAttribute("fill", "none");
         arc.setAttribute("stroke", fColor);
         arc.setAttribute("stroke-width", "1.8");
@@ -1246,18 +2089,19 @@ function renderFretboardHandOverlay(nowRel = 0) {
   // 5. Render 4 Fingers (Standby or Active 2-Segment Articulated Bone + Fingertip Pad + Barre Bar)
   for (let fIdx = 1; fIdx <= 4; fIdx++) {
     const kx = knuckleX[fIdx];
-    const ky = knuckleY;
+    const ky = knuckleYMap[fIdx];
     const fColor = FINGER_COLORS[fIdx] || "#38bdf8";
     const activeTarget = activeByFinger[fIdx];
 
     if (activeTarget && activeTarget.fret > 0) {
-      const tx = fretCenterX(activeTarget.fret);
-      const ty = stringY(activeTarget.s);
+      const pAct = projectNote(activeTarget.s, activeTarget.fret, zNoteTop);
+      const tx = pAct.cx;
+      const ty = pAct.cy;
       const { jx, jy } = computeJoint(fIdx, kx, ky, tx, ty);
 
       // 5a. Outer Translucent Finger Flesh Silhouette (in backLayer, behind note dots)
       const fleshPath = document.createElementNS(ns, "path");
-      fleshPath.setAttribute("d", `M ${kx} ${ky} L ${jx} ${jy} L ${tx} ${ty}`);
+      fleshPath.setAttribute("d", `M ${kx.toFixed(1)} ${ky.toFixed(1)} L ${jx.toFixed(1)} ${jy.toFixed(1)} L ${tx.toFixed(1)} ${ty.toFixed(1)}`);
       fleshPath.setAttribute("fill", "none");
       fleshPath.setAttribute("stroke", fColor);
       fleshPath.setAttribute("stroke-width", "15");
@@ -1268,7 +2112,7 @@ function renderFretboardHandOverlay(nowRel = 0) {
 
       // 5b. Inner Articulated Bone Line (in backLayer)
       const bonePath = document.createElementNS(ns, "path");
-      bonePath.setAttribute("d", `M ${kx} ${ky} L ${jx} ${jy} L ${tx} ${ty}`);
+      bonePath.setAttribute("d", `M ${kx.toFixed(1)} ${ky.toFixed(1)} L ${jx.toFixed(1)} ${jy.toFixed(1)} L ${tx.toFixed(1)} ${ty.toFixed(1)}`);
       bonePath.setAttribute("fill", "none");
       bonePath.setAttribute("stroke", fColor);
       bonePath.setAttribute("stroke-width", "3.8");
@@ -1279,36 +2123,48 @@ function renderFretboardHandOverlay(nowRel = 0) {
 
       // Middle Knuckle Joint (PIP Joint) Dot
       const jointDot = document.createElementNS(ns, "circle");
-      jointDot.setAttribute("cx", jx);
-      jointDot.setAttribute("cy", jy);
+      jointDot.setAttribute("cx", jx.toFixed(1));
+      jointDot.setAttribute("cy", jy.toFixed(1));
       jointDot.setAttribute("r", "4.5");
       jointDot.setAttribute("fill", "#0f172a");
       jointDot.setAttribute("stroke", fColor);
       jointDot.setAttribute("stroke-width", "2");
       backLayer.appendChild(jointDot);
 
-      // 5c. If Finger 1 is in Barre Chord Mode, draw the full Index Barre Bar in tipLayer
+      // 5c. If Finger 1 is in Barre Chord Mode, draw the 3D-aligned Index Barre Capsule in tipLayer
       if (fIdx === 1 && barreInfo) {
-        const bx = fretCenterX(barreInfo.fret);
-        const yTop = stringY(barreInfo.minS) - 13;
-        const yBot = stringY(barreInfo.maxS) + 13;
-        const barreRect = document.createElementNS(ns, "rect");
-        barreRect.setAttribute("x", bx - 13);
-        barreRect.setAttribute("y", yTop);
-        barreRect.setAttribute("width", "26");
-        barreRect.setAttribute("height", Math.max(26, yBot - yTop));
-        barreRect.setAttribute("rx", "13");
-        barreRect.setAttribute("fill", "rgba(56, 189, 248, 0.18)");
-        barreRect.setAttribute("stroke", "#38bdf8");
-        barreRect.setAttribute("stroke-width", "2.4");
-        tipLayer.appendChild(barreRect);
+        const pBTop = projectNote(barreInfo.minS, barreInfo.fret, zNoteTop);
+        const pBBot = projectNote(barreInfo.maxS, barreInfo.fret, zNoteTop);
+        const bw = 21 * ((pBTop.scale + pBBot.scale) * 0.5);
+        const barreOuter = document.createElementNS(ns, "line");
+        barreOuter.setAttribute("x1", pBTop.cx.toFixed(1));
+        barreOuter.setAttribute("y1", pBTop.cy.toFixed(1));
+        barreOuter.setAttribute("x2", pBBot.cx.toFixed(1));
+        barreOuter.setAttribute("y2", pBBot.cy.toFixed(1));
+        barreOuter.setAttribute("stroke", "#38bdf8");
+        barreOuter.setAttribute("stroke-width", bw.toFixed(1));
+        barreOuter.setAttribute("stroke-linecap", "round");
+        barreOuter.setAttribute("opacity", "0.26");
+        tipLayer.appendChild(barreOuter);
+
+        const barreCore = document.createElementNS(ns, "line");
+        barreCore.setAttribute("x1", pBTop.cx.toFixed(1));
+        barreCore.setAttribute("y1", pBTop.cy.toFixed(1));
+        barreCore.setAttribute("x2", pBBot.cx.toFixed(1));
+        barreCore.setAttribute("y2", pBBot.cy.toFixed(1));
+        barreCore.setAttribute("stroke", "#38bdf8");
+        barreCore.setAttribute("stroke-width", "2.6");
+        barreCore.setAttribute("stroke-linecap", "round");
+        tipLayer.appendChild(barreCore);
       } else {
         // 5d. Anatomical Fingertip Pad + Nail Crescent around target fret (in tipLayer)
+        const padRx = 13.5 * pAct.scale;
+        const padRy = 12 * ryScale3d * pAct.scale;
         const padRing = document.createElementNS(ns, "ellipse");
-        padRing.setAttribute("cx", tx);
-        padRing.setAttribute("cy", ty);
-        padRing.setAttribute("rx", "15");
-        padRing.setAttribute("ry", "13.5");
+        padRing.setAttribute("cx", tx.toFixed(1));
+        padRing.setAttribute("cy", ty.toFixed(1));
+        padRing.setAttribute("rx", padRx.toFixed(1));
+        padRing.setAttribute("ry", padRy.toFixed(1));
         padRing.setAttribute("fill", "none");
         padRing.setAttribute("stroke", fColor);
         padRing.setAttribute("stroke-width", "2.2");
@@ -1317,21 +2173,28 @@ function renderFretboardHandOverlay(nowRel = 0) {
 
         // Fingertip Nail Crescent at top of pad
         const nailArc = document.createElementNS(ns, "path");
-        nailArc.setAttribute("d", `M ${tx - 5.5} ${ty - 9.5} Q ${tx} ${ty - 13.5} ${tx + 5.5} ${ty - 9.5}`);
+        nailArc.setAttribute(
+          "d",
+          `M ${(tx - 5 * pAct.scale).toFixed(1)} ${(ty - padRy * 0.72).toFixed(1)} Q ${tx.toFixed(1)} ${(ty - padRy * 1.02).toFixed(1)} ${(tx + 5 * pAct.scale).toFixed(1)} ${(ty - padRy * 0.72).toFixed(1)}`
+        );
         nailArc.setAttribute("fill", "none");
         nailArc.setAttribute("stroke", "#ffffff");
-        nailArc.setAttribute("stroke-width", "1.6");
+        nailArc.setAttribute("stroke-width", "1.5");
         nailArc.setAttribute("stroke-linecap", "round");
         tipLayer.appendChild(nailArc);
       }
     } else {
       // Standby / Idle Finger resting just below the lowest string at its home fret column
-      const idleTipX = kx;
-      const idleTipY = neckH - 17; // y = 223, just below 6th string
-      const idleJointY = (ky + idleTipY) / 2;
+      const fnIdle = Math.max(0.4, Math.min(frets, anchorF + (fIdx - 1)));
+      const wcIdle = noteWorldCoord(numStrings - 1, fnIdle);
+      const pIdleTip = project3D(wcIdle.wx, halfStrAt(wcIdle.t) + 6, is3D ? 2 : 0);
+      const idleTipX = pIdleTip.x;
+      const idleTipY = Math.min(ky - 12, pIdleTip.y);
+      const idleJointX = (kx + idleTipX) * 0.5;
+      const idleJointY = (ky + idleTipY) * 0.5;
 
       const idleBone = document.createElementNS(ns, "path");
-      idleBone.setAttribute("d", `M ${kx} ${ky} L ${idleTipX} ${idleJointY} L ${idleTipX} ${idleTipY}`);
+      idleBone.setAttribute("d", `M ${kx.toFixed(1)} ${ky.toFixed(1)} L ${idleJointX.toFixed(1)} ${idleJointY.toFixed(1)} L ${idleTipX.toFixed(1)} ${idleTipY.toFixed(1)}`);
       idleBone.setAttribute("fill", "none");
       idleBone.setAttribute("stroke", fColor);
       idleBone.setAttribute("stroke-width", "9");
@@ -1343,8 +2206,8 @@ function renderFretboardHandOverlay(nowRel = 0) {
     // 5e. Draw Knuckle Base Badge (①, ②, ③, ④) on the Palm
     const isFingerActive = !!(activeTarget && activeTarget.fret > 0);
     const kCircle = document.createElementNS(ns, "circle");
-    kCircle.setAttribute("cx", kx);
-    kCircle.setAttribute("cy", ky);
+    kCircle.setAttribute("cx", kx.toFixed(1));
+    kCircle.setAttribute("cy", ky.toFixed(1));
     kCircle.setAttribute("r", isFingerActive ? "10.5" : "8.5");
     kCircle.setAttribute("fill", isFingerActive ? fColor : "#0f172a");
     kCircle.setAttribute("stroke", fColor);
@@ -1352,8 +2215,8 @@ function renderFretboardHandOverlay(nowRel = 0) {
     backLayer.appendChild(kCircle);
 
     const kText = document.createElementNS(ns, "text");
-    kText.setAttribute("x", kx);
-    kText.setAttribute("y", ky + 3.8);
+    kText.setAttribute("x", kx.toFixed(1));
+    kText.setAttribute("y", (ky + 3.8).toFixed(1));
     kText.setAttribute("text-anchor", "middle");
     kText.setAttribute("fill", isFingerActive ? "#090c10" : fColor);
     kText.setAttribute("font-size", "10.5px");
@@ -1363,11 +2226,11 @@ function renderFretboardHandOverlay(nowRel = 0) {
 
     // Short finger name below knuckle when active
     const kSub = document.createElementNS(ns, "text");
-    kSub.setAttribute("x", kx);
-    kSub.setAttribute("y", ky + 20);
+    kSub.setAttribute("x", kx.toFixed(1));
+    kSub.setAttribute("y", (ky + 18).toFixed(1));
     kSub.setAttribute("text-anchor", "middle");
     kSub.setAttribute("fill", isFingerActive ? "#ffffff" : "#64748b");
-    kSub.setAttribute("font-size", "9.5px");
+    kSub.setAttribute("font-size", "9px");
     kSub.setAttribute("font-weight", isFingerActive ? "700" : "500");
     kSub.textContent = t("fingerShort_" + fIdx);
     backLayer.appendChild(kSub);
@@ -1375,12 +2238,12 @@ function renderFretboardHandOverlay(nowRel = 0) {
 
   // 6. Open String (⓪ 개방현) Nut Highlight Banner
   if (openStringTarget && openStringTarget.fret === 0) {
-    const ox = fretCenterX(0);
-    const oy = stringY(openStringTarget.s);
-    const openHalo = document.createElementNS(ns, "circle");
-    openHalo.setAttribute("cx", ox);
-    openHalo.setAttribute("cy", oy);
-    openHalo.setAttribute("r", "15");
+    const pOpen = projectNote(openStringTarget.s, 0, zNoteTop);
+    const openHalo = document.createElementNS(ns, "ellipse");
+    openHalo.setAttribute("cx", pOpen.cx.toFixed(1));
+    openHalo.setAttribute("cy", pOpen.cy.toFixed(1));
+    openHalo.setAttribute("rx", (15 * pOpen.scale).toFixed(1));
+    openHalo.setAttribute("ry", (15 * ryScale3d * pOpen.scale).toFixed(1));
     openHalo.setAttribute("fill", "none");
     openHalo.setAttribute("stroke", "#cbd5e1");
     openHalo.setAttribute("stroke-width", "2.2");
@@ -1390,6 +2253,23 @@ function renderFretboardHandOverlay(nowRel = 0) {
 }
 
 function updateFretboardLit() {
+  let rNow = null, rNext = null, rNext2 = null;
+  if (appMode === "rhythm") {
+    if (isRhythmPlaying) {
+      rNow = rhythmCurrentTarget;
+      rNext = rhythmNextTarget;
+      const pendIdx = rhythmChart.findIndex(n => n.status === "pending");
+      if (pendIdx !== -1 && pendIdx + 2 < rhythmChart.length) {
+        rNext2 = rhythmChart[pendIdx + 2];
+      }
+    } else {
+      const pChart = getCachedRhythmPreviewChart();
+      rNow = pChart[0] || null;
+      rNext = pChart[1] || null;
+      rNext2 = pChart[2] || null;
+    }
+  }
+
   for (let i = 0; i < fretboardNoteElements.length; i++) {
     const g = fretboardNoteElements[i];
     const notePc = parseInt(g.getAttribute("data-pc"), 10);
@@ -1397,15 +2277,22 @@ function updateFretboardLit() {
     const fret = parseInt(g.getAttribute("data-fret"), 10);
     const isLit = litPcs.includes(notePc);
     const isJamTarget = isJamPlaying && jamTargetChordPcs.includes(notePc);
-    const isRhythmNow = isRhythmPlaying && rhythmCurrentTarget && rhythmCurrentTarget.s === sIdx && rhythmCurrentTarget.fret === fret;
-    const isRhythmNext = isRhythmPlaying && rhythmNextTarget && rhythmNextTarget.s === sIdx && rhythmNextTarget.fret === fret && !isRhythmNow;
+    const isRhythmNow = rNow && rNow.s === sIdx && rNow.fret === fret;
+    const isRhythmNext = rNext && rNext.s === sIdx && rNext.fret === fret && !isRhythmNow;
+    const isRhythmNext2 = rNext2 && rNext2.s === sIdx && rNext2.fret === fret && !isRhythmNow && !isRhythmNext;
 
     g.classList.toggle("is-lit", isLit);
     g.classList.toggle("is-jam", isJamTarget && !isLit);
     g.classList.toggle("is-rhythm-target", !!isRhythmNow);
     g.classList.toggle("is-rhythm-next", !!isRhythmNext);
+    g.classList.toggle("is-rhythm-next2", !!isRhythmNext2);
   }
-  renderFretboardHandOverlay(isRhythmPlaying && audioCtx ? (audioCtx.currentTime - rhythmStartTime) : 0);
+  const nowRel = isRhythmPlaying && audioCtx ? (audioCtx.currentTime - rhythmStartTime) - (rhythmLatencyMs / 1000) : 0;
+  updateStringVibrationOverlay(rNow);
+  renderFretboardHandOverlay(nowRel);
+  if (appMode === "rhythm") {
+    drawRhythmHighway(nowRel);
+  }
 }
 
 function drawFB() {
@@ -1567,6 +2454,40 @@ function renderCircleOfFifths() {
   }
 }
 
+// ---------- HUD Arc Strobe Pitch Gauge Helper ----------
+function updateHudArcGauge(cents, isIdle = false) {
+  const needle = $("hudArcNeedle");
+  const pivot = $("hudArcPivot");
+  const centsTxt = $("hudArcCents");
+  if (!needle || !centsTxt) return;
+
+  if (isIdle) {
+    needle.setAttribute("x2", "58");
+    needle.setAttribute("y2", "12");
+    needle.setAttribute("stroke", "#71717a");
+    if (pivot) pivot.setAttribute("fill", "#71717a");
+    centsTxt.textContent = "0¢";
+    centsTxt.setAttribute("fill", "#71717a");
+    return;
+  }
+
+  const clamped = Math.max(-50, Math.min(50, cents));
+  const rad = ((clamped / 50) * 72 * Math.PI) / 180;
+  const x2 = (58 + 40 * Math.sin(rad)).toFixed(1);
+  const y2 = (52 - 40 * Math.cos(rad)).toFixed(1);
+  const absC = Math.abs(cents);
+  const col = absC <= 12 ? "#22c55e" : (absC <= 28 ? "#facc15" : "#ef4444");
+
+  needle.setAttribute("x2", x2);
+  needle.setAttribute("y2", y2);
+  needle.setAttribute("stroke", col);
+  if (pivot) pivot.setAttribute("fill", col);
+
+  const rounded = Math.round(cents);
+  centsTxt.textContent = `${rounded > 0 ? "+" : ""}${rounded}¢`;
+  centsTxt.setAttribute("fill", col);
+}
+
 // ---------- Update Poly & Single Note Handlers ----------
 function updatePoly(data) {
   const v = $("verdict");
@@ -1595,6 +2516,7 @@ function updatePoly(data) {
     $("degTxt").textContent = "";
     $("hz").textContent = "";
     $("needle").style.left = "50%";
+    updateHudArcGauge(0, true);
     v.textContent = (guideMode === "chord") ? t("verdictOutChord") : t("verdictOutScale");
     v.className = "verdict idle";
     return;
@@ -1624,6 +2546,7 @@ function updatePoly(data) {
     $("hz").textContent = activeNotes.map(n => `${Math.round(n.f)}Hz`).join(" · ");
   }
   $("needle").style.left = `${50 + Math.max(-50, Math.min(50, cents))}%`;
+  updateHudArcGauge(cents, false);
 
   if (isRecording) {
     const elapsed = (Date.now() - recStartTime) / 1000;
@@ -1707,6 +2630,7 @@ function update(res) {
     $("degTxt").textContent = "";
     $("hz").textContent = "";
     $("needle").style.left = "50%";
+    updateHudArcGauge(0, true);
     v.textContent = (guideMode === "chord") ? t("verdictOutChord") : t("verdictOutScale");
     v.className = "verdict idle";
     litPcs = [];
@@ -1729,6 +2653,7 @@ function update(res) {
   updateTunerUI([{ f: res.f, midi: m }]);
   $("hz").textContent = `${Math.round(res.f)}Hz`;
   $("needle").style.left = `${50 + Math.max(-50, Math.min(50, cents))}%`;
+  updateHudArcGauge(cents, false);
 
   const activeChordPcs = (currentChordPcs && currentChordPcs.length > 0) ? currentChordPcs : getChordPcs(rootPc, chordTypeVal);
 
@@ -1844,11 +2769,15 @@ async function connect(id) {
 
 async function start() {
   $("err").textContent = "";
+  const devId = $("deviceSel") ? $("deviceSel").value : "mic_default";
   try {
-    const devId = $("deviceSel").value;
     await connect(devId);
     if (devId && !devId.startsWith("asio_")) {
       await listDevices();
+      updateAsioStatusBadge("web");
+    } else {
+      updateAsioStatusBadge("ok");
+      closeAsioSmartPopover();
     }
     running = true;
     $("led").classList.add("on"); $("powerTxt").textContent = t("powerOn");
@@ -1861,8 +2790,16 @@ async function start() {
     }
     loop();
   } catch (e) {
-    $("err").textContent = e.message;
-    stop();
+    const isAsioChoice = (devId === "asio_ws" || (devId && devId.startsWith("asio_dev_")));
+    if (isAsioChoice) {
+      updateAsioStatusBadge("warn");
+      stop();
+      $("err").textContent = "";
+      openAsioSmartPopover();
+    } else {
+      $("err").textContent = e.message;
+      stop();
+    }
   }
 }
 
@@ -1895,6 +2832,7 @@ function stop() {
   $("startBtn").classList.remove("danger");
   $("bigNote").textContent = "––"; litPcs = []; updateFretboardLit();
   updateTunerUI([]);
+  updateHudArcGauge(0, true);
   refreshDynamic();
 }
 
@@ -3163,11 +4101,15 @@ function updateRhythmApproachRing(nowRel) {
   const timeUntilHit = rhythmCurrentTarget.t - nowRel;
   const lookahead = 1.6;
   const clampedRatio = Math.max(0, Math.min(1, timeUntilHit / lookahead));
+  const ryScale = (fretboardGeom && fretboardGeom.is3D)
+    ? Math.max(0.45, Math.cos(fretboardGeom.tiltRad) * 0.84)
+    : 1.0;
   const radius = 12 + clampedRatio * 20; // shrinks from 32px down to 12px at Hit time
 
-  ring.setAttribute("cx", cx);
-  ring.setAttribute("cy", cy);
-  ring.setAttribute("r", radius.toFixed(1));
+  ring.setAttribute("cx", cx.toFixed(1));
+  ring.setAttribute("cy", cy.toFixed(1));
+  ring.setAttribute("rx", radius.toFixed(1));
+  ring.setAttribute("ry", (radius * ryScale).toFixed(1));
   ring.setAttribute("stroke", FINGER_COLORS[rhythmCurrentTarget.finger] || "#38bdf8");
   ring.style.display = "block";
 }
@@ -3258,6 +4200,7 @@ function stepRhythmGame() {
       note.status = "miss";
       rhythmCounts.miss++;
       rhythmCombo = 0;
+      spawnRhythmHitParticles(note.s, "miss", note.finger, note.fret, null);
       showRhythmJudgment("miss");
       updateRhythmLiveStatsUI();
       targetChanged = true;
@@ -3357,283 +4300,669 @@ function checkRhythmHit(detectedNotes, primaryF, primaryMidi, cents = 0) {
   rhythmLastHitTime = nowAudio;
   rhythmLastHitMidi = candidate.midi;
 
-  // Spawn burst particles on Highway Hit Line
-  spawnRhythmHitParticles(candidate.s, tier, candidate.finger);
+  // Spawn burst particles & floating judgement popup directly on the Fretboard SVG
+  spawnRhythmHitParticles(candidate.s, tier, candidate.finger, candidate.fret, offsetMs);
   showRhythmJudgment(tier, offsetMs);
   updateRhythmLiveStatsUI();
 }
 
-function spawnRhythmHitParticles(sIdx, tier, fingerIdx) {
-  const canvas = $("rhythmCanvas");
-  if (!canvas) return;
-  const H = canvas.height;
-  const numStrings = strings.length;
-  const topPad = 28, botPad = 24;
-  const usableH = H - topPad - botPad;
-  const y = topPad + sIdx * (usableH / Math.max(1, numStrings - 1));
-  const hitX = 115;
-  const color = tier === "perfect" ? "#38bdf8" : (tier === "great" ? "#22c55e" : (FINGER_COLORS[fingerIdx] || "#facc15"));
+let cachedPreviewKey = "";
+let cachedPreviewChart = [];
+let rhythmPopups = [];
 
-  for (let i = 0; i < 12; i++) {
-    const angle = (Math.PI * 2 * i) / 12;
-    const speed = 1.8 + Math.random() * 2.5;
+function getCachedRhythmPreviewChart() {
+  const vKey = (guideMode === "chord" && voicingMode && currentVoicing) ? currentVoicing.name : "none";
+  const key = `${currentInstrument}_${rootPc}_${scaleId}_${guideMode}_${chordTypeVal}_${vKey}_${rhythmBoxId}_${rhythmDrillId}_${rhythmMeterId}_${rhythmSubdivId}_${rhythmNoteCount}`;
+  if (key !== cachedPreviewKey || cachedPreviewChart.length === 0) {
+    cachedPreviewKey = key;
+    cachedPreviewChart = generateRhythmChart();
+  }
+  return cachedPreviewChart;
+}
+
+function getFretNoteCoords(sIdx, fretNum) {
+  if (!fretboardGeom) return { cx: 100, cy: 100, scale: 1 };
+  if (fretboardGeom.projectNote) {
+    return fretboardGeom.projectNote(sIdx, fretNum, fretboardGeom.is3D ? 7.2 : 0);
+  }
+  const cx = fretboardGeom.fretCenterX(fretNum);
+  const cy = fretboardGeom.stringY(sIdx, fretNum);
+  return { cx, cy, scale: 1 };
+}
+
+function spawnRhythmHitParticles(sIdx, tier, fingerIdx, fretNum = 5, offsetMs = null) {
+  if (!fretboardGeom) return;
+  const { cx, cy } = getFretNoteCoords(sIdx, fretNum);
+  const color = tier === "perfect" ? "#38bdf8" : (tier === "great" ? "#22c55e" : (tier === "miss" ? "#ef4444" : (FINGER_COLORS[fingerIdx] || "#facc15")));
+
+  for (let i = 0; i < 14; i++) {
+    const angle = (Math.PI * 2 * i) / 14;
+    const speed = 1.6 + Math.random() * 2.6;
     rhythmParticles.push({
-      x: hitX,
-      y,
+      x: cx,
+      y: cy,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
       life: 1.0,
       color
     });
   }
+
+  let label = "GOOD";
+  if (tier === "perfect") label = "PERFECT!";
+  else if (tier === "great") label = "GREAT!";
+  else if (tier === "miss") label = "MISS";
+
+  const sub = (offsetMs !== null && tier !== "miss")
+    ? `${offsetMs > 0 ? "+" : ""}${offsetMs}ms${rhythmCombo >= 2 ? ` · ${rhythmCombo} COMBO` : ""}`
+    : (rhythmCombo >= 2 && tier !== "miss" ? `${rhythmCombo} COMBO` : "");
+
+  rhythmPopups.push({
+    x: cx,
+    y: cy - 18,
+    vy: -0.9,
+    life: 1.0,
+    label,
+    sub,
+    color
+  });
+}
+
+let lastBeatStripKey = "";
+function updateRhythmBeatStripUI(nowRel = 0) {
+  const meter = getRhythmMeterInfo();
+  if ($("rhythmMeterNum")) $("rhythmMeterNum").textContent = String(meter.num);
+  if ($("rhythmMeterDen")) $("rhythmMeterDen").textContent = String(meter.den);
+
+  const ledsWrap = $("rhythmBeatLeds");
+  if (!ledsWrap) return;
+
+  const stripKey = `${rhythmMeterId}_${meter.pulsesPerBar}`;
+  if (stripKey !== lastBeatStripKey || ledsWrap.children.length === 0) {
+    lastBeatStripKey = stripKey;
+    ledsWrap.innerHTML = "";
+    for (let p = 0; p < meter.pulsesPerBar; p++) {
+      if (p > 0 && meter.subAccents.includes(p)) {
+        const sep = document.createElement("span");
+        sep.className = "beat-group-sep";
+        ledsWrap.appendChild(sep);
+      }
+      const led = document.createElement("span");
+      const isStrong = (p === 0);
+      const isSub = meter.subAccents.includes(p);
+      led.className = `beat-led ${isStrong ? "accent-strong" : (isSub ? "accent-sub" : "accent-weak")}`;
+      led.setAttribute("data-pulse", p);
+      led.textContent = String(p + 1);
+      ledsWrap.appendChild(led);
+    }
+  }
+
+  let activePulse = 0;
+  let barText = "BAR 1";
+  if (isRhythmPlaying) {
+    const pIdx = Math.floor(nowRel / meter.pulseSec);
+    activePulse = ((pIdx % meter.pulsesPerBar) + meter.pulsesPerBar) % meter.pulsesPerBar;
+    if (nowRel < 0) {
+      const beatsLeft = Math.ceil(Math.abs(nowRel) / meter.pulseSec);
+      barText = `READY -${beatsLeft}`;
+    } else {
+      barText = `BAR ${Math.floor(pIdx / meter.pulsesPerBar) + 1}`;
+    }
+  }
+
+  if ($("rhythmBarCounter")) $("rhythmBarCounter").textContent = barText;
+  const leds = ledsWrap.querySelectorAll(".beat-led");
+  leds.forEach(led => {
+    const p = parseInt(led.getAttribute("data-pulse"), 10);
+    led.classList.toggle("active", p === activePulse);
+  });
 }
 
 function drawRhythmHighway(nowRel = 0) {
-  const canvas = $("rhythmCanvas");
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const W = canvas.width;
-  const H = canvas.height;
+  updateRhythmBeatStripUI(nowRel);
 
-  ctx.clearRect(0, 0, W, H);
+  const backLayer = $("fretboardRhythmBackLayer");
+  const frontLayer = $("fretboardRhythmFrontLayer");
+  if (!backLayer || !frontLayer || !fretboardGeom) return;
 
-  // Background gradient
-  const bgGrad = ctx.createLinearGradient(0, 0, W, 0);
-  bgGrad.addColorStop(0, "#0b111c");
-  bgGrad.addColorStop(0.16, "#090e17");
-  bgGrad.addColorStop(1, "#06090f");
-  ctx.fillStyle = bgGrad;
-  ctx.fillRect(0, 0, W, H);
+  backLayer.innerHTML = "";
+  frontLayer.innerHTML = "";
 
-  const numStrings = strings.length;
-  const topPad = 28, botPad = 24;
-  const usableH = H - topPad - botPad;
-  const hitX = 115;
-  const lookaheadSec = 2.6;
-  const pxPerSec = (W - hitX - 30) / lookaheadSec;
-  const laneY = (sIdx) => topPad + sIdx * (usableH / Math.max(1, numStrings - 1));
+  if (appMode !== "rhythm") return;
 
-  // 1. Draw vertical pulse, sub-accent, & bar lines according to Time Signature (4/4, 3/4, 6/8, 12/8, etc.)
+  const {
+    fretRatio, project3D, projectNote, noteWorldCoord,
+    wxAtRatio, halfNeckAt, strYWorld,
+    is3D, tiltRad, frets
+  } = fretboardGeom;
+  const ns = "http://www.w3.org/2000/svg";
   const meter = getRhythmMeterInfo();
   const pulseSec = meter.pulseSec;
-  const pulsesPerBar = meter.pulsesPerBar;
-  const firstPulse = Math.floor((nowRel - 0.3) / pulseSec);
-  const lastPulse = Math.ceil((nowRel + lookaheadSec) / pulseSec);
+  const ryScale = is3D ? Math.max(0.45, Math.cos(tiltRad) * 0.84) : 1.0;
 
-  for (let pIdx = firstPulse; pIdx <= lastPulse; pIdx++) {
-    if (pIdx < 0) continue;
-    const pTime = pIdx * pulseSec;
-    const x = hitX + (pTime - nowRel) * pxPerSec;
-    if (x < 65 || x > W) continue;
+  // Pulse the Fret Box Zone border in sync with the current beat
+  const boxRect = $("rhythmBoxZoneRect");
+  if (boxRect) {
+    const beatFrac = isRhythmPlaying
+      ? 1.0 - (((nowRel / pulseSec) % 1 + 1) % 1)
+      : 0.65;
+    const strokeAlpha = (0.28 + beatFrac * 0.45).toFixed(2);
+    boxRect.setAttribute("stroke", `rgba(56, 189, 248, ${strokeAlpha})`);
+    boxRect.setAttribute("stroke-width", (1.2 + beatFrac * 1.4).toFixed(1));
+  }
 
-    const pulseInBar = pIdx % pulsesPerBar;
-    const isBar = (pulseInBar === 0);
-    const isSubAccent = meter.subAccents.includes(pulseInBar);
+  // Determine active sequence notes on the Fretboard: n0 (NOW), n1 (NEXT +1), n2 (+2), and prevNote
+  const activeChart = (isRhythmPlaying && rhythmChart.length > 0) ? rhythmChart : getCachedRhythmPreviewChart();
+  let idx0 = 0;
+  if (isRhythmPlaying) {
+    idx0 = activeChart.findIndex(n => n.status === "pending");
+  }
 
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(x, topPad - 12);
-    ctx.lineTo(x, H - botPad + 10);
-    if (isBar) {
-      ctx.strokeStyle = "rgba(226, 232, 240, 0.42)";
-      ctx.lineWidth = 2.0;
-    } else if (isSubAccent) {
-      ctx.strokeStyle = "rgba(56, 189, 248, 0.32)";
-      ctx.lineWidth = 1.4;
-      ctx.setLineDash([4, 3]);
+  const n0 = (idx0 !== -1 && idx0 < activeChart.length) ? activeChart[idx0] : null;
+  let repeatCount = 1;
+  if (n0 && idx0 !== -1) {
+    for (let k = idx0 + 1; k < activeChart.length; k++) {
+      if (activeChart[k].s === n0.s && activeChart[k].fret === n0.fret) repeatCount++;
+      else break;
+    }
+  }
+
+  const prevNote = (isRhythmPlaying && idx0 > 0) ? activeChart[idx0 - 1] : null;
+  if (!isRhythmPlaying && n0) {
+    setActiveFingerPill(n0.finger);
+  }
+
+  const idx1 = (idx0 !== -1 && idx0 + repeatCount < activeChart.length) ? (idx0 + repeatCount) : -1;
+  const n1 = idx1 !== -1 ? activeChart[idx1] : null;
+  let idx2 = -1;
+  if (idx1 !== -1) {
+    for (let k = idx1 + 1; k < activeChart.length; k++) {
+      if (activeChart[k].s !== n1.s || activeChart[k].fret !== n1.fret) {
+        idx2 = k;
+        break;
+      }
+    }
+  }
+  const n2 = idx2 !== -1 ? activeChart[idx2] : null;
+
+  // Helper to build a 3D/2D projected quad polygon in world coordinates
+  const makeQuadPoly = (pts, fill, fillOpacity, stroke, strokeWidth, dash = null) => {
+    const poly = document.createElementNS(ns, "polygon");
+    poly.setAttribute("points", pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" "));
+    if (fill) poly.setAttribute("fill", fill);
+    if (fillOpacity !== null && fillOpacity !== undefined) poly.setAttribute("fill-opacity", String(fillOpacity));
+    if (stroke) {
+      poly.setAttribute("stroke", stroke);
+      poly.setAttribute("stroke-width", String(strokeWidth || 1.4));
+    }
+    if (dash) poly.setAttribute("stroke-dasharray", dash);
+    return poly;
+  };
+
+  const getFretRatioSpan = (fretNum) => {
+    if (fretNum <= 0) {
+      const wc0 = noteWorldCoord(0, 0);
+      return { isOpen: true, xA: wc0.wx - 11, xB: wc0.wx + 11, tA: 0, tB: 0 };
+    }
+    const fC = Math.min(frets, fretNum);
+    const tA = fretRatio[fC - 1];
+    const tB = fretRatio[fC];
+    return { isOpen: false, xA: wxAtRatio(tA), xB: wxAtRatio(tB), tA, tB };
+  };
+
+  // 1. BACK LAYER: 3D-Projected Fret Column Glow & Fret Cell Energy Fill Gauge
+  if (n0) {
+    const span0 = getFretRatioSpan(n0.fret);
+    const fColor = FINGER_COLORS[n0.finger] || "#38bdf8";
+    const zBack = is3D ? 0.8 : 0;
+    const zCell = is3D ? 1.5 : 0;
+
+    let fillRatio = 0.72;
+    if (isRhythmPlaying) {
+      const tStart = prevNote ? prevNote.t : (n0.t - pulseSec * 2);
+      const span = Math.max(0.15, n0.t - tStart);
+      fillRatio = Math.max(0.05, Math.min(1.0, 1.0 - (n0.t - nowRel) / span));
+    }
+
+    // Subtle full-column vertical highlight projected onto wood surface
+    const colPts = [
+      project3D(span0.xA, -halfNeckAt(span0.tA) + 2, zBack),
+      project3D(span0.xB, -halfNeckAt(span0.tB) + 2, zBack),
+      project3D(span0.xB, halfNeckAt(span0.tB) - 2, zBack),
+      project3D(span0.xA, halfNeckAt(span0.tA) - 2, zBack)
+    ];
+    backLayer.appendChild(makeQuadPoly(colPts, fColor, "0.10", null, 0));
+
+    // Target Fret Cell Container around (n0.fret, n0.s)
+    const cTA = span0.isOpen ? 0 : span0.tA + (span0.tB - span0.tA) * 0.06;
+    const cTB = span0.isOpen ? 0 : span0.tB - (span0.tB - span0.tA) * 0.06;
+    const cXA = span0.isOpen ? span0.xA + 1 : wxAtRatio(cTA);
+    const cXB = span0.isOpen ? span0.xB - 1 : wxAtRatio(cTB);
+    const cyMidA = strYWorld(n0.s, cTA);
+    const cyMidB = strYWorld(n0.s, cTB);
+    const cellPts = [
+      project3D(cXA, cyMidA - 10.5, zCell),
+      project3D(cXB, cyMidB - 10.5, zCell),
+      project3D(cXB, cyMidB + 10.5, zCell),
+      project3D(cXA, cyMidA + 10.5, zCell)
+    ];
+    const cellPoly = makeQuadPoly(cellPts, "rgba(15, 23, 42, 0.58)", "1", fColor, "1.8");
+    cellPoly.setAttribute("stroke-opacity", "0.88");
+    backLayer.appendChild(cellPoly);
+
+    // Rising Energy Fill Bar inside the 3D Fret Cell
+    const cXFill = cXA + (cXB - cXA) * fillRatio;
+    const cyMidF = cyMidA + (cyMidB - cyMidA) * fillRatio;
+    const fillPts = [
+      project3D(cXA, cyMidA - 9.5, zCell),
+      project3D(cXFill, cyMidF - 9.5, zCell),
+      project3D(cXFill, cyMidF + 9.5, zCell),
+      project3D(cXA, cyMidA + 9.5, zCell)
+    ];
+    backLayer.appendChild(makeQuadPoly(fillPts, fColor, (0.20 + fillRatio * 0.25).toFixed(2), null, 0));
+  }
+
+  // Also prime the NEXT (+1) fret cell in the back layer
+  if (n1 && (!n0 || n1.s !== n0.s || n1.fret !== n0.fret)) {
+    const span1 = getFretRatioSpan(n1.fret);
+    const nextColor = FINGER_COLORS[n1.finger] || "#38bdf8";
+    const zNext = is3D ? 1.4 : 0;
+    const nTA = span1.isOpen ? 0 : span1.tA + (span1.tB - span1.tA) * 0.08;
+    const nTB = span1.isOpen ? 0 : span1.tB - (span1.tB - span1.tA) * 0.08;
+    const nXA = span1.isOpen ? span1.xA + 2 : wxAtRatio(nTA);
+    const nXB = span1.isOpen ? span1.xB - 2 : wxAtRatio(nTB);
+    const nyMidA = strYWorld(n1.s, nTA);
+    const nyMidB = strYWorld(n1.s, nTB);
+    const nextPts = [
+      project3D(nXA, nyMidA - 9.5, zNext),
+      project3D(nXB, nyMidB - 9.5, zNext),
+      project3D(nXB, nyMidB + 9.5, zNext),
+      project3D(nXA, nyMidA + 9.5, zNext)
+    ];
+    const nextPoly = makeQuadPoly(nextPts, nextColor, "0.08", nextColor, "1.3", "4 3");
+    nextPoly.setAttribute("stroke-opacity", "0.68");
+    backLayer.appendChild(nextPoly);
+  }
+
+  // 2. FRONT LAYER (3D ONLY): Z-Axis Hologram Light Pillar & Floating Rings above NOW Target
+  if (n0 && is3D) {
+    const wc0 = noteWorldCoord(n0.s, n0.fret);
+    const pPBaseL = project3D(wc0.wx - 11, wc0.wy, 7);
+    const pPBaseR = project3D(wc0.wx + 11, wc0.wy, 7);
+    const pPTopR = project3D(wc0.wx + 6.5, wc0.wy, 86);
+    const pPTopL = project3D(wc0.wx - 6.5, wc0.wy, 86);
+    const pillarPoly = document.createElementNS(ns, "polygon");
+    pillarPoly.setAttribute(
+      "points",
+      [pPBaseL, pPBaseR, pPTopR, pPTopL].map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")
+    );
+    pillarPoly.setAttribute("fill", "url(#rhythmPillarGrad)");
+    pillarPoly.setAttribute("filter", "url(#glow3dSoft)");
+    frontLayer.appendChild(pillarPoly);
+
+    // Floating Z-rings along light beam
+    [
+      { z: 26, r: 10.5, op: "0.45" },
+      { z: 54, r: 8.5, op: "0.26" }
+    ].forEach(zr => {
+      const pz = project3D(wc0.wx, wc0.wy, zr.z);
+      const zRing = document.createElementNS(ns, "ellipse");
+      zRing.setAttribute("cx", pz.x.toFixed(1));
+      zRing.setAttribute("cy", pz.y.toFixed(1));
+      zRing.setAttribute("rx", (zr.r * pz.scale).toFixed(1));
+      zRing.setAttribute("ry", (zr.r * ryScale * pz.scale).toFixed(1));
+      zRing.setAttribute("fill", "none");
+      zRing.setAttribute("stroke", "#facc15");
+      zRing.setAttribute("stroke-width", "1.4");
+      zRing.setAttribute("opacity", zr.op);
+      frontLayer.appendChild(zRing);
+    });
+  }
+
+  // Helper to evaluate 3D Z-space elevated trajectory arc & ground shadow curve
+  const buildArcGeometry = (fromNote, toNote, liftSign = -1) => {
+    const wcA = noteWorldCoord(fromNote.s, fromNote.fret);
+    const wcB = noteWorldCoord(toNote.s, toNote.fret);
+    const worldDist = Math.hypot(wcB.wx - wcA.wx, wcB.wy - wcA.wy);
+    const maxLiftZ = is3D ? Math.min(54, Math.max(24, worldDist * 0.28)) : 0;
+    const ctrlWy2D = Math.min(wcA.wy, wcB.wy) + liftSign * Math.min(44, Math.max(20, worldDist * 0.34));
+
+    const evalPt = (t) => {
+      const wx = wcA.wx + (wcB.wx - wcA.wx) * t;
+      if (is3D) {
+        const wy = wcA.wy + (wcB.wy - wcA.wy) * t;
+        const wz = 8 + Math.sin(t * Math.PI) * maxLiftZ;
+        const pAir = project3D(wx, wy, wz);
+        const pGnd = project3D(wx, wy, 1.4);
+        return { x: pAir.x, y: pAir.y, scale: pAir.scale, gx: pGnd.x, gy: pGnd.y, gScale: pGnd.scale };
+      }
+      const u = 1 - t;
+      const wyPara = u * u * wcA.wy + 2 * u * t * ctrlWy2D + t * t * wcB.wy;
+      const p2D = project3D(wx, wyPara, 0);
+      return { x: p2D.x, y: p2D.y, scale: 1, gx: p2D.x, gy: p2D.y, gScale: 1 };
+    };
+
+    const samplePaths = (samples = 22) => {
+      let dAir = "";
+      let dGnd = "";
+      for (let i = 0; i <= samples; i++) {
+        const pt = evalPt(i / samples);
+        dAir += (i === 0 ? "M " : "L ") + `${pt.x.toFixed(1)} ${pt.y.toFixed(1)} `;
+        dGnd += (i === 0 ? "M " : "L ") + `${pt.gx.toFixed(1)} ${pt.gy.toFixed(1)} `;
+      }
+      return { dAir, dGnd };
+    };
+
+    return { wcA, wcB, worldDist, evalPt, samplePaths };
+  };
+
+  // 3. 3-Note Parabolic 3D Trajectory Chain (NOW -> NEXT +1 -> +2) + Ground Shadow
+  if (n1 && n2 && (n1.s !== n2.s || n1.fret !== n2.fret)) {
+    const arc12 = buildArcGeometry(n1, n2, -1);
+    const { dAir, dGnd } = arc12.samplePaths(20);
+    if (is3D) {
+      const sh12 = document.createElementNS(ns, "path");
+      sh12.setAttribute("d", dGnd);
+      sh12.setAttribute("fill", "none");
+      sh12.setAttribute("stroke", "rgba(0,0,0,0.34)");
+      sh12.setAttribute("stroke-width", "2.6");
+      sh12.setAttribute("stroke-dasharray", "3 4");
+      frontLayer.appendChild(sh12);
+    }
+    const path12 = document.createElementNS(ns, "path");
+    path12.setAttribute("d", dAir);
+    path12.setAttribute("fill", "none");
+    path12.setAttribute("stroke", "#c084fc");
+    path12.setAttribute("stroke-width", "1.9");
+    path12.setAttribute("stroke-dasharray", "3 4");
+    path12.setAttribute("opacity", "0.78");
+    frontLayer.appendChild(path12);
+  }
+
+  let arc01 = null;
+  if (n0 && n1 && (n0.s !== n1.s || n0.fret !== n1.fret)) {
+    arc01 = buildArcGeometry(n0, n1, -1);
+    const { dAir, dGnd } = arc01.samplePaths(24);
+    if (is3D) {
+      const sh01 = document.createElementNS(ns, "path");
+      sh01.setAttribute("d", dGnd);
+      sh01.setAttribute("fill", "none");
+      sh01.setAttribute("stroke", "rgba(0,0,0,0.45)");
+      sh01.setAttribute("stroke-width", "3.8");
+      sh01.setAttribute("stroke-dasharray", "4 3");
+      frontLayer.appendChild(sh01);
+    }
+    const path01 = document.createElementNS(ns, "path");
+    path01.setAttribute("d", dAir);
+    path01.setAttribute("fill", "none");
+    path01.setAttribute("stroke", "url(#rhythmLaserGrad)");
+    path01.setAttribute("stroke-width", "3.2");
+    path01.setAttribute("stroke-linecap", "round");
+    path01.setAttribute("opacity", "0.95");
+    if (is3D) path01.setAttribute("filter", "url(#glow3dSoft)");
+    frontLayer.appendChild(path01);
+  }
+
+  // 4. Bouncing Rhythm Orb (탄도 바운싱 리듬 구슬 + 3D 지면 그림자 + 혜성 잔상)
+  let orbArc = null;
+  let orbProgress = 0.48;
+  if (isRhythmPlaying && n0) {
+    if (prevNote && (prevNote.s !== n0.s || prevNote.fret !== n0.fret)) {
+      orbArc = buildArcGeometry(prevNote, n0, -1);
+      const span = Math.max(0.12, n0.t - prevNote.t);
+      orbProgress = Math.max(0, Math.min(1, (nowRel - prevNote.t) / span));
+    } else if (arc01) {
+      const timeUntil = n0.t - nowRel;
+      if (timeUntil > 0) {
+        const launchNote = { s: n0.s, fret: Math.max(0, n0.fret - 2) };
+        orbArc = buildArcGeometry(launchNote, n0, -1);
+        orbProgress = Math.max(0, Math.min(1, 1.0 - timeUntil / (pulseSec * 2)));
+      }
+    }
+  } else if (!isRhythmPlaying && arc01) {
+    orbArc = arc01;
+    orbProgress = 0.46;
+  }
+
+  if (orbArc) {
+    // Draw 3 comet trail afterimages behind the Bouncing Orb
+    [0.16, 0.10, 0.05].forEach((lag, idx) => {
+      const tp = Math.max(0, orbProgress - lag);
+      const pt = orbArc.evalPt(tp);
+      const trailDot = document.createElementNS(ns, "circle");
+      trailDot.setAttribute("cx", pt.x.toFixed(1));
+      trailDot.setAttribute("cy", pt.y.toFixed(1));
+      trailDot.setAttribute("r", ((2.4 + idx * 1.1) * pt.scale).toFixed(1));
+      trailDot.setAttribute("fill", "#38bdf8");
+      trailDot.setAttribute("fill-opacity", (0.22 + idx * 0.16).toFixed(2));
+      frontLayer.appendChild(trailDot);
+    });
+
+    const orbPt = orbArc.evalPt(orbProgress);
+    if (is3D) {
+      const orbGndShadow = document.createElementNS(ns, "ellipse");
+      orbGndShadow.setAttribute("cx", orbPt.gx.toFixed(1));
+      orbGndShadow.setAttribute("cy", orbPt.gy.toFixed(1));
+      orbGndShadow.setAttribute("rx", (8.5 * orbPt.gScale).toFixed(1));
+      orbGndShadow.setAttribute("ry", (8.5 * ryScale * orbPt.gScale).toFixed(1));
+      orbGndShadow.setAttribute("fill", "rgba(0,0,0,0.52)");
+      frontLayer.appendChild(orbGndShadow);
+    }
+
+    const orbHalo = document.createElementNS(ns, "circle");
+    orbHalo.setAttribute("cx", orbPt.x.toFixed(1));
+    orbHalo.setAttribute("cy", orbPt.y.toFixed(1));
+    orbHalo.setAttribute("r", (11 * orbPt.scale).toFixed(1));
+    orbHalo.setAttribute("fill", "rgba(250, 204, 21, 0.25)");
+    orbHalo.setAttribute("stroke", "#38bdf8");
+    orbHalo.setAttribute("stroke-width", "1.4");
+    frontLayer.appendChild(orbHalo);
+
+    const orbCore = document.createElementNS(ns, "circle");
+    orbCore.setAttribute("cx", orbPt.x.toFixed(1));
+    orbCore.setAttribute("cy", orbPt.y.toFixed(1));
+    orbCore.setAttribute("r", (6 * orbPt.scale).toFixed(1));
+    orbCore.setAttribute("fill", "#facc15");
+    orbCore.setAttribute("stroke", "#ffffff");
+    orbCore.setAttribute("stroke-width", "1.8");
+    frontLayer.appendChild(orbCore);
+  }
+
+  // 5. Shrinking Precision Reticle & Non-Overlapping Corner Superscript Badges
+  const drawCornerStepBadge = (cx, cy, labelText, badgeBg, badgeStroke, textCol, dx = 11, dy = -10) => {
+    const bx = cx + dx;
+    const by = cy + dy;
+    const isWide = labelText.length > 1;
+    if (isWide) {
+      const w = Math.max(20, labelText.length * 6 + 8);
+      const h = 14;
+      const rect = document.createElementNS(ns, "rect");
+      rect.setAttribute("x", (bx - w / 2).toFixed(1));
+      rect.setAttribute("y", (by - h / 2).toFixed(1));
+      rect.setAttribute("width", w.toFixed(1));
+      rect.setAttribute("height", h);
+      rect.setAttribute("rx", "7");
+      rect.setAttribute("fill", badgeBg);
+      rect.setAttribute("stroke", badgeStroke);
+      rect.setAttribute("stroke-width", "1.3");
+      frontLayer.appendChild(rect);
     } else {
-      ctx.strokeStyle = "rgba(71, 85, 105, 0.22)";
-      ctx.lineWidth = 1;
+      const circ = document.createElementNS(ns, "circle");
+      circ.setAttribute("cx", bx.toFixed(1));
+      circ.setAttribute("cy", by.toFixed(1));
+      circ.setAttribute("r", "7.5");
+      circ.setAttribute("fill", badgeBg);
+      circ.setAttribute("stroke", badgeStroke);
+      circ.setAttribute("stroke-width", "1.4");
+      frontLayer.appendChild(circ);
     }
-    ctx.stroke();
-    ctx.restore();
 
-    if (isBar) {
-      ctx.fillStyle = "#cbd5e1";
-      ctx.font = "700 10px 'IBM Plex Mono', monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(`BAR ${Math.floor(pIdx / pulsesPerBar) + 1}`, x, 13);
+    const txt = document.createElementNS(ns, "text");
+    txt.setAttribute("x", bx.toFixed(1));
+    txt.setAttribute("y", (by + 3.4).toFixed(1));
+    txt.setAttribute("text-anchor", "middle");
+    txt.setAttribute("fill", textCol);
+    txt.setAttribute("font-size", isWide ? "8.5px" : "9.5px");
+    txt.setAttribute("font-weight", "800");
+    txt.setAttribute("font-family", "'IBM Plex Mono', monospace");
+    txt.textContent = labelText;
+    frontLayer.appendChild(txt);
+  };
+
+  if (n2 && (!n0 || n2.s !== n0.s || n2.fret !== n0.fret) && (!n1 || n2.s !== n1.s || n2.fret !== n1.fret)) {
+    const { cx, cy } = getFretNoteCoords(n2.s, n2.fret);
+    drawCornerStepBadge(cx, cy, "2", "#7e22ce", "#f3e8ff", "#ffffff", 11, -10);
+  }
+
+  if (n1 && (!n0 || n1.s !== n0.s || n1.fret !== n0.fret)) {
+    const { cx, cy } = getFretNoteCoords(n1.s, n1.fret);
+    drawCornerStepBadge(cx, cy, "1", "#0284c7", "#bae6fd", "#ffffff", 11, -10);
+  }
+
+  if (n0) {
+    const { cx, cy, scale } = getFretNoteCoords(n0.s, n0.fret);
+    const fColor = FINGER_COLORS[n0.finger] || "#facc15";
+
+    let ringR = 20 * (scale || 1);
+    if (isRhythmPlaying) {
+      const timeUntil = n0.t - nowRel;
+      const ratio = Math.max(0, Math.min(1, timeUntil / 1.5));
+      ringR = (12 + ratio * 22) * (scale || 1);
     } else {
-      ctx.fillStyle = isSubAccent ? "#38bdf8" : "#475569";
-      ctx.font = "600 9.5px 'IBM Plex Mono', monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(`${pulseInBar + 1}`, x, 13);
+      const ringEl = $("rhythmApproachRing");
+      if (ringEl) {
+        ringEl.setAttribute("cx", cx.toFixed(1));
+        ringEl.setAttribute("cy", cy.toFixed(1));
+        ringEl.setAttribute("rx", ringR.toFixed(1));
+        ringEl.setAttribute("ry", (ringR * ryScale).toFixed(1));
+        ringEl.setAttribute("stroke", fColor);
+        ringEl.style.display = "block";
+      }
+    }
+
+    // 4 Cardinal Reticle Ticks foreshortened to match 3D ellipse ring
+    [0, Math.PI / 2, Math.PI, (Math.PI * 3) / 2].forEach(ang => {
+      const rIn = ringR + 1;
+      const rOut = ringR + 5.5;
+      const tick = document.createElementNS(ns, "line");
+      tick.setAttribute("x1", (cx + Math.cos(ang) * rIn).toFixed(1));
+      tick.setAttribute("y1", (cy + Math.sin(ang) * rIn * ryScale).toFixed(1));
+      tick.setAttribute("x2", (cx + Math.cos(ang) * rOut).toFixed(1));
+      tick.setAttribute("y2", (cy + Math.sin(ang) * rOut * ryScale).toFixed(1));
+      tick.setAttribute("stroke", "#facc15");
+      tick.setAttribute("stroke-width", "2");
+      tick.setAttribute("stroke-linecap", "round");
+      frontLayer.appendChild(tick);
+    });
+
+    if (repeatCount > 1) {
+      drawCornerStepBadge(cx, cy, `×${repeatCount}`, "#18181b", "#facc15", "#fde047", -12, -11);
     }
   }
 
-  // Draw Time Signature Emblem (e.g., 4/4, 3/4, 6/8, 12/8) at top-left of Highway
-  ctx.save();
-  ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
-  ctx.strokeStyle = "rgba(56, 189, 248, 0.4)";
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.roundRect(8, 6, 30, 34, 6);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = "#38bdf8";
-  ctx.font = "800 13px 'Oswald', sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText(String(meter.num), 23, 20);
-  ctx.beginPath();
-  ctx.moveTo(13, 23);
-  ctx.lineTo(33, 23);
-  ctx.strokeStyle = "#475569";
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.fillStyle = "#e2e8f0";
-  ctx.fillText(String(meter.den), 23, 36);
-  ctx.restore();
-
-  // 2. Draw string lanes and left string labels
-  for (let s = 0; s < numStrings; s++) {
-    const y = laneY(s);
-    const isTargetLane = isRhythmPlaying && rhythmCurrentTarget && rhythmCurrentTarget.s === s;
-
-    if (isTargetLane) {
-      ctx.fillStyle = "rgba(56, 189, 248, 0.06)";
-      ctx.fillRect(65, y - 13, W - 65, 26);
-    }
-
-    ctx.beginPath();
-    ctx.moveTo(65, y);
-    ctx.lineTo(W, y);
-    ctx.strokeStyle = isTargetLane ? "#38bdf8" : "#334155";
-    ctx.lineWidth = (currentInstrument === "bass") ? (1.6 + s * 0.7) : (1.0 + s * 0.4);
-    ctx.stroke();
-
-    // Left string badge (e.g., 1E, 2B, 3G...)
-    const strNote = NOTE[pc(strings[s])];
-    ctx.fillStyle = isTargetLane ? "#38bdf8" : "#94a3b8";
-    ctx.font = "700 11px 'IBM Plex Mono', monospace";
-    ctx.textAlign = "right";
-    ctx.fillText(`${s + 1}${strNote}`, 54, y + 4);
-  }
-
-  // 3. Draw Hit Zone Line & Target Receptors
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(hitX, topPad - 14);
-  ctx.lineTo(hitX, H - botPad + 14);
-  ctx.strokeStyle = "#38bdf8";
-  ctx.lineWidth = 2.5;
-  ctx.shadowColor = "#38bdf8";
-  ctx.shadowBlur = 10;
-  ctx.stroke();
-  ctx.restore();
-
-  for (let s = 0; s < numStrings; s++) {
-    const y = laneY(s);
-    ctx.beginPath();
-    ctx.arc(hitX, y, 7, 0, Math.PI * 2);
-    ctx.fillStyle = "#0b0e12";
-    ctx.fill();
-    ctx.strokeStyle = (isRhythmPlaying && rhythmCurrentTarget && rhythmCurrentTarget.s === s) ? "#facc15" : "#475569";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }
-
-  // 4. If idle preview, generate a preview chart so user sees the current box & finger badges immediately
-  const activeChart = (isRhythmPlaying && rhythmChart.length > 0) ? rhythmChart : generateRhythmChart();
-
-  // 5. Draw scrolling note capsules with Fret + Note/Degree + Finger Badge
-  for (let i = 0; i < activeChart.length; i++) {
-    const note = activeChart[i];
-    if (note.status === "perfect" || note.status === "great" || note.status === "good") continue;
-
-    const x = hitX + (note.t - nowRel) * pxPerSec;
-    if (x < 55 || x > W + 45) continue;
-
-    const y = laneY(note.s);
-    const isMiss = (note.status === "miss");
-    const isCurrent = (isRhythmPlaying && rhythmCurrentTarget && rhythmCurrentTarget.idx === note.idx);
-    const fingerColor = FINGER_COLORS[note.finger] || "#38bdf8";
-
-    const capW = 68;
-    const capH = 22;
-    const rx = x - capW / 2;
-    const ry = y - capH / 2;
-
-    ctx.save();
-    if (isMiss) ctx.globalAlpha = 0.35;
-
-    // Capsule body
-    ctx.beginPath();
-    ctx.roundRect(rx, ry, capW, capH, 11);
-    ctx.fillStyle = isMiss ? "#334155" : (note.isRoot ? "#dc2626" : "#0f172a");
-    ctx.fill();
-    ctx.lineWidth = isCurrent ? 2.5 : 1.8;
-    ctx.strokeStyle = isCurrent ? "#facc15" : (note.isRoot ? "#f87171" : fingerColor);
-    if (isCurrent) {
-      ctx.shadowColor = "#facc15";
-      ctx.shadowBlur = 10;
-    }
-    ctx.stroke();
-
-    // Left text inside capsule: Fret + Note/Deg (e.g., "5F·A" or "5F·1")
-    const subLabel = (labelMode === "deg") ? note.deg : NOTE[note.pc];
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "700 11px 'IBM Plex Mono', monospace";
-    ctx.textAlign = "left";
-    ctx.shadowBlur = 0;
-    ctx.fillText(`${note.fret}F·${subLabel}`, rx + 7, y + 4);
-
-    // Right Finger Badge circle inside capsule (⓪~④)
-    const badgeX = rx + capW - 12;
-    ctx.beginPath();
-    ctx.arc(badgeX, y, 8.5, 0, Math.PI * 2);
-    ctx.fillStyle = fingerColor;
-    ctx.fill();
-
-    ctx.fillStyle = "#090c10";
-    ctx.font = "800 10.5px 'Inter', sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(String(note.finger), badgeX, y + 3.8);
-
-    ctx.restore();
-  }
-
-  // 6. Update & draw hit burst particles
+  // 5. Render On-Fretboard Burst Particles & Floating Judgement Popups (PERFECT!, GREAT!, COMBO)
   for (let i = rhythmParticles.length - 1; i >= 0; i--) {
     const p = rhythmParticles[i];
     p.x += p.vx;
     p.y += p.vy;
-    p.life -= 0.06;
+    p.life -= 0.055;
     if (p.life <= 0) {
       rhythmParticles.splice(i, 1);
       continue;
     }
-    ctx.save();
-    ctx.globalAlpha = p.life;
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 3.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    const dot = document.createElementNS(ns, "circle");
+    dot.setAttribute("cx", p.x.toFixed(1));
+    dot.setAttribute("cy", p.y.toFixed(1));
+    dot.setAttribute("r", (3.6 * p.life).toFixed(1));
+    dot.setAttribute("fill", p.color);
+    dot.setAttribute("fill-opacity", p.life.toFixed(2));
+    frontLayer.appendChild(dot);
   }
 
-  // 7. Count-in overlay when nowRel < 0
+  for (let i = rhythmPopups.length - 1; i >= 0; i--) {
+    const pop = rhythmPopups[i];
+    pop.y += pop.vy;
+    pop.life -= 0.035;
+    if (pop.life <= 0) {
+      rhythmPopups.splice(i, 1);
+      continue;
+    }
+    const gPop = document.createElementNS(ns, "g");
+    gPop.setAttribute("opacity", Math.min(1, pop.life * 1.4).toFixed(2));
+
+    const mainTxt = document.createElementNS(ns, "text");
+    mainTxt.setAttribute("x", pop.x.toFixed(1));
+    mainTxt.setAttribute("y", pop.y.toFixed(1));
+    mainTxt.setAttribute("text-anchor", "middle");
+    mainTxt.setAttribute("fill", pop.color);
+    mainTxt.setAttribute("stroke", "#090c10");
+    mainTxt.setAttribute("stroke-width", "3");
+    mainTxt.setAttribute("paint-order", "stroke");
+    mainTxt.setAttribute("font-size", "14px");
+    mainTxt.setAttribute("font-weight", "900");
+    mainTxt.setAttribute("font-family", "'Oswald', sans-serif");
+    mainTxt.textContent = pop.label;
+    gPop.appendChild(mainTxt);
+
+    if (pop.sub) {
+      const subTxt = document.createElementNS(ns, "text");
+      subTxt.setAttribute("x", pop.x.toFixed(1));
+      subTxt.setAttribute("y", (pop.y + 12).toFixed(1));
+      subTxt.setAttribute("text-anchor", "middle");
+      subTxt.setAttribute("fill", "#f8fafc");
+      subTxt.setAttribute("stroke", "#090c10");
+      subTxt.setAttribute("stroke-width", "2.5");
+      subTxt.setAttribute("paint-order", "stroke");
+      subTxt.setAttribute("font-size", "9.5px");
+      subTxt.setAttribute("font-weight", "700");
+      subTxt.setAttribute("font-family", "'IBM Plex Mono', monospace");
+      subTxt.textContent = pop.sub;
+      gPop.appendChild(subTxt);
+    }
+    frontLayer.appendChild(gPop);
+  }
+
+  // 6. On-Fretboard Count-In Glass Banner when nowRel < 0
   if (isRhythmPlaying && nowRel < 0) {
     const beatsLeft = Math.ceil(Math.abs(nowRel) / pulseSec);
-    ctx.save();
-    ctx.fillStyle = "rgba(9, 12, 18, 0.55)";
-    ctx.fillRect(hitX + 10, 0, W - hitX - 10, H);
+    const bannerW = 360, bannerH = 44;
+    const bx = W / 2 - bannerW / 2, by = 6;
 
-    ctx.fillStyle = "#facc15";
-    ctx.font = "700 28px 'Oswald', sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(`[${meter.num}/${meter.den}] ${t("rhythmCountIn")} ${beatsLeft}`, W / 2 + 30, H / 2 - 4);
+    const glass = document.createElementNS(ns, "rect");
+    glass.setAttribute("x", bx);
+    glass.setAttribute("y", by);
+    glass.setAttribute("width", bannerW);
+    glass.setAttribute("height", bannerH);
+    glass.setAttribute("rx", "10");
+    glass.setAttribute("fill", "rgba(9, 13, 22, 0.92)");
+    glass.setAttribute("stroke", "#facc15");
+    glass.setAttribute("stroke-width", "1.6");
+    frontLayer.appendChild(glass);
 
-    if (rhythmCurrentTarget) {
-      const fName = t("finger_" + rhythmCurrentTarget.finger);
-      ctx.fillStyle = "#38bdf8";
-      ctx.font = "600 13px 'Inter', sans-serif";
-      ctx.fillText(
-        `NEXT: ${rhythmCurrentTarget.s + 1}st String · ${rhythmCurrentTarget.fret}F (${NOTE[rhythmCurrentTarget.pc]}) — ${FINGER_BADGES[rhythmCurrentTarget.finger]} ${fName}`,
-        W / 2 + 30,
-        H / 2 + 22
-      );
+    const countTxt = document.createElementNS(ns, "text");
+    countTxt.setAttribute("x", W / 2);
+    countTxt.setAttribute("y", by + 20);
+    countTxt.setAttribute("text-anchor", "middle");
+    countTxt.setAttribute("fill", "#facc15");
+    countTxt.setAttribute("font-size", "15px");
+    countTxt.setAttribute("font-weight", "800");
+    countTxt.setAttribute("font-family", "'Oswald', sans-serif");
+    countTxt.textContent = `[${meter.num}/${meter.den}] ${t("rhythmCountIn")} ${beatsLeft}`;
+    frontLayer.appendChild(countTxt);
+
+    if (n0) {
+      const fName = t("finger_" + n0.finger);
+      const hintTxt = document.createElementNS(ns, "text");
+      hintTxt.setAttribute("x", W / 2);
+      hintTxt.setAttribute("y", by + 36);
+      hintTxt.setAttribute("text-anchor", "middle");
+      hintTxt.setAttribute("fill", "#38bdf8");
+      hintTxt.setAttribute("font-size", "10.5px");
+      hintTxt.setAttribute("font-weight", "700");
+      hintTxt.setAttribute("font-family", "'Inter', sans-serif");
+      hintTxt.textContent = `START: ${n0.s + 1}st String · ${n0.fret}F (${NOTE[n0.pc]}) — ${FINGER_BADGES[n0.finger]} ${fName}`;
+      frontLayer.appendChild(hintTxt);
     }
-    ctx.restore();
   }
 }
 
@@ -3700,6 +5029,15 @@ function finishRhythmGame() {
 }
 
 function bindEvents() {
+  document.querySelectorAll(".neck-theme-btn").forEach(btn => {
+    btn.onclick = () => setNeckWood(btn.getAttribute("data-wood"));
+  });
+  document.querySelectorAll(".v3d-preset-btn").forEach(btn => {
+    btn.onclick = () => setFbViewMode(btn.getAttribute("data-view3d"));
+  });
+  if ($("btnResetCam3d")) {
+    $("btnResetCam3d").onclick = () => setFbViewMode("studio");
+  }
   if ($("startBtn")) $("startBtn").onclick = () => running ? stop() : start();
   if ($("keySel")) {
     $("keySel").onchange = e => {
@@ -3939,17 +5277,29 @@ function bindEvents() {
   if ($("deviceSel")) {
     $("deviceSel").onchange = async (e) => {
       const val = e.target.value;
-      if (val.startsWith("asio_dev_")) {
-        const devId = parseInt(val.replace("asio_dev_", ""), 10);
-        currentAsioDeviceId = devId;
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "select_asio_device", device_id: devId }));
+      if (val.startsWith("asio_dev_") || val === "asio_ws") {
+        const ok = await probeAsioBridgeSilent(650);
+        if (!ok) {
+          updateAsioStatusBadge("warn");
+          openAsioSmartPopover();
+          return;
+        }
+        updateAsioStatusBadge("ok");
+        closeAsioSmartPopover();
+        if (val.startsWith("asio_dev_")) {
+          const devId = parseInt(val.replace("asio_dev_", ""), 10);
+          currentAsioDeviceId = devId;
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "select_asio_device", device_id: devId }));
+          } else if (running) {
+            await connect(val);
+          }
         } else if (running) {
           await connect(val);
         }
-      } else if (val === "asio_ws") {
-        if (running) await connect(val);
       } else {
+        updateAsioStatusBadge("web");
+        closeAsioSmartPopover();
         if (running) {
           await connect(val);
         }
@@ -3957,8 +5307,83 @@ function bindEvents() {
     };
   }
 
+  if ($("asioStatusBadge")) {
+    $("asioStatusBadge").onclick = () => toggleAsioSmartPopover();
+  }
+  if ($("btnCloseAsioPopover")) {
+    $("btnCloseAsioPopover").onclick = () => closeAsioSmartPopover();
+  }
+  if ($("btnAsioUseWebMic")) {
+    $("btnAsioUseWebMic").onclick = () => switchToBrowserMicAndStart(true);
+  }
+  if ($("btnAsioRescan")) {
+    $("btnAsioRescan").onclick = async () => {
+      const btn = $("btnAsioRescan");
+      if (btn) btn.textContent = "🔄 스캔 중...";
+      const ok = await probeAsioBridgeSilent(800);
+      refreshAsioDiagnosticView(ok);
+      if (ok) {
+        updateAsioStatusBadge("ok");
+        if (btn) btn.textContent = "✓ 연결 완료!";
+        if (running) {
+          try { await connect($("deviceSel") ? $("deviceSel").value : "asio_ws"); } catch (e) { }
+        }
+      } else {
+        updateAsioStatusBadge("warn");
+        if (btn) btn.textContent = "⚡ 다시 스캔";
+      }
+    };
+  }
+  if ($("chkAsioAutoFallback")) {
+    $("chkAsioAutoFallback").onchange = e => {
+      try { localStorage.setItem("asioAutoFallback", e.target.checked ? "1" : "0"); } catch (err) { }
+    };
+  }
+  window.addEventListener("resize", positionAsioSmartPopover);
+  window.addEventListener("scroll", positionAsioSmartPopover, true);
+  window.addEventListener("keydown", e => {
+    if (e.key === "Escape" && asioPopoverOpen) closeAsioSmartPopover();
+  });
+
   if ($("fb")) {
+    $("fb").onpointerdown = e => {
+      if (e.button !== 0 && e.pointerType === "mouse") return;
+      isDragging3dCam = true;
+      wasDragged3d = false;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      dragStartTilt = fbTiltDeg;
+      dragStartYaw = fbYawDeg;
+    };
+    window.addEventListener("pointermove", e => {
+      if (!isDragging3dCam) return;
+      const dx = e.clientX - dragStartX;
+      const dy = e.clientY - dragStartY;
+      if (Math.hypot(dx, dy) > 4) {
+        wasDragged3d = true;
+        fbYawDeg = Math.max(-24, Math.min(24, dragStartYaw + dx * 0.14));
+        fbTiltDeg = Math.max(0, Math.min(56, dragStartTilt + dy * 0.22));
+        fbViewMode = (fbTiltDeg <= 1.5 && Math.abs(fbYawDeg) <= 1.5) ? "2d" : "custom";
+        drawFB();
+      }
+    });
+    window.addEventListener("pointerup", () => {
+      if (!isDragging3dCam) return;
+      isDragging3dCam = false;
+      if (wasDragged3d) {
+        setTimeout(() => { wasDragged3d = false; }, 60);
+      }
+    });
+    window.addEventListener("pointercancel", () => {
+      isDragging3dCam = false;
+      wasDragged3d = false;
+    });
+
     $("fb").onclick = e => {
+      if (wasDragged3d) {
+        wasDragged3d = false;
+        return;
+      }
       const dot = e.target.closest(".note-dot");
       if (dot) {
         const midi = parseInt(dot.getAttribute("data-midi"), 10);
@@ -3969,6 +5394,7 @@ function bindEvents() {
       }
     };
     $("fb").onmousemove = e => {
+      if (isDragging3dCam) return;
       const dot = e.target.closest(".note-dot");
       if (dot) {
         const s = parseInt(dot.getAttribute("data-str"), 10);
@@ -4008,13 +5434,12 @@ function bindEvents() {
     $("rhythmBoxSel").onchange = e => {
       rhythmBoxId = e.target.value;
       drawFB();
-      if (!isRhythmPlaying) drawRhythmHighway(0);
     };
   }
   if ($("rhythmDrillSel")) {
     $("rhythmDrillSel").onchange = e => {
       rhythmDrillId = e.target.value;
-      if (!isRhythmPlaying) drawRhythmHighway(0);
+      if (!isRhythmPlaying) updateFretboardLit();
     };
   }
   if ($("rhythmMeterSel")) {
@@ -4028,26 +5453,26 @@ function bindEvents() {
         rhythmSubdivId = "quarter";
         if ($("rhythmSubdivSel")) $("rhythmSubdivSel").value = "quarter";
       }
-      if (!isRhythmPlaying) drawRhythmHighway(0);
+      if (!isRhythmPlaying) updateFretboardLit();
     };
   }
   if ($("rhythmSubdivSel")) {
     $("rhythmSubdivSel").onchange = e => {
       rhythmSubdivId = e.target.value;
-      if (!isRhythmPlaying) drawRhythmHighway(0);
+      if (!isRhythmPlaying) updateFretboardLit();
     };
   }
   if ($("rhythmBpm")) {
     $("rhythmBpm").oninput = e => {
       rhythmBpm = parseInt(e.target.value, 10);
       if ($("rhythmBpmVal")) $("rhythmBpmVal").textContent = rhythmBpm;
-      if (!isRhythmPlaying) drawRhythmHighway(0);
+      if (!isRhythmPlaying) updateFretboardLit();
     };
   }
   if ($("rhythmLenSel")) {
     $("rhythmLenSel").onchange = e => {
       rhythmNoteCount = parseInt(e.target.value, 10);
-      if (!isRhythmPlaying) drawRhythmHighway(0);
+      if (!isRhythmPlaying) updateFretboardLit();
     };
   }
   if ($("rhythmLatency")) {
@@ -4100,8 +5525,27 @@ function rebuildCustomTuningUI() {
   }
 }
 
-function initDeviceSel() {
-  rebuildDeviceDropdown();
+async function initDeviceSel() {
+  const chk = $("chkAsioAutoFallback");
+  let autoFallbackPref = false;
+  try {
+    autoFallbackPref = localStorage.getItem("asioAutoFallback") === "1";
+  } catch (e) { }
+  if (chk) chk.checked = autoFallbackPref;
+
+  await rebuildDeviceDropdown();
+  const ok = await probeAsioBridgeSilent(550);
+  if (ok) {
+    updateAsioStatusBadge("ok");
+  } else {
+    const isRemoteWeb = window.location.protocol === "https:";
+    if ((autoFallbackPref || isRemoteWeb) && $("deviceSel")) {
+      $("deviceSel").value = "mic_default";
+      updateAsioStatusBadge("web");
+    } else {
+      updateAsioStatusBadge("warn");
+    }
+  }
 }
 
 // ---------- Init ----------
@@ -4123,6 +5567,13 @@ drawFB();
 // URL hash handler for direct views & deep-linking (#bass, #drawer, #recording)
 function handleHashRoute() {
   const hash = window.location.hash.toLowerCase();
+  if (hash.includes("2d")) setFbViewMode("2d");
+  else if (hash.includes("deep")) setFbViewMode("deep");
+  else if (hash.includes("3d")) setFbViewMode("studio");
+  if (hash.includes("rosewood")) setNeckWood("rosewood");
+  else if (hash.includes("maple")) setNeckWood("maple");
+  else if (hash.includes("cyber")) setNeckWood("cyber");
+  else if (hash.includes("ebony")) setNeckWood("ebony");
   if (hash.includes("bass")) {
     const sel = $("instrSel");
     if (sel && sel.value !== "bass") {
@@ -4156,6 +5607,9 @@ function handleHashRoute() {
       dSel.value = "chord";
       dSel.dispatchEvent(new Event("change"));
     }
+  }
+  if (hash.includes("asio")) {
+    setTimeout(() => { openAsioSmartPopover(); }, 80);
   }
   if (hash.includes("drawer") || hash.includes("rec") || hash.includes("recording")) {
     const drawer = $("sideDrawer");
