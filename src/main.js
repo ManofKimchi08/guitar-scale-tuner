@@ -1052,10 +1052,10 @@ let handAnchorFretSmoothed = null;
 let currentNeckWood = "ebony";
 let fbViewMode = "studio"; // "2d" | "studio" | "deep" | "custom"
 let fbTiltDeg = 38;
-let fbYawDeg = -6;
+let fbYawDeg = 12;
 let isDragging3dCam = false;
 let wasDragged3d = false;
-let dragStartX = 0, dragStartY = 0, dragStartTilt = 38, dragStartYaw = -6;
+let dragStartX = 0, dragStartY = 0, dragStartTilt = 38, dragStartYaw = 12;
 
 function updateCam3dUI() {
   const readout = $("fbCamReadout");
@@ -1084,7 +1084,7 @@ function setFbViewMode(mode) {
   } else {
     fbViewMode = "studio";
     fbTiltDeg = 38;
-    fbYawDeg = -6;
+    fbYawDeg = isLeftHand ? -12 : 12;
   }
   updateCam3dUI();
   drawFB();
@@ -1108,16 +1108,17 @@ function renderStaticFretboard() {
 
   const frets = 15;
   const numStrings = strings.length;
-  const W = 960, H = 310;
+  const W = 1060, H = 430;
+  fb.setAttribute("viewBox", `0 0 ${W} ${H}`);
   const ns = "http://www.w3.org/2000/svg";
   const is3D = (fbTiltDeg > 1.5 || Math.abs(fbYawDeg) > 1.5);
   const tiltRad = is3D ? (fbTiltDeg * Math.PI) / 180 : 0;
   const yawRad = is3D ? (fbYawDeg * Math.PI) / 180 : 0;
-  const camDist = fbViewMode === "deep" ? 450 : (fbTiltDeg > 45 ? 470 : 620);
+  const camDist = fbViewMode === "deep" ? 560 : (fbTiltDeg > 45 ? 580 : 920);
 
-  const showHandArea = (appMode === "rhythm") || (labelMode === "finger") || (guideMode === "chord" && voicingMode && currentInstrument !== "bass");
-  const cxScreen = 478;
-  const cyScreen = is3D ? (showHandArea ? 132 : 158) : (showHandArea ? 116 : 152);
+  const showHandArea = is3D || (appMode === "rhythm") || (labelMode === "finger") || (guideMode === "chord" && voicingMode && currentInstrument !== "bass") || (hoveredFretNote !== null);
+  const cxScreen = 535;
+  const cyScreen = is3D ? (showHandArea ? 204 : 185) : (showHandArea ? 172 : 185);
   const dirSign = isLeftHand ? -1 : 1;
 
   // SVG <defs> for 3D Guitar Neck Woods, Pearloid Inlays, Lighting, & Rhythm Gradients
@@ -1172,6 +1173,27 @@ function renderStaticFretboard() {
       <stop offset="55%" stop-color="#38bdf8"/>
       <stop offset="100%" stop-color="#c084fc"/>
     </linearGradient>
+    <linearGradient id="coachDigit" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="rgba(29, 78, 216, 0.64)"/>
+      <stop offset="52%" stop-color="rgba(59, 130, 246, 0.42)"/>
+      <stop offset="100%" stop-color="rgba(147, 197, 253, 0.68)"/>
+    </linearGradient>
+    <linearGradient id="coachBehind" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="rgba(59, 130, 246, 0.46)"/>
+      <stop offset="100%" stop-color="rgba(30, 58, 138, 0.16)"/>
+    </linearGradient>
+    <linearGradient id="forearmFadeGrad" gradientUnits="userSpaceOnUse" x1="470" y1="285" x2="535" y2="425">
+      <stop offset="0%" stop-color="white" stop-opacity="1"/>
+      <stop offset="45%" stop-color="white" stop-opacity="0.86"/>
+      <stop offset="100%" stop-color="white" stop-opacity="0"/>
+    </linearGradient>
+    <mask id="forearmFadeMask">
+      <rect x="0" y="0" width="${W}" height="${H}" fill="url(#forearmFadeGrad)"/>
+    </mask>
+    <filter id="glowYellowHand" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="5.0" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
     <filter id="glow3dSoft" x="-30%" y="-30%" width="160%" height="160%">
       <feGaussianBlur stdDeviation="3.5" result="blur"/>
       <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
@@ -1180,7 +1202,7 @@ function renderStaticFretboard() {
   fb.appendChild(defs);
 
   const neckThemes = {
-    ebony:    { fill: "url(#woodGrad_ebony)",    binding: "#9ca3af", border: "#3f3f4a", sideWall: "#18181f", sideDot: "#f4f4f5", fret: "#d4d4d8", nut: "#fef3c7", inlayAlpha: "0.52", numCol: "#71717a" },
+    ebony:    { fill: "url(#woodGrad_ebony)",    binding: "#dfd4bc", border: "#3f3f4a", sideWall: "#18181f", sideDot: "#181512", fret: "#d4d4d8", nut: "#fef3c7", inlayAlpha: "0.52", numCol: "#71717a" },
     rosewood: { fill: "url(#woodGrad_rosewood)", binding: "#fef3c7", border: "#b45309", sideWall: "#451a03", sideDot: "#18181b", fret: "#e4e4e7", nut: "#fef3c7", inlayAlpha: "0.85", numCol: "#a8a29e" },
     maple:    { fill: "url(#woodGrad_maple)",    binding: "#92400e", border: "#92400e", sideWall: "#b45309", sideDot: "#18181b", fret: "#71717a", nut: "#fef9c3", inlayAlpha: "0.55", numCol: "#a1a1aa" },
     cyber:    { fill: "url(#woodGrad_cyber)",    binding: "#a78bfa", border: "#7c3aed", sideWall: "#2e1065", sideDot: "#38bdf8", fret: "#67e8f9", nut: "#e9d5ff", inlayAlpha: "0.65", numCol: "#a78bfa" }
@@ -1218,7 +1240,7 @@ function renderStaticFretboard() {
     if (!is3D) {
       return { x: cxScreen + wx, y: cyScreen + wy, scale: 1, depth: 0 };
     }
-    const normY = wy / 68;
+    const normY = Math.max(-1, Math.min(1, wy / 68));
     const archZ = 10 * (1 - normY * normY);
     const zTotal = wz + archZ;
 
@@ -1265,11 +1287,12 @@ function renderStaticFretboard() {
   fretboardGeom = {
     fretX, fretRatio, stringY, fretCenterX, project3D, projectNote, noteWorldCoord,
     wxAtRatio, halfNeckAt, halfStrAt, strYWorld, ratioOfFret, dirSign,
-    is3D, tiltRad, yawRad, W, neckH: H, fullH: H, frets, numStrings, cyScreen
+    nutHalfNeck, endHalfNeck, neckHalfLen,
+    is3D, tiltRad, yawRad, W, H, neckH: H, fullH: H, frets, numStrings, cyScreen, showHandArea
   };
 
   // ==============================================================
-  // LAYER 0 (3D ONLY): Floor Shadow, Cutaway Body & Headstock, Side Slab & Dots
+  // LAYER 0 (3D ONLY): Floor Shadow, Cutaway Body -> Behind-Neck Hand Layer -> Headstock, Side Slab & Dots
   // ==============================================================
   if (is3D) {
     // 0a. Ambient studio drop-shadow below 3D neck
@@ -1329,8 +1352,16 @@ function renderStaticFretboard() {
       pole.setAttribute("fill", "#a1a1aa");
       fb.appendChild(pole);
     }
+  }
 
-    // 0c. Angled Left/Right Headstock Transition & Tuning Pegs at Nut (0F-)
+  // Behind-Neck 3D Left-Hand Layer (Top inner palm cushion + bottom thenar & faded wrist rendered under neck/binding)
+  const handBehindNeckLayer = document.createElementNS(ns, "g");
+  handBehindNeckLayer.setAttribute("id", "fretboardHandBehindNeckLayer");
+  handBehindNeckLayer.style.pointerEvents = "none";
+  fb.appendChild(handBehindNeckLayer);
+
+  if (is3D) {
+    // 0c. Angled Left/Right Headstock Transition & Tuning Pegs + String Labels at Nut (0F-)
     const xNut = wxAtRatio(0);
     const pNT0 = project3D(xNut, -nutHalfNeck, 0);
     const pNB0 = project3D(xNut, nutHalfNeck, 0);
@@ -1357,6 +1388,18 @@ function renderStaticFretboard() {
       pegC.setAttribute("rx", "4.2"); pegC.setAttribute("ry", "2.8");
       pegC.setAttribute("fill", "#d4d4d8"); pegC.setAttribute("stroke", "#27272a"); pegC.setAttribute("stroke-width", "0.9");
       fb.appendChild(pegC);
+
+      const sLblP = project3D(dirSign * (-neckHalfLen - 96), strYWorld(s, 0), 1.5);
+      const sLbl = document.createElementNS(ns, "text");
+      sLbl.setAttribute("x", sLblP.x.toFixed(1));
+      sLbl.setAttribute("y", (sLblP.y + 3.5).toFixed(1));
+      sLbl.setAttribute("text-anchor", dirSign > 0 ? "end" : "start");
+      sLbl.setAttribute("font-size", "10.5");
+      sLbl.setAttribute("font-weight", "700");
+      sLbl.setAttribute("font-family", "var(--mono, ui-monospace, monospace)");
+      sLbl.setAttribute("fill", s === numStrings - 1 ? "#fdba74" : "#94a3b8");
+      sLbl.textContent = `${s + 1}${NOTE[pc(strings[s])]}`;
+      fb.appendChild(sLbl);
     }
 
     // 0d. 3D Front Neck Thickness Slab + Binding + Glowing Side Position Dots facing the player!
@@ -1372,7 +1415,7 @@ function renderStaticFretboard() {
       const bindPoly = document.createElementNS(ns, "polygon");
       bindPoly.setAttribute("points", `${tl.x.toFixed(1)},${tl.y.toFixed(1)} ${tr.x.toFixed(1)},${tr.y.toFixed(1)} ${br.x.toFixed(1)},${br.y.toFixed(1)} ${bl.x.toFixed(1)},${bl.y.toFixed(1)}`);
       bindPoly.setAttribute("fill", nt.binding);
-      bindPoly.setAttribute("fill-opacity", currentNeckWood === "rosewood" ? "0.9" : "0.62");
+      bindPoly.setAttribute("fill-opacity", (currentNeckWood === "rosewood" || currentNeckWood === "ebony") ? "0.88" : "0.62");
       fb.appendChild(bindPoly);
 
       const wallPoly = document.createElementNS(ns, "polygon");
@@ -1396,7 +1439,7 @@ function renderStaticFretboard() {
         const sp = project3D(wxAtRatio(mr) + dx, halfNeckAt(mr), -3.3);
         const sd = document.createElementNS(ns, "circle");
         sd.setAttribute("cx", sp.x.toFixed(1)); sd.setAttribute("cy", sp.y.toFixed(1));
-        sd.setAttribute("r", "2.0"); sd.setAttribute("fill", currentNeckWood === "ebony" ? "#38bdf8" : nt.sideDot);
+        sd.setAttribute("r", "2.0"); sd.setAttribute("fill", nt.sideDot);
         fb.appendChild(sd);
       });
     }
@@ -1504,16 +1547,16 @@ function renderStaticFretboard() {
       fLine.setAttribute("stroke-opacity", "0.75"); fLine.setAttribute("stroke-linecap", "round");
       fb.appendChild(fLine);
 
-      // Fret numbers along top edge (and bottom edge in flat 2D)
+      // Fret numbers along elevated top edge (above finger badges in 3D, and bottom edge in flat 2D)
       const mt = (fretRatio[i - 1] + t) / 2;
-      const mpTop = project3D(wxAtRatio(mt), -halfNeckAt(mt) - (is3D ? 21 : 13), 0);
+      const mpTop = project3D(wxAtRatio(mt), -halfNeckAt(mt) - (is3D ? (showHandArea ? 88 : 22) : 13), is3D && showHandArea ? 14 : 0);
       const numTop = document.createElementNS(ns, "text");
       numTop.setAttribute("x", mpTop.x.toFixed(1));
       numTop.setAttribute("y", mpTop.y.toFixed(1));
       numTop.setAttribute("class", "fret-num");
       numTop.setAttribute("data-fret", i);
       numTop.setAttribute("fill", nt.numCol);
-      numTop.setAttribute("font-size", (10.5 * mpTop.scale).toFixed(1));
+      numTop.setAttribute("font-size", ((is3D && showHandArea ? 11.5 : 10.5) * mpTop.scale).toFixed(1));
       numTop.textContent = i;
       fb.appendChild(numTop);
 
@@ -1769,7 +1812,7 @@ function renderStaticFretboard() {
 
   // 3D Camera Orbit Axis Gizmo in top-right corner when 3D view is active
   if (is3D) {
-    const gx = 918, gy = 40;
+    const gx = 1016, gy = 40;
     const gBox = document.createElementNS(ns, "g");
     gBox.setAttribute("opacity", "0.9");
     gBox.style.pointerEvents = "none";
@@ -1852,24 +1895,51 @@ function updateStringVibrationOverlay(rNow) {
 }
 
 function renderFretboardHandOverlay(nowRel = 0) {
+  const behindLayer = $("fretboardHandBehindNeckLayer");
   const backLayer = $("fretboardHandBackLayer");
   const tipLayer = $("fretboardHandTipLayer");
+  const fb = $("fb");
   if (!backLayer || !tipLayer || !fretboardGeom) return;
 
+  if (behindLayer) behindLayer.innerHTML = "";
   backLayer.innerHTML = "";
   tipLayer.innerHTML = "";
 
   const isChordVoicingActive = (guideMode === "chord" && voicingMode && currentVoicing && currentInstrument !== "bass");
-  const shouldShowHand = (appMode === "rhythm") || (labelMode === "finger") || isChordVoicingActive || (hoveredFretNote !== null);
+  const shouldShowHand = (fretboardGeom.is3D && currentInstrument !== "bass") || (appMode === "rhythm") || (labelMode === "finger") || isChordVoicingActive || (hoveredFretNote !== null);
+
+  if (fb) {
+    fb.querySelectorAll(".fret-num").forEach(el => {
+      el.removeAttribute("data-inbox");
+      el.style.fill = "";
+      el.style.fontWeight = "";
+    });
+  }
   if (!shouldShowHand) return;
 
   const {
-    neckH, frets, numStrings,
-    project3D, projectNote, noteWorldCoord, halfNeckAt, halfStrAt, is3D, tiltRad
+    W = 1060, H = 430, frets, numStrings, dirSign = 1,
+    project3D, projectNote, noteWorldCoord, wxAtRatio, halfNeckAt, strYWorld, ratioOfFret,
+    is3D, tiltRad
   } = fretboardGeom;
   const ns = "http://www.w3.org/2000/svg";
   const zNoteTop = is3D ? 7.2 : 0;
   const ryScale3d = is3D ? Math.max(0.48, Math.cos(tiltRad) * 0.84) : 1.0;
+
+  const svgEl = (tag, attrs, parent) => {
+    const node = document.createElementNS(ns, tag);
+    if (attrs) {
+      for (const [k, v] of Object.entries(attrs)) {
+        node.setAttribute(k, String(v));
+      }
+    }
+    if (parent) parent.appendChild(node);
+    return node;
+  };
+
+  // Highlight active box range or fall back cleanly for Scale / Chord / Rhythm
+  const activeBoxId = appMode === "rhythm" ? rhythmBoxId : "box1";
+  let [boxMin, boxMax] = getFretBoxRange(activeBoxId);
 
   // 1. Determine active finger target(s), next target, and optional Barre chord info
   const activeByFinger = { 1: null, 2: null, 3: null, 4: null };
@@ -1882,14 +1952,10 @@ function renderFretboardHandOverlay(nowRel = 0) {
     primaryActive = rhythmCurrentTarget;
     nextTarget = rhythmNextTarget;
     if (primaryActive) {
-      if (primaryActive.fret === 0) {
-        openStringTarget = primaryActive;
-      } else if (primaryActive.finger >= 1 && primaryActive.finger <= 4) {
-        activeByFinger[primaryActive.finger] = primaryActive;
-      }
+      if (primaryActive.fret === 0) openStringTarget = primaryActive;
+      else if (primaryActive.finger >= 1 && primaryActive.finger <= 4) activeByFinger[primaryActive.finger] = primaryActive;
     }
   } else if (isChordVoicingActive) {
-    // Show all fingers of the selected CAGED Chord Voicing simultaneously (including Barre on Finger 1!)
     const f1Strings = [];
     let f1Fret = null;
     for (let s = 0; s < numStrings; s++) {
@@ -1901,7 +1967,6 @@ function renderFretboardHandOverlay(nowRel = 0) {
         f1Fret = f;
       }
       if (fNum >= 1 && fNum <= 4) {
-        // Keep the lowest-pitched string (highest s index) as the primary tip target for each finger
         if (!activeByFinger[fNum] || s > activeByFinger[fNum].s) {
           activeByFinger[fNum] = { s, fret: f, finger: fNum, pc: pc(strings[s] + f) };
         }
@@ -1922,24 +1987,18 @@ function renderFretboardHandOverlay(nowRel = 0) {
       }
     }
   } else if (appMode === "rhythm") {
-    // Idle Rhythm Mode Preview: show 1st note (ACTIVE) and 2nd note (NEXT) of preview chart
     const previewChart = getCachedRhythmPreviewChart();
     primaryActive = hoveredFretNote || previewChart[0] || null;
     nextTarget = hoveredFretNote ? null : (previewChart[1] || null);
     if (primaryActive) {
       if (primaryActive.fret === 0) openStringTarget = primaryActive;
-      else if (primaryActive.finger >= 1 && primaryActive.finger <= 4) {
-        activeByFinger[primaryActive.finger] = primaryActive;
-      }
+      else if (primaryActive.finger >= 1 && primaryActive.finger <= 4) activeByFinger[primaryActive.finger] = primaryActive;
     }
   } else if (hoveredFretNote) {
     primaryActive = hoveredFretNote;
     if (primaryActive.fret === 0) openStringTarget = primaryActive;
-    else if (primaryActive.finger >= 1 && primaryActive.finger <= 4) {
-      activeByFinger[primaryActive.finger] = primaryActive;
-    }
+    else if (primaryActive.finger >= 1 && primaryActive.finger <= 4) activeByFinger[primaryActive.finger] = primaryActive;
   } else if (litPcs && litPcs.length > 0) {
-    // In Finger Guide mode when playing a note into mic, find matching fret dot
     const playedPc = litPcs[0];
     const matchDot = fretboardNoteElements.find(g => parseInt(g.getAttribute("data-pc"), 10) === playedPc);
     if (matchDot) {
@@ -1952,17 +2011,48 @@ function renderFretboardHandOverlay(nowRel = 0) {
     }
   }
 
-  // 2. Compute Target 4-Fret Hand Anchor (Fret of Index Finger 1)
-  let [boxMin, boxMax] = getFretBoxRange(appMode === "rhythm" ? rhythmBoxId : "box1");
-  let targetAnchorFret = Math.max(1, boxMin === 0 ? 1 : boxMin);
+  // Idle 3D Coach Preview: find a natural scale/root position inside active box so the 3D hand displays cleanly on load
+  if (!primaryActive && !isChordVoicingActive) {
+    const bStart = Math.max(1, boxMin === 0 ? 1 : boxMin);
+    const bEnd = Math.min(frets, Math.max(bStart + 3, boxMax));
+    const strPref = [2, 3, 1, 4, 5, 0].filter(s => s < numStrings);
+    let bestCand = null;
+    for (const wantRoot of [true, false]) {
+      for (const s of strPref) {
+        for (let f = bStart; f <= bEnd; f++) {
+          const m = strings[s] + f;
+          if (!inScale(m)) continue;
+          const p = pc(m);
+          if (wantRoot && p !== rootPc) continue;
+          const recF = getRecommendedFinger(s, f, activeBoxId);
+          bestCand = { s, fret: f, finger: (recF >= 1 && recF <= 4) ? recF : 1, pc: p, isIdlePreview: true };
+          break;
+        }
+        if (bestCand) break;
+      }
+      if (bestCand) break;
+    }
+    if (bestCand) {
+      primaryActive = bestCand;
+      activeByFinger[bestCand.finger] = bestCand;
+      for (let nf = bestCand.fret + 1; nf <= bEnd; nf++) {
+        if (inScale(strings[bestCand.s] + nf)) {
+          const recN = getRecommendedFinger(bestCand.s, nf, activeBoxId);
+          nextTarget = { s: bestCand.s, fret: nf, finger: (recN >= 1 && recN <= 4) ? recN : Math.min(4, bestCand.finger + 1), pc: pc(strings[bestCand.s] + nf) };
+          break;
+        }
+      }
+    }
+  }
 
+  // 2. Compute Target 4-Fret Hand Anchor (Fret of Index Finger ①)
+  let targetAnchorFret = Math.max(1, boxMin === 0 ? 1 : boxMin);
   if (isChordVoicingActive) {
     const validFrets = currentVoicing.frets.filter(f => f !== null && f > 0);
     if (validFrets.length > 0) {
       targetAnchorFret = Math.max(1, Math.min(frets - 3, Math.min(...validFrets)));
     }
   } else if (primaryActive && primaryActive.fret > 0 && primaryActive.finger >= 1) {
-    // Align palm so Finger `primaryActive.finger` naturally lines up with `primaryActive.fret`
     targetAnchorFret = Math.max(1, Math.min(frets - 3, primaryActive.fret - (primaryActive.finger - 1)));
   }
 
@@ -1973,292 +2063,527 @@ function renderFretboardHandOverlay(nowRel = 0) {
   }
 
   const anchorF = handAnchorFretSmoothed;
-  const knucklePos = {};
-  const knuckleX = {};
-  const knuckleYMap = {};
-  for (let fIdx = 1; fIdx <= 4; fIdx++) {
-    const fn = Math.max(0.4, Math.min(frets, anchorF + (fIdx - 1)));
-    const wc = noteWorldCoord(numStrings - 1, fn);
-    const kp = project3D(wc.wx, halfNeckAt(wc.t) + (is3D ? 25 : 24), is3D ? -4 : 0);
-    const kyVal = Math.min(neckH - 42, kp.y);
-    knucklePos[fIdx] = { x: kp.x, y: kyVal, scale: kp.scale };
-    knuckleX[fIdx] = kp.x;
-    knuckleYMap[fIdx] = kyVal;
-  }
-  const leftIdx = knuckleX[1] <= knuckleX[4] ? 1 : 4;
-  const rightIdx = leftIdx === 1 ? 4 : 1;
-  const leftKY = knuckleYMap[leftIdx];
-  const rightKY = knuckleYMap[rightIdx];
-  const knuckleYAvg = (leftKY + rightKY) * 0.5;
-  const palmBottomY = Math.min(neckH - 6, knuckleYAvg + 38);
-
-  // 3. Draw Translucent Ghost Palm & Thumb Silhouette in backLayer
-  const leftEdgeX = Math.min(knuckleX[1], knuckleX[4]) - 18;
-  const rightEdgeX = Math.max(knuckleX[1], knuckleX[4]) + 18;
-  const palmCenterX = (leftEdgeX + rightEdgeX) / 2;
-  const thumbSideX = isLeftHand ? (rightEdgeX + 14) : (leftEdgeX - 14);
-  const thumbKY = isLeftHand ? rightKY : leftKY;
-
-  const palmPath = document.createElementNS(ns, "path");
-  const dPalm = `
-    M ${leftEdgeX + 8} ${leftKY - 4}
-    Q ${palmCenterX} ${knuckleYAvg - 10} ${rightEdgeX - 8} ${rightKY - 4}
-    Q ${rightEdgeX + 6} ${rightKY + 10} ${rightEdgeX - 4} ${palmBottomY - 5}
-    Q ${palmCenterX} ${palmBottomY + 4} ${leftEdgeX + 4} ${palmBottomY - 5}
-    Q ${leftEdgeX - 6} ${leftKY + 10} ${leftEdgeX + 8} ${leftKY - 4}
-    Z
-  `;
-  palmPath.setAttribute("d", dPalm);
-  palmPath.setAttribute("fill", "rgba(15, 23, 42, 0.82)");
-  palmPath.setAttribute("stroke", "rgba(56, 189, 248, 0.45)");
-  palmPath.setAttribute("stroke-width", "1.6");
-  backLayer.appendChild(palmPath);
-
-  // Thumb silhouette peeking on the index-finger side of the palm
-  const thumbBaseX = isLeftHand ? rightEdgeX - 4 : leftEdgeX + 4;
-  const thumbPath = document.createElementNS(ns, "path");
-  thumbPath.setAttribute(
-    "d",
-    `M ${thumbBaseX} ${thumbKY + 16} Q ${thumbSideX} ${thumbKY - 6} ${thumbBaseX + (isLeftHand ? -4 : 4)} ${thumbKY - 12}`
-  );
-  thumbPath.setAttribute("fill", "none");
-  thumbPath.setAttribute("stroke", "rgba(148, 163, 184, 0.45)");
-  thumbPath.setAttribute("stroke-width", "9");
-  thumbPath.setAttribute("stroke-linecap", "round");
-  backLayer.appendChild(thumbPath);
-
-  // Palm Position Label (e.g., "🖐️ HAND POS: 5F ~ 8F")
   const minDispF = Math.round(anchorF);
   const maxDispF = Math.min(frets, minDispF + 3);
-  const palmLbl = document.createElementNS(ns, "text");
-  palmLbl.setAttribute("x", palmCenterX);
-  palmLbl.setAttribute("y", palmBottomY - 6);
-  palmLbl.setAttribute("text-anchor", "middle");
-  palmLbl.setAttribute("fill", "#94a3b8");
-  palmLbl.setAttribute("font-size", "9.5px");
-  palmLbl.setAttribute("font-family", "var(--mono)");
-  palmLbl.setAttribute("font-weight", "600");
-  palmLbl.textContent = barreInfo
-    ? `🖐️ BARRE ${barreInfo.fret}F (${currentVoicing ? currentVoicing.name : ""})`
-    : `🖐️ HAND POS: ${minDispF}F ~ ${maxDispF}F`;
-  backLayer.appendChild(palmLbl);
 
-  // Helper to compute 2-segment IK middle joint (PIP joint) between knuckle (kx, ky) and fingertip (tx, ty)
-  const computeJoint = (fIdx, kx, ky, tx, ty) => {
-    const midX = kx + (tx - kx) * 0.52;
-    const midY = ky + (ty - ky) * 0.48;
-    // Natural anatomical finger splay bow
-    const splayDir = isLeftHand ? -1 : 1;
-    const bowOffset = (fIdx - 2.5) * 3.5 * splayDir;
-    return { jx: midX + bowOffset, jy: midY };
+  // Highlight active fret numbers in top rail (3D)
+  if (fb && is3D) {
+    fb.querySelectorAll(".fret-num").forEach(el => {
+      const fVal = parseInt(el.getAttribute("data-fret"), 10);
+      if (fVal >= minDispF && fVal <= maxDispF) {
+        el.style.fill = "#7dd3fc";
+        el.style.fontWeight = "800";
+      }
+    });
+  }
+
+  // Smooth continuous fret coordinate helper supporting negative frets (below nut) and > frets
+  const firstCellCenterT = (ratioOfFret(0) + ratioOfFret(1)) * 0.5;
+  const lastCellCenterT = (ratioOfFret(frets - 1) + ratioOfFret(frets)) * 0.5;
+  const lastCellStepT = lastCellCenterT - (ratioOfFret(frets - 2) + ratioOfFret(frets - 1)) * 0.5;
+  const fretCoord = (sIdx, fCont) => {
+    if (fCont < 0) {
+      const t = fCont * firstCellCenterT;
+      return { wx: wxAtRatio(t), wy: strYWorld(sIdx, Math.max(0, t)), t };
+    }
+    if (fCont > frets) {
+      const t = lastCellCenterT + (fCont - frets) * lastCellStepT;
+      return { wx: wxAtRatio(t), wy: strYWorld(sIdx, Math.min(1, t)), t };
+    }
+    return noteWorldCoord(sIdx, fCont);
   };
 
-  // 4. Render Next-Note Ghost Finger & Motion Trajectory Arc (if in Rhythm Mode)
-  if (nextTarget && nextTarget.fret > 0 && nextTarget.finger >= 1 && nextTarget.finger <= 4) {
-    const nf = nextTarget.finger;
-    const isSameAsActive = activeByFinger[nf] && activeByFinger[nf].s === nextTarget.s && activeByFinger[nf].fret === nextTarget.fret;
-    if (!isSameAsActive) {
-      const kx = knuckleX[nf];
-      const ky = knuckleYMap[nf];
-      const pNext = projectNote(nextTarget.s, nextTarget.fret, zNoteTop);
-      const ntx = pNext.cx;
-      const nty = pNext.cy;
-      const { jx, jy } = computeJoint(nf, kx, ky, ntx, nty);
-      const fColor = FINGER_COLORS[nf] || "#38bdf8";
+  // Scale digit radii gently with local fret width so upper frets never crowd together
+  const anchorInt = Math.max(1, Math.min(frets - 1, Math.round(anchorF)));
+  const localFretSpan = Math.abs(wxAtRatio(ratioOfFret(anchorInt)) - wxAtRatio(ratioOfFret(anchorInt - 1)));
+  const rScale = Math.max(0.72, Math.min(1.02, localFretSpan / 62));
 
-      const ghostBone = document.createElementNS(ns, "path");
-      ghostBone.setAttribute("d", `M ${kx.toFixed(1)} ${ky.toFixed(1)} L ${jx.toFixed(1)} ${jy.toFixed(1)} L ${ntx.toFixed(1)} ${nty.toFixed(1)}`);
-      ghostBone.setAttribute("fill", "none");
-      ghostBone.setAttribute("stroke", fColor);
-      ghostBone.setAttribute("stroke-width", "6");
-      ghostBone.setAttribute("stroke-linecap", "round");
-      ghostBone.setAttribute("stroke-linejoin", "round");
-      ghostBone.setAttribute("stroke-dasharray", "5 4");
-      ghostBone.setAttribute("opacity", "0.45");
-      backLayer.appendChild(ghostBone);
-
-      // Motion Trajectory Arc from primaryActive to nextTarget (flat guide when not playing rhythm arc)
-      if (!isRhythmPlaying && appMode !== "rhythm" && primaryActive && (primaryActive.s !== nextTarget.s || primaryActive.fret !== nextTarget.fret)) {
-        const pCur = projectNote(primaryActive.s, primaryActive.fret, zNoteTop);
-        const curX = pCur.cx;
-        const curY = pCur.cy;
-        const ctrlX = (curX + ntx) / 2;
-        const ctrlY = Math.min(curY, nty) - 22;
-        const arc = document.createElementNS(ns, "path");
-        arc.setAttribute("d", `M ${curX.toFixed(1)} ${curY.toFixed(1)} Q ${ctrlX.toFixed(1)} ${ctrlY.toFixed(1)} ${ntx.toFixed(1)} ${nty.toFixed(1)}`);
-        arc.setAttribute("fill", "none");
-        arc.setAttribute("stroke", fColor);
-        arc.setAttribute("stroke-width", "1.8");
-        arc.setAttribute("stroke-dasharray", "3 3");
-        arc.setAttribute("opacity", "0.75");
-        tipLayer.appendChild(arc);
+  // 3. 3D Catmull-Rom Tube Helper (IK Coach Style 2안)
+  function buildTubePoints(nodes, samplesPerSeg = 8) {
+    const dense = [];
+    for (let i = 0; i < nodes.length - 1; i++) {
+      const p0 = nodes[Math.max(0, i - 1)];
+      const p1 = nodes[i];
+      const p2 = nodes[i + 1];
+      const p3 = nodes[Math.min(nodes.length - 1, i + 2)];
+      for (let s = 0; s < samplesPerSeg; s++) {
+        const u = s / samplesPerSeg;
+        const u2 = u * u, u3 = u2 * u;
+        const cr = (a, b, c, d) => 0.5 * ((2 * b) + (-a + c) * u + (2 * a - 5 * b + 4 * c - d) * u2 + (-a + 3 * b - 3 * c + d) * u3);
+        dense.push({
+          wx: cr(p0.wx, p1.wx, p2.wx, p3.wx),
+          wy: cr(p0.wy, p1.wy, p2.wy, p3.wy),
+          wz: cr(p0.wz, p1.wz, p2.wz, p3.wz),
+          r: cr(p0.r, p1.r, p2.r, p3.r)
+        });
       }
     }
+    dense.push(nodes[nodes.length - 1]);
+    return dense;
   }
 
-  // 5. Render 4 Fingers (Standby or Active 2-Segment Articulated Bone + Fingertip Pad + Barre Bar)
-  for (let fIdx = 1; fIdx <= 4; fIdx++) {
-    const kx = knuckleX[fIdx];
-    const ky = knuckleYMap[fIdx];
+  function tubeOutlineSvgPath(dense, capStart = true, capEnd = true) {
+    const pts = dense.map(p => ({ ...project3D(p.wx, p.wy, p.wz), r3: p.r }));
+    const left = [], right = [];
+    for (let i = 0; i < pts.length; i++) {
+      const prev = pts[Math.max(0, i - 1)];
+      const next = pts[Math.min(pts.length - 1, i + 1)];
+      let dx = next.x - prev.x;
+      let dy = next.y - prev.y;
+      const len = Math.hypot(dx, dy) || 1;
+      dx /= len; dy /= len;
+      const nx = -dy, ny = dx;
+      const rad = pts[i].r3 * pts[i].scale;
+      left.push({ x: pts[i].x + nx * rad, y: pts[i].y + ny * rad });
+      right.push({ x: pts[i].x - nx * rad, y: pts[i].y - ny * rad });
+    }
+    const endP = pts[pts.length - 1], prevEnd = pts[pts.length - 2];
+    const ex = endP.x - prevEnd.x, ey = endP.y - prevEnd.y;
+    const elen = Math.hypot(ex, ey) || 1;
+    const eTip = {
+      x: endP.x + (ex / elen) * (endP.r3 * endP.scale * 0.94),
+      y: endP.y + (ey / elen) * (endP.r3 * endP.scale * 0.94)
+    };
+    const startP = pts[0], nextStart = pts[1];
+    const sx = startP.x - nextStart.x, sy = startP.y - nextStart.y;
+    const slen = Math.hypot(sx, sy) || 1;
+    const sTip = {
+      x: startP.x + (sx / slen) * (startP.r3 * startP.scale * 0.85),
+      y: startP.y + (sy / slen) * (startP.r3 * startP.scale * 0.85)
+    };
+
+    let d = `M ${left[0].x.toFixed(1)} ${left[0].y.toFixed(1)} `;
+    for (let i = 1; i < left.length; i++) d += `L ${left[i].x.toFixed(1)} ${left[i].y.toFixed(1)} `;
+    const rEnd = right[right.length - 1];
+    d += capEnd
+      ? `Q ${eTip.x.toFixed(1)} ${eTip.y.toFixed(1)} ${rEnd.x.toFixed(1)} ${rEnd.y.toFixed(1)} `
+      : `L ${rEnd.x.toFixed(1)} ${rEnd.y.toFixed(1)} `;
+    for (let i = right.length - 2; i >= 0; i--) d += `L ${right[i].x.toFixed(1)} ${right[i].y.toFixed(1)} `;
+    d += capStart
+      ? `Q ${sTip.x.toFixed(1)} ${sTip.y.toFixed(1)} ${left[0].x.toFixed(1)} ${left[0].y.toFixed(1)} Z`
+      : "Z";
+    return { d, pts };
+  }
+
+  function renderDigit3D(dense, opts) {
+    const g = svgEl("g", {}, tipLayer);
+    const { d, pts } = tubeOutlineSvgPath(dense, true, true);
+    const col = opts.color || "#93c5fd";
+
+    svgEl("path", {
+      d, fill: "url(#coachDigit)",
+      stroke: "rgba(147, 197, 253, 0.85)",
+      "stroke-width": opts.isActive ? "1.8" : "1.45",
+      "stroke-linejoin": "round",
+      opacity: opts.isActive ? "0.96" : "0.88"
+    }, g);
+
+    // Subtle key light rim along proximal-to-distal surface
+    const pStart = pts[Math.floor(pts.length * 0.14)];
+    const pMid = pts[Math.floor(pts.length * 0.44)];
+    const pEnd = pts[Math.floor(pts.length * 0.72)];
+    svgEl("path", {
+      d: `M ${(pStart.x - 3).toFixed(1)} ${(pStart.y - 2).toFixed(1)} Q ${(pMid.x - 4).toFixed(1)} ${(pMid.y - 2).toFixed(1)} ${(pEnd.x - 2).toFixed(1)} ${(pEnd.y - 1).toFixed(1)}`,
+      fill: "none", stroke: "rgba(219, 234, 254, 0.65)",
+      "stroke-width": opts.isThumb ? "5.0" : "3.6", "stroke-linecap": "round", opacity: "0.38"
+    }, g);
+
+    // Colored PIP & DIP joint rings for top 4 fingers (2안 signature)
+    if (!opts.isThumb) {
+      [0.34, 0.62].forEach(frac => {
+        const idx = Math.floor(pts.length * frac);
+        const jp = pts[idx];
+        const jNext = pts[Math.min(pts.length - 1, idx + 1)];
+        const ang = Math.atan2(jNext.y - jp.y, jNext.x - jp.x) * 180 / Math.PI + 90;
+        svgEl("ellipse", {
+          cx: jp.x.toFixed(1), cy: jp.y.toFixed(1),
+          rx: (jp.r3 * jp.scale * 0.94).toFixed(1), ry: (4.4 * jp.scale).toFixed(1),
+          transform: `rotate(${ang.toFixed(1)} ${jp.x.toFixed(1)} ${jp.y.toFixed(1)})`,
+          fill: "none", stroke: col, "stroke-width": opts.isActive ? "2.0" : "1.55", opacity: opts.isActive ? "0.92" : "0.74"
+        }, g);
+      });
+    }
+
+    // Anatomical Fingernail + Lunula (~78% along distal phalanx)
+    const nailIdx = Math.floor(pts.length * (opts.isThumb ? 0.76 : 0.78));
+    const np = pts[nailIdx];
+    const nPrev = pts[Math.max(0, nailIdx - 2)];
+    const angleDeg = Math.atan2(np.y - nPrev.y, np.x - nPrev.x) * 180 / Math.PI;
+    const nailW = np.r3 * np.scale * (opts.isThumb ? 1.24 : 0.96);
+    const nailH = np.r3 * np.scale * (opts.isThumb ? 1.12 : 0.98);
+    const ng = svgEl("g", {
+      transform: `translate(${np.x.toFixed(1)} ${np.y.toFixed(1)}) rotate(${angleDeg.toFixed(1)})`
+    }, g);
+    svgEl("rect", {
+      x: (-nailW * 0.50).toFixed(1), y: (-nailH * 0.52).toFixed(1),
+      width: (nailW * 1.00).toFixed(1), height: (nailH * 1.04).toFixed(1),
+      rx: (nailH * 0.42).toFixed(1),
+      fill: "rgba(219, 234, 254, 0.34)", stroke: "rgba(191, 219, 254, 0.78)", "stroke-width": "1.0"
+    }, ng);
+    svgEl("path", {
+      d: `M ${(-nailW * 0.44).toFixed(1)} ${(-nailH * 0.34).toFixed(1)} Q ${(-nailW * 0.02).toFixed(1)} 0 ${(-nailW * 0.44).toFixed(1)} ${(nailH * 0.34).toFixed(1)} Z`,
+      fill: "rgba(255, 255, 255, 0.36)"
+    }, ng);
+    svgEl("ellipse", {
+      cx: (nailW * 0.08).toFixed(1), cy: (-nailH * 0.18).toFixed(1),
+      rx: (nailW * 0.24).toFixed(1), ry: (nailH * 0.12).toFixed(1),
+      fill: "rgba(255, 255, 255, 0.34)"
+    }, ng);
+
+    return { pts, g };
+  }
+
+  // 4. Behind-Neck Hand Layer (Top-Right Inner Palm Cushion + Bottom Seamless Thenar & Faded Wrist)
+  if (behindLayer) {
+    // 4a. Top inner palm cushion peeking above top 1E behind ③ & ④
+    const pc0 = fretCoord(0, anchorF - 0.05);
+    const pc1 = fretCoord(0, anchorF + 0.85);
+    const pc2 = fretCoord(0, anchorF + 2.20);
+    const pc3 = fretCoord(0, anchorF + 3.05);
+    const pc4 = fretCoord(0, anchorF + 2.88);
+    const pA = project3D(pc0.wx, -halfNeckAt(Math.max(0, pc0.t)) + 2, -6);
+    const pB = project3D(pc1.wx, -halfNeckAt(Math.max(0, pc1.t)) - 34, -6);
+    const pC = project3D(pc2.wx, -halfNeckAt(Math.max(0, Math.min(1, pc2.t))) - 36, -6);
+    const pD = project3D(pc3.wx, -halfNeckAt(Math.max(0, Math.min(1, pc3.t))) - 12, -4);
+    const pE = project3D(pc4.wx, -halfNeckAt(Math.max(0, Math.min(1, pc4.t))) + 6, -12);
+    svgEl("path", {
+      d: `M ${pA.x.toFixed(1)} ${pA.y.toFixed(1)} C ${pB.x.toFixed(1)} ${pB.y.toFixed(1)}, ${pC.x.toFixed(1)} ${pC.y.toFixed(1)}, ${pD.x.toFixed(1)} ${pD.y.toFixed(1)} L ${pE.x.toFixed(1)} ${pE.y.toFixed(1)} Z`,
+      fill: "url(#coachBehind)", stroke: "rgba(147, 197, 253, 0.72)", "stroke-width": "1.1", opacity: "0.92"
+    }, behindLayer);
+
+    // 4b. Unified Seamless Bottom Thenar + Palm + Forearm descending below bottom 6E binding
+    const uc = (df, wyOff, wz) => {
+      const c = fretCoord(numStrings - 1, anchorF + df);
+      const tClamped = Math.max(0, Math.min(1, c.t));
+      return project3D(c.wx, halfNeckAt(tClamped) + wyOff, wz);
+    };
+    const u0 = uc(-1.68, -4, -2);
+    const u1 = uc(-1.55, 34, 4);
+    const u2 = uc(-0.70, 54, 2);
+    const u3 = uc(-0.15, 108, -14);
+    const u4 = uc(0.55, 195, -32);
+    const u5 = uc(2.45, 195, -32);
+    const u6 = uc(2.25, 92, -16);
+    const u7 = uc(2.52, 20, -8);
+    const u8 = uc(2.55, -6, -8);
+
+    // Sync #forearmFadeGrad linearly along the projected bottom wrist direction for any box/orbit angle
+    const fadeGrad = $("forearmFadeGrad");
+    if (fadeGrad) {
+      const wStart = uc(0.6, 12, 0);
+      const wEnd = uc(1.4, 185, -30);
+      fadeGrad.setAttribute("x1", wStart.x.toFixed(1));
+      fadeGrad.setAttribute("y1", wStart.y.toFixed(1));
+      fadeGrad.setAttribute("x2", wEnd.x.toFixed(1));
+      fadeGrad.setAttribute("y2", wEnd.y.toFixed(1));
+    }
+
+    const gArm = svgEl("g", { mask: "url(#forearmFadeMask)" }, behindLayer);
+    svgEl("path", {
+      d: `M ${u0.x.toFixed(1)} ${u0.y.toFixed(1)} C ${u1.x.toFixed(1)} ${u1.y.toFixed(1)}, ${u2.x.toFixed(1)} ${u2.y.toFixed(1)}, ${u3.x.toFixed(1)} ${u3.y.toFixed(1)} Q ${((u3.x + u4.x) * 0.5).toFixed(1)} ${((u3.y + u4.y) * 0.5).toFixed(1)} ${u4.x.toFixed(1)} ${u4.y.toFixed(1)} L ${u5.x.toFixed(1)} ${u5.y.toFixed(1)} C ${u6.x.toFixed(1)} ${u6.y.toFixed(1)}, ${u7.x.toFixed(1)} ${u7.y.toFixed(1)}, ${u8.x.toFixed(1)} ${u8.y.toFixed(1)} Z`,
+      fill: "url(#coachBehind)", stroke: "rgba(147, 197, 253, 0.72)", "stroke-width": "1.15", opacity: "0.94"
+    }, gArm);
+
+    const tc0 = uc(-1.08, 22, 4);
+    const tc1 = uc(-0.05, 30, 4);
+    svgEl("path", {
+      d: `M ${tc0.x.toFixed(1)} ${tc0.y.toFixed(1)} Q ${((tc0.x + tc1.x) * 0.5).toFixed(1)} ${((tc0.y + tc1.y) * 0.5 + 4).toFixed(1)} ${tc1.x.toFixed(1)} ${tc1.y.toFixed(1)}`,
+      fill: "none", stroke: "rgba(219, 234, 254, 0.65)", "stroke-width": "2.2", "stroke-linecap": "round", opacity: "0.28"
+    }, behindLayer);
+  }
+
+  // 5. Build Finger & Thumb 3D Control Nodes (Top 4 fingers ①..④ curl DOWN from 1E; Bottom Thumb curls UP over 6E)
+  const baseRadii = [0, 19.2, 19.6, 18.8, 15.8];
+  const fingerDefs = [];
+  for (let fIdx = 4; fIdx >= 1; fIdx--) {
     const fColor = FINGER_COLORS[fIdx] || "#38bdf8";
     const activeTarget = activeByFinger[fIdx];
+    const isActive = !!(activeTarget && activeTarget.fret > 0);
+    const rF = baseRadii[fIdx] * rScale;
 
-    if (activeTarget && activeTarget.fret > 0) {
-      const pAct = projectNote(activeTarget.s, activeTarget.fret, zNoteTop);
-      const tx = pAct.cx;
-      const ty = pAct.cy;
-      const { jx, jy } = computeJoint(fIdx, kx, ky, tx, ty);
-
-      // 5a. Outer Translucent Finger Flesh Silhouette (in backLayer, behind note dots)
-      const fleshPath = document.createElementNS(ns, "path");
-      fleshPath.setAttribute("d", `M ${kx.toFixed(1)} ${ky.toFixed(1)} L ${jx.toFixed(1)} ${jy.toFixed(1)} L ${tx.toFixed(1)} ${ty.toFixed(1)}`);
-      fleshPath.setAttribute("fill", "none");
-      fleshPath.setAttribute("stroke", fColor);
-      fleshPath.setAttribute("stroke-width", "15");
-      fleshPath.setAttribute("stroke-linecap", "round");
-      fleshPath.setAttribute("stroke-linejoin", "round");
-      fleshPath.setAttribute("opacity", "0.28");
-      backLayer.appendChild(fleshPath);
-
-      // 5b. Inner Articulated Bone Line (in backLayer)
-      const bonePath = document.createElementNS(ns, "path");
-      bonePath.setAttribute("d", `M ${kx.toFixed(1)} ${ky.toFixed(1)} L ${jx.toFixed(1)} ${jy.toFixed(1)} L ${tx.toFixed(1)} ${ty.toFixed(1)}`);
-      bonePath.setAttribute("fill", "none");
-      bonePath.setAttribute("stroke", fColor);
-      bonePath.setAttribute("stroke-width", "3.8");
-      bonePath.setAttribute("stroke-linecap", "round");
-      bonePath.setAttribute("stroke-linejoin", "round");
-      bonePath.setAttribute("opacity", "0.9");
-      backLayer.appendChild(bonePath);
-
-      // Middle Knuckle Joint (PIP Joint) Dot
-      const jointDot = document.createElementNS(ns, "circle");
-      jointDot.setAttribute("cx", jx.toFixed(1));
-      jointDot.setAttribute("cy", jy.toFixed(1));
-      jointDot.setAttribute("r", "4.5");
-      jointDot.setAttribute("fill", "#0f172a");
-      jointDot.setAttribute("stroke", fColor);
-      jointDot.setAttribute("stroke-width", "2");
-      backLayer.appendChild(jointDot);
-
-      // 5c. If Finger 1 is in Barre Chord Mode, draw the 3D-aligned Index Barre Capsule in tipLayer
-      if (fIdx === 1 && barreInfo) {
-        const pBTop = projectNote(barreInfo.minS, barreInfo.fret, zNoteTop);
-        const pBBot = projectNote(barreInfo.maxS, barreInfo.fret, zNoteTop);
-        const bw = 21 * ((pBTop.scale + pBBot.scale) * 0.5);
-        const barreOuter = document.createElementNS(ns, "line");
-        barreOuter.setAttribute("x1", pBTop.cx.toFixed(1));
-        barreOuter.setAttribute("y1", pBTop.cy.toFixed(1));
-        barreOuter.setAttribute("x2", pBBot.cx.toFixed(1));
-        barreOuter.setAttribute("y2", pBBot.cy.toFixed(1));
-        barreOuter.setAttribute("stroke", "#38bdf8");
-        barreOuter.setAttribute("stroke-width", bw.toFixed(1));
-        barreOuter.setAttribute("stroke-linecap", "round");
-        barreOuter.setAttribute("opacity", "0.26");
-        tipLayer.appendChild(barreOuter);
-
-        const barreCore = document.createElementNS(ns, "line");
-        barreCore.setAttribute("x1", pBTop.cx.toFixed(1));
-        barreCore.setAttribute("y1", pBTop.cy.toFixed(1));
-        barreCore.setAttribute("x2", pBBot.cx.toFixed(1));
-        barreCore.setAttribute("y2", pBBot.cy.toFixed(1));
-        barreCore.setAttribute("stroke", "#38bdf8");
-        barreCore.setAttribute("stroke-width", "2.6");
-        barreCore.setAttribute("stroke-linecap", "round");
-        tipLayer.appendChild(barreCore);
-      } else {
-        // 5d. Anatomical Fingertip Pad + Nail Crescent around target fret (in tipLayer)
-        const padRx = 13.5 * pAct.scale;
-        const padRy = 12 * ryScale3d * pAct.scale;
-        const padRing = document.createElementNS(ns, "ellipse");
-        padRing.setAttribute("cx", tx.toFixed(1));
-        padRing.setAttribute("cy", ty.toFixed(1));
-        padRing.setAttribute("rx", padRx.toFixed(1));
-        padRing.setAttribute("ry", padRy.toFixed(1));
-        padRing.setAttribute("fill", "none");
-        padRing.setAttribute("stroke", fColor);
-        padRing.setAttribute("stroke-width", "2.2");
-        padRing.setAttribute("opacity", "0.95");
-        tipLayer.appendChild(padRing);
-
-        // Fingertip Nail Crescent at top of pad
-        const nailArc = document.createElementNS(ns, "path");
-        nailArc.setAttribute(
-          "d",
-          `M ${(tx - 5 * pAct.scale).toFixed(1)} ${(ty - padRy * 0.72).toFixed(1)} Q ${tx.toFixed(1)} ${(ty - padRy * 1.02).toFixed(1)} ${(tx + 5 * pAct.scale).toFixed(1)} ${(ty - padRy * 0.72).toFixed(1)}`
-        );
-        nailArc.setAttribute("fill", "none");
-        nailArc.setAttribute("stroke", "#ffffff");
-        nailArc.setAttribute("stroke-width", "1.5");
-        nailArc.setAttribute("stroke-linecap", "round");
-        tipLayer.appendChild(nailArc);
-      }
+    let tipF, tipS, knuckleF;
+    if (isActive) {
+      tipF = activeTarget.fret;
+      tipS = activeTarget.s;
+      knuckleF = Math.max(0.5, tipF + 0.14);
     } else {
-      // Standby / Idle Finger resting just below the lowest string at its home fret column
-      const fnIdle = Math.max(0.4, Math.min(frets, anchorF + (fIdx - 1)));
-      const wcIdle = noteWorldCoord(numStrings - 1, fnIdle);
-      const pIdleTip = project3D(wcIdle.wx, halfStrAt(wcIdle.t) + 6, is3D ? 2 : 0);
-      const idleTipX = pIdleTip.x;
-      const idleTipY = Math.min(ky - 12, pIdleTip.y);
-      const idleJointX = (kx + idleTipX) * 0.5;
-      const idleJointY = (ky + idleTipY) * 0.5;
-
-      const idleBone = document.createElementNS(ns, "path");
-      idleBone.setAttribute("d", `M ${kx.toFixed(1)} ${ky.toFixed(1)} L ${idleJointX.toFixed(1)} ${idleJointY.toFixed(1)} L ${idleTipX.toFixed(1)} ${idleTipY.toFixed(1)}`);
-      idleBone.setAttribute("fill", "none");
-      idleBone.setAttribute("stroke", fColor);
-      idleBone.setAttribute("stroke-width", "9");
-      idleBone.setAttribute("stroke-linecap", "round");
-      idleBone.setAttribute("opacity", "0.24");
-      backLayer.appendChild(idleBone);
+      // Relaxed standby fret column subtly gathered inward toward palm center
+      const rel = (fIdx - 1) * 0.88;
+      tipF = Math.min(frets, anchorF + rel);
+      tipS = Math.min(numStrings - 1, 2); // Hover gently arched over middle string 3G
+      knuckleF = tipF + 0.16;
     }
 
-    // 5e. Draw Knuckle Base Badge (①, ②, ③, ④) on the Palm
-    const isFingerActive = !!(activeTarget && activeTarget.fret > 0);
-    const kCircle = document.createElementNS(ns, "circle");
-    kCircle.setAttribute("cx", kx.toFixed(1));
-    kCircle.setAttribute("cy", ky.toFixed(1));
-    kCircle.setAttribute("r", isFingerActive ? "10.5" : "8.5");
-    kCircle.setAttribute("fill", isFingerActive ? fColor : "#0f172a");
-    kCircle.setAttribute("stroke", fColor);
-    kCircle.setAttribute("stroke-width", isFingerActive ? "2.5" : "1.8");
-    backLayer.appendChild(kCircle);
+    // Barre chord overrides Finger 1 span cleanly across minS..maxS
+    const isBarreF1 = (fIdx === 1 && barreInfo);
+    if (isBarreF1) {
+      tipF = barreInfo.fret;
+      tipS = barreInfo.maxS;
+      knuckleF = barreInfo.fret + 0.10;
+    }
 
-    const kText = document.createElementNS(ns, "text");
-    kText.setAttribute("x", kx.toFixed(1));
-    kText.setAttribute("y", (ky + 3.8).toFixed(1));
-    kText.setAttribute("text-anchor", "middle");
-    kText.setAttribute("fill", isFingerActive ? "#090c10" : fColor);
-    kText.setAttribute("font-size", "10.5px");
-    kText.setAttribute("font-weight", "800");
-    kText.textContent = String(fIdx);
-    backLayer.appendChild(kText);
+    const fcK = fretCoord(0, knuckleF);
+    const fcMid1 = fretCoord(0, knuckleF - 0.05);
+    const fcMid2 = fretCoord(Math.max(0, Math.min(numStrings - 1, tipS)), (knuckleF + tipF) * 0.5);
+    const fcTip = fretCoord(tipS, tipF);
+    const tK = Math.max(0, Math.min(1, fcK.t));
+    const tM1 = Math.max(0, Math.min(1, fcMid1.t));
+    const hwK = halfNeckAt(tK);
+    const hwM1 = halfNeckAt(tM1);
 
-    // Short finger name below knuckle when active
-    const kSub = document.createElementNS(ns, "text");
-    kSub.setAttribute("x", kx.toFixed(1));
-    kSub.setAttribute("y", (ky + 18).toFixed(1));
-    kSub.setAttribute("text-anchor", "middle");
-    kSub.setAttribute("fill", isFingerActive ? "#ffffff" : "#64748b");
-    kSub.setAttribute("font-size", "9px");
-    kSub.setAttribute("font-weight", isFingerActive ? "700" : "500");
-    kSub.textContent = t("fingerShort_" + fIdx);
-    backLayer.appendChild(kSub);
+    let wy1, wy2, wy3, wz1, wz2, wz3;
+    if (isBarreF1) {
+      const midS = (barreInfo.minS + barreInfo.maxS) * 0.5;
+      wy1 = -hwM1 * 0.65;
+      wy2 = strYWorld(midS, Math.max(0, Math.min(1, fcMid2.t)));
+      wy3 = fcTip.wy - 4;
+      wz1 = 15; wz2 = 12; wz3 = 7.5;
+    } else if (tipS === 0) {
+      wy1 = -hwM1 - 6;
+      wy2 = fcMid2.wy - 8;
+      wy3 = fcTip.wy - 8;
+      wz1 = 19.5; wz2 = 16.5; wz3 = 5.4;
+    } else {
+      wy1 = tipS >= numStrings - 2 ? -hwM1 * 0.52 : -hwM1 - 4;
+      wy2 = strYWorld(Math.max(1, tipS - 1), Math.max(0, Math.min(1, fcMid2.t)));
+      wy3 = fcTip.wy - 9;
+      wz1 = 19.5; wz2 = 16.0; wz3 = 5.2;
+    }
+
+    fingerDefs.push({
+      id: fIdx,
+      color: fColor,
+      isActive,
+      isBarreF1,
+      tipWx: fcTip.wx,
+      tipWy: wy3,
+      knuckleWx: fcK.wx,
+      nodes: [
+        { wx: fcK.wx, wy: -hwK - 16, wz: 2, r: rF * 0.99 },
+        { wx: fcMid1.wx, wy: wy1, wz: wz1, r: rF },
+        { wx: fcMid2.wx, wy: wy2, wz: wz2, r: rF * 0.92 },
+        { wx: fcTip.wx, wy: wy3, wz: wz3, r: rF * 0.85 }
+      ]
+    });
   }
 
-  // 6. Open String (⓪ 개방현) Nut Highlight Banner
+  // Bottom Left Thumb curling UP & RIGHT over bottom 6E binding toward ① 검지
+  const tBaseF = anchorF - 1.05;
+  const thC0 = fretCoord(numStrings - 1, tBaseF - 0.12);
+  const thC1 = fretCoord(numStrings - 1, tBaseF + 0.18);
+  const thC2 = fretCoord(numStrings - 1, tBaseF + 0.42);
+  const thC3 = fretCoord(Math.max(1, numStrings - 3), tBaseF + 0.62);
+  const thumbNodes = [
+    { wx: thC0.wx, wy: halfNeckAt(Math.max(0, Math.min(1, thC0.t))) + 15, wz: 11, r: 21.8 * rScale },
+    { wx: thC1.wx, wy: halfNeckAt(Math.max(0, Math.min(1, thC1.t))) - 2, wz: 16.5, r: 22.2 * rScale },
+    { wx: thC2.wx, wy: thC2.wy - 11, wz: 15.5, r: 20.6 * rScale },
+    { wx: thC3.wx, wy: thC3.wy + 7, wz: 10.5, r: 18.8 * rScale }
+  ];
+
+  // 6. Cast Shadows on Fretboard (backLayer under note pucks)
+  const drawCastShadow = (wx, wy, rx, ry, rotDeg) => {
+    const p = project3D(wx + dirSign * 2, wy + 4, 2.1);
+    svgEl("ellipse", {
+      cx: p.x.toFixed(1), cy: p.y.toFixed(1),
+      rx: (rx * p.scale).toFixed(1), ry: (ry * p.scale).toFixed(1),
+      transform: `rotate(${rotDeg} ${p.x.toFixed(1)} ${p.y.toFixed(1)})`,
+      fill: "rgba(0, 0, 0, 0.34)", filter: "url(#glow3dSoft)"
+    }, backLayer);
+  };
+  drawCastShadow(thC2.wx, thC2.wy, 26 * rScale, 13 * rScale, dirSign * -18);
+  fingerDefs.forEach(fg => {
+    const tip = fg.nodes[fg.nodes.length - 1];
+    drawCastShadow(tip.wx, tip.wy, tip.r * 1.12, tip.r * 0.70, dirSign * -10);
+  });
+
+  // 7. Render 4 Fingers (painter order ④ -> ①), Barre Capsule (if active), and Bottom Thumb (tipLayer)
+  const fingerRenderInfo = [];
+  fingerDefs.forEach(fg => {
+    if (fg.isBarreF1) {
+      const pBTop = projectNote(barreInfo.minS, barreInfo.fret, zNoteTop);
+      const pBBot = projectNote(barreInfo.maxS, barreInfo.fret, zNoteTop);
+      const bw = 20 * ((pBTop.scale + pBBot.scale) * 0.5);
+      svgEl("line", {
+        x1: pBTop.cx.toFixed(1), y1: pBTop.cy.toFixed(1), x2: pBBot.cx.toFixed(1), y2: pBBot.cy.toFixed(1),
+        stroke: "#38bdf8", "stroke-width": bw.toFixed(1), "stroke-linecap": "round", opacity: "0.28"
+      }, tipLayer);
+      svgEl("line", {
+        x1: pBTop.cx.toFixed(1), y1: pBTop.cy.toFixed(1), x2: pBBot.cx.toFixed(1), y2: pBBot.cy.toFixed(1),
+        stroke: "#38bdf8", "stroke-width": "2.6", "stroke-linecap": "round"
+      }, tipLayer);
+    }
+    const dense = buildTubePoints(fg.nodes, 8);
+    const res = renderDigit3D(dense, { color: fg.color, isThumb: false, isActive: fg.isActive });
+    fingerRenderInfo.push({ fg, pts: res.pts });
+  });
+
+  const thumbDense = buildTubePoints(thumbNodes, 8);
+  renderDigit3D(thumbDense, { color: "#fb923c", isThumb: true, isActive: true });
+
+  // 8. Next-Note Ghost Ring & Target Active Glow Ring + Crisp Puck (on top of translucent fingers so always legible!)
+  if (nextTarget && nextTarget.fret > 0 && nextTarget.finger >= 1 && nextTarget.finger <= 4) {
+    const isSameAsActive = primaryActive && primaryActive.s === nextTarget.s && primaryActive.fret === nextTarget.fret;
+    if (!isSameAsActive) {
+      const pNext = projectNote(nextTarget.s, nextTarget.fret, zNoteTop);
+      svgEl("ellipse", {
+        cx: pNext.cx.toFixed(1), cy: pNext.cy.toFixed(1),
+        rx: (13.5 * pNext.scale).toFixed(1), ry: (13.5 * ryScale3d * pNext.scale).toFixed(1),
+        fill: "rgba(34, 211, 238, 0.14)", stroke: "#67e8f9",
+        "stroke-width": "1.9", "stroke-dasharray": "4 3"
+      }, tipLayer);
+      if (!isRhythmPlaying && appMode !== "rhythm" && primaryActive && primaryActive.fret > 0) {
+        const pCur = projectNote(primaryActive.s, primaryActive.fret, zNoteTop);
+        const ctrlX = (pCur.cx + pNext.cx) * 0.5;
+        const ctrlY = Math.min(pCur.cy, pNext.cy) - 18;
+        svgEl("path", {
+          d: `M ${pCur.cx.toFixed(1)} ${pCur.cy.toFixed(1)} Q ${ctrlX.toFixed(1)} ${ctrlY.toFixed(1)} ${pNext.cx.toFixed(1)} ${pNext.cy.toFixed(1)}`,
+          fill: "none", stroke: "#67e8f9", "stroke-width": "1.7", "stroke-dasharray": "4 3", opacity: "0.78"
+        }, tipLayer);
+      }
+    }
+  }
+
+  if (primaryActive && primaryActive.fret > 0) {
+    const ap = projectNote(primaryActive.s, primaryActive.fret, zNoteTop);
+    svgEl("circle", {
+      cx: ap.cx.toFixed(1), cy: ap.cy.toFixed(1), r: (14.2 * ap.scale).toFixed(1),
+      fill: "rgba(250, 204, 21, 0.22)", stroke: "#fde047", "stroke-width": "2.1",
+      filter: "url(#glowYellowHand)"
+    }, tipLayer);
+    svgEl("circle", {
+      cx: ap.cx.toFixed(1), cy: ap.cy.toFixed(1), r: (9.2 * ap.scale).toFixed(1),
+      fill: "#facc15", stroke: "#ffffff", "stroke-width": "1.5", opacity: "0.95"
+    }, tipLayer);
+    const lblPc = (primaryActive.pc !== undefined) ? primaryActive.pc : pc(strings[primaryActive.s] + primaryActive.fret);
+    svgEl("text", {
+      x: ap.cx.toFixed(1), y: (ap.cy + 3.5 * ap.scale).toFixed(1),
+      "text-anchor": "middle", "font-size": (10.2 * ap.scale).toFixed(1), "font-weight": "900", fill: "#0f172a"
+    }, tipLayer).textContent = NOTE[lblPc];
+  }
+
   if (openStringTarget && openStringTarget.fret === 0) {
     const pOpen = projectNote(openStringTarget.s, 0, zNoteTop);
-    const openHalo = document.createElementNS(ns, "ellipse");
-    openHalo.setAttribute("cx", pOpen.cx.toFixed(1));
-    openHalo.setAttribute("cy", pOpen.cy.toFixed(1));
-    openHalo.setAttribute("rx", (15 * pOpen.scale).toFixed(1));
-    openHalo.setAttribute("ry", (15 * ryScale3d * pOpen.scale).toFixed(1));
-    openHalo.setAttribute("fill", "none");
-    openHalo.setAttribute("stroke", "#cbd5e1");
-    openHalo.setAttribute("stroke-width", "2.2");
-    openHalo.setAttribute("stroke-dasharray", "4 2");
-    tipLayer.appendChild(openHalo);
+    svgEl("ellipse", {
+      cx: pOpen.cx.toFixed(1), cy: pOpen.cy.toFixed(1),
+      rx: (15 * pOpen.scale).toFixed(1), ry: (15 * ryScale3d * pOpen.scale).toFixed(1),
+      fill: "none", stroke: "#cbd5e1", "stroke-width": "2.2", "stroke-dasharray": "4 2"
+    }, tipLayer);
+  }
+
+  // 9. Coaching HUD Callouts (Top ①②③④ Badges, 👍 하단 6E 엄지, ARCH 74° OK, HAND POS Dock)
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+  // 9a. ①..④ Finger Badges cleanly ABOVE top 1E edge (below elevated Fret rail)
+  fingerRenderInfo.forEach(({ fg, pts }) => {
+    const kT = Math.max(0, Math.min(1, fretCoord(0, Math.max(0.5, anchorF + (fg.id - 1))).t));
+    const bp = project3D(fg.knuckleWx, -halfNeckAt(kT) - 56, 6);
+    const bx = clamp(bp.x, 16, W - 16);
+    const by = clamp(bp.y, 28, H - 16);
+    const kp = pts[Math.floor(pts.length * 0.16)];
+    svgEl("line", {
+      x1: bx.toFixed(1), y1: (by + 10).toFixed(1),
+      x2: kp.x.toFixed(1), y2: (kp.y - 6).toFixed(1),
+      stroke: fg.color, "stroke-width": "1.2", opacity: "0.68"
+    }, tipLayer);
+    svgEl("circle", {
+      cx: bx.toFixed(1), cy: by.toFixed(1), r: fg.isActive ? "11.2" : "10.0",
+      fill: fg.isActive ? fg.color : "#0f172a", stroke: fg.color, "stroke-width": fg.isActive ? "2.1" : "1.7"
+    }, tipLayer);
+    svgEl("text", {
+      x: bx.toFixed(1), y: (by + 3.8).toFixed(1),
+      "text-anchor": "middle", "font-size": "11.2", "font-weight": "800",
+      fill: fg.isActive ? "#090c10" : fg.color
+    }, tipLayer).textContent = String(fg.id);
+  });
+
+  // 9b. Thumb Callout Pill safely on the Nut side of the Thumb below 6E
+  {
+    const thEdge = fretCoord(numStrings - 1, tBaseF + 0.1);
+    const tpEdge = project3D(thEdge.wx, halfNeckAt(Math.max(0, Math.min(1, thEdge.t))) + 14, 14);
+    const thPillAnchor = fretCoord(numStrings - 1, tBaseF - 1.1);
+    const tPill = project3D(thPillAnchor.wx, halfNeckAt(Math.max(0, Math.min(1, thPillAnchor.t))) + 52, 8);
+    const pillW = 116;
+    const rawCenterX = tPill.x - dirSign * (pillW * 0.5 + 4);
+    const pillCx = clamp(rawCenterX, pillW * 0.5 + 8, W - pillW * 0.5 - 8);
+    const pillCy = clamp(tPill.y, 18, H - 18);
+    const edgeToThumbX = dirSign > 0 ? pillCx + pillW * 0.5 - 4 : pillCx - pillW * 0.5 + 4;
+    svgEl("path", {
+      d: `M ${(tpEdge.x - dirSign * 14).toFixed(1)} ${(tpEdge.y + 4).toFixed(1)} Q ${((tpEdge.x + edgeToThumbX) * 0.5).toFixed(1)} ${(pillCy + 8).toFixed(1)} ${edgeToThumbX.toFixed(1)} ${pillCy.toFixed(1)}`,
+      fill: "none", stroke: "rgba(251, 146, 60, 0.65)", "stroke-width": "1.3", "stroke-dasharray": "4 3"
+    }, tipLayer);
+    svgEl("rect", {
+      x: (pillCx - pillW * 0.5).toFixed(1), y: (pillCy - 11).toFixed(1),
+      width: pillW, height: "22", rx: "10",
+      fill: "rgba(15, 23, 42, 0.92)", stroke: "rgba(251, 146, 60, 0.55)", "stroke-width": "1.1"
+    }, tipLayer);
+    svgEl("text", {
+      x: pillCx.toFixed(1), y: (pillCy + 3.5).toFixed(1),
+      "text-anchor": "middle", "font-size": "10.5", "font-weight": "700", fill: "#fdba74"
+    }, tipLayer).textContent = "👍 하단 6E 엄지";
+  }
+
+  // 9c. ARCH 74° OK Curve & Badge cleanly beside ④ 소지 (flips Left when anchorF > 9)
+  const coachBodySide = anchorF <= 9;
+  {
+    const fArcBase = coachBodySide ? anchorF + 3.15 : anchorF - 0.55;
+    const fcA0 = fretCoord(0, fArcBase);
+    const fcA1 = fretCoord(0, fArcBase + (coachBodySide ? 0.30 : -0.30));
+    const fcA2 = fretCoord(0, fArcBase + (coachBodySide ? 0.55 : -0.55));
+    const hw0 = halfNeckAt(Math.max(0, Math.min(1, fcA0.t)));
+    const hw1 = halfNeckAt(Math.max(0, Math.min(1, fcA1.t)));
+    const hw2 = halfNeckAt(Math.max(0, Math.min(1, fcA2.t)));
+    const aOrig = project3D(fcA0.wx, -hw0 - 20, 4);
+    const aPeak = project3D(fcA1.wx, -hw1 - 30, 20);
+    const aTip = project3D(fcA2.wx, -hw2 + 16, 4);
+    svgEl("path", {
+      d: `M ${aOrig.x.toFixed(1)} ${aOrig.y.toFixed(1)} Q ${aPeak.x.toFixed(1)} ${aPeak.y.toFixed(1)} ${aTip.x.toFixed(1)} ${aTip.y.toFixed(1)}`,
+      fill: "none", stroke: "#38bdf8", "stroke-width": "1.75", "stroke-dasharray": "4 3"
+    }, tipLayer);
+
+    const bFret = coachBodySide ? anchorF + 5.75 : anchorF - 2.3;
+    const fcB = fretCoord(0, bFret);
+    const badgeTop = project3D(fcB.wx, -halfNeckAt(Math.max(0, Math.min(1, fcB.t))) - 42, 6);
+    const bW = 108;
+    const bCx = clamp(badgeTop.x, bW * 0.5 + 8, W - bW * 0.5 - 8);
+    const bCy = clamp(badgeTop.y, 26, H - 20);
+    svgEl("line", {
+      x1: aPeak.x.toFixed(1), y1: (aPeak.y - 2).toFixed(1),
+      x2: (bCx + (aPeak.x < bCx ? -bW * 0.5 + 2 : bW * 0.5 - 2)).toFixed(1), y2: bCy.toFixed(1),
+      stroke: "rgba(56, 189, 248, 0.45)", "stroke-width": "1.2", "stroke-dasharray": "3 3"
+    }, tipLayer);
+    svgEl("rect", {
+      x: (bCx - bW * 0.5).toFixed(1), y: (bCy - 12).toFixed(1),
+      width: bW, height: "24", rx: "12",
+      fill: "rgba(15, 23, 42, 0.94)", stroke: "rgba(56, 189, 248, 0.6)", "stroke-width": "1.2"
+    }, tipLayer);
+    svgEl("text", {
+      x: bCx.toFixed(1), y: (bCy + 4).toFixed(1),
+      "text-anchor": "middle", "font-size": "11.2", "font-weight": "800", fill: "#7dd3fc"
+    }, tipLayer).textContent = "ARCH 74° OK";
+  }
+
+  // 9d. HAND POS Dock cleanly below open frets away from the Thumb & Wrist
+  {
+    const dFret = coachBodySide ? Math.min(frets - 1.5, anchorF + 6.4) : Math.max(1.2, anchorF - 2.4);
+    const fcD = fretCoord(numStrings - 1, dFret);
+    const dockAnchor = project3D(fcD.wx, halfNeckAt(Math.max(0, Math.min(1, fcD.t))) + 54, -4);
+    const dText = barreInfo
+      ? `BARRE ${barreInfo.fret}F (${currentVoicing ? currentVoicing.name : ""})`
+      : isLeftHand
+        ? `HAND POS: ${minDispF}F~${maxDispF}F · 오른손(④소지 ← ①검지)`
+        : `HAND POS: ${minDispF}F~${maxDispF}F · 왼손(①검지 → ④소지)`;
+    const dockW = barreInfo ? 236 : 268;
+    const dockCx = clamp(dockAnchor.x, dockW * 0.5 + 10, W - dockW * 0.5 - 10);
+    const dockCy = clamp(dockAnchor.y, 24, H - 22);
+    svgEl("rect", {
+      x: (dockCx - dockW * 0.5).toFixed(1), y: (dockCy - 15).toFixed(1),
+      width: dockW, height: "30", rx: "10",
+      fill: "rgba(15, 23, 42, 0.92)", stroke: "rgba(148, 163, 184, 0.38)", "stroke-width": "1.2"
+    }, tipLayer);
+    svgEl("text", {
+      x: dockCx.toFixed(1), y: (dockCy + 4).toFixed(1),
+      "text-anchor": "middle", "font-size": "11.2", "font-weight": "700", fill: "#e2e8f0"
+    }, tipLayer).textContent = dText;
   }
 }
 
@@ -3683,7 +4008,9 @@ function initSlideToggles() {
     updateToggleVisuals(handT, isLeftHand, "toggleLeft", "toggleRight");
     handT.onclick = () => {
       isLeftHand = !isLeftHand;
+      fbYawDeg = isLeftHand ? -Math.abs(fbYawDeg) : Math.abs(fbYawDeg);
       updateToggleVisuals(handT, isLeftHand, "toggleLeft", "toggleRight");
+      updateCam3dUI();
       drawFB();
     };
   }

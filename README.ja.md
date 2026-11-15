@@ -3,7 +3,7 @@
 **エレキギター＆ベースの実音をリアルタイムで聴き取る、超低遅延フレットボード・スケールガイド、リズムゲーム＆スマート運指トレーナー**
 
 [![Live Web App](https://img.shields.io/badge/Live%20Web%20App-Try%20Without%20Install-38bdf8?style=flat&logo=googlechrome&logoColor=white)](https://manofkimchi08.github.io/guitar-scale-tuner/)
-[![Release](https://img.shields.io/badge/Release-v2.3.0-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
+[![Release](https://img.shields.io/badge/Release-v2.4.0-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Web%20%7C%20Windows-brightgreen.svg)](https://manofkimchi08.github.io/guitar-scale-tuner/)
 
@@ -14,11 +14,11 @@
 
 ## 📸 スクリーンショット & UIツアー (Screenshots)
 
-| 🧊 3Dスタジオ指板 (`Carbon` テーマ · 12-TET 実比率) | ⚡ ハイブリッド 2+4 スマート ASIO 診断ドック |
+| 🖐️ 3D IKアーチ型・左手運指コーチ (`Box 1 · 5F~8F`) | ⚡ ハイブリッド 2+4 スマート ASIO 診断ドック |
 | :---: | :---: |
-| ![3D Studio Fretboard](docs/screenshots/screenshot_main.png) | ![Hybrid ASIO Smart Popover](docs/screenshots/screenshot_asio_hybrid.png) |
+| ![3D IK Arch Coach Fretboard](docs/screenshots/screenshot_main.png) | ![Hybrid ASIO Smart Popover](docs/screenshots/screenshot_asio_hybrid.png) |
 
-| 🎮 リズム＆指板・運指トレーナー (`4/4拍子` スケールラン + ハイブリッド左手アバター) | 🖐️ `6/8拍子` 複合拍子ハイウェイ + CAGEDバレーコード(`1 BARRE`) 運指ガイド |
+| 🎮 リズム＆指板・運指トレーナー (`3Dレーザーハイウェイ` + アーチ左手モデル) | 🖐️ `6/8拍子` 複合拍子ハイウェイ + CAGEDバレーコード(`BARRE 5F`) 運指ガイド |
 | :---: | :---: |
 | ![Rhythm Game & Hand Avatar](docs/screenshots/screenshot_rhythm_game.png) | ![6/8 Rhythm & CAGED Barre Chord Hand](docs/screenshots/screenshot_rhythm_68_barre.png) |
 
@@ -28,9 +28,15 @@
 
 ---
 
-## 🌟 主な機能 (v2.3.0)
+## 🌟 主な機能 (v2.4.0)
 
-### 0. 🧊 3Dスタジオ指板＆ハイブリッド 2+4 スマートASIOドック (v2.3.0 新機能)
+### 0. 🖐️ 3D IKアーチ型・左手運指コーチ (`IK Arch Coach Lab`)＆プレイヤー視点対応 (v2.4.0 新機能)
+- **実演奏に即した左手視点 (`左ヘッド 1F → 右ボディ 15F` / `上 1E → 下 6E`)**: 右利きプレイヤーが見下ろす向きと同一の構図 (`PITCH 38° · YAW +12°`) を採用。左ヘッド側 `1E..6E` ラベル、下端 `6E` クリームバインディング＆サイドドット、上側 `1E` から下に曲げて押さえる4本の指(`① 人差し指 → ④ 小指`)、下側 `6E` から上に添える親指と自然フェード手首を立体描画します。
+- **3D Catmull-Rom パラメトリックチューブ＆解剖学的関節ディテール**: 半透明コバルトブルーの3Dチューブ (`#coachDigit`)、指ごとのカラー **PIP/DIP 関節リング**、爪・半月、発光ターゲットパック (`#glowYellowHand`)、そして動的 `#forearmFadeMask` による手首のフェード処理で音名視認性と立体感を両立しました。
+- **コーチングHUD＆自動追従スケーリング**: 上段フレット数字レール(`1..15`)、指番号バッジ(`① ② ③ ④`)、**`ARCH 74° OK`** フォームガイド、**`👍 하단 6E 엄지`** ラベル、**`HAND POS` / `BARRE`** ドックを備え、通常練習・ホバー・リズムゲーム・CAGEDバレーコード・マイク入力にリアルタイム連動します。
+- **直感的な `右利き / 左利き` トグル**: 設定ボタン表記を `右利き / 左利き` (`Right-Handed / Left-Handed`) へ整理し、切替時に3DカメラYaw角と手・指板の左右ミラーリングを自動同期します。
+
+### 1. 🧊 3Dスタジオ指板＆ハイブリッド 2+4 スマートASIOドック (v2.3.0)
 - **実物ギターと同じ 12-TET フレット比率 ($2^{-n/12}$)**: 1フレットから22フレットまで平均律スケール公式に従って間隔が自然に狭まり、実機に近い視認性を実現しました。
 - **インタラクティブ3D回転＆4種ネックテーマ**: **`2D平面`**・**`3D Studio (38°)`**・**`Deep 3D (52°)`** の切り替え、ドラッグによるPitch/Yaw角度回転、ワンクリック視点リセット、右上 **3D軸ギズモ**、立体3Dノートパックと4種ネックテーマ(`Carbon`, `Rosewood`, `Maple`, `Synth`)を備えています。
 - **インストール不要のライブWeb版＆自動フォールバック**: [https://manofkimchi08.github.io/guitar-scale-tuner/](https://manofkimchi08.github.io/guitar-scale-tuner/) へアクセスすると、ローカルブリッジ未検出時は自動でブラウザ標準マイク (`mic_default`) に切り替わり、即座に演奏を始められます。
@@ -83,7 +89,7 @@
 3. **ハイブリッドASIOブリッジモード (任意)**: 上部ドロップダウンから **`⚡ ASIO`** を選ぶと、PC上のローカルASIOブリッジ(`127.0.0.1:8765`)を自動診断します。未導入の場合はスマート診断ポップオーバーが表示され、超低遅延ブリッジ(`.exe`)を導入するか、ワンクリックでブラウザ標準マイクへ切り替えてすぐ演奏できます。
 
 ### 方法 A: Windows ローカル実行ファイル
-1. [Releasesページ](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)から最新の `GuitarScaleTuner-v2.3.0-windows-x64.zip` をダウンロードして解凍するか、リポジトリをクローンします。
+1. [Releasesページ](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)から最新の `GuitarScaleTuner-v2.4.0-windows-x64.zip` をダウンロードして解凍するか、リポジトリをクローンします。
 2. フォルダ内の **`GuitarScaleTuner.exe`** (または `Run_GuitarScaleTuner.bat`) をダブルクリックするだけで、Pythonのインストールなしで即座に起動します。
 
 ### 方法 B: ソースコードから実行

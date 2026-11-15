@@ -3,23 +3,23 @@
 A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic fingering trainer** in the browser and desktop that **listens to your real electric & bass guitar** in real-time.
 
 [![Live Web App](https://img.shields.io/badge/Live%20Web%20App-Try%20Without%20Install-38bdf8?style=flat&logo=googlechrome&logoColor=white)](https://manofkimchi08.github.io/guitar-scale-tuner/)
-[![Release](https://img.shields.io/badge/Release-v2.3.0-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
+[![Release](https://img.shields.io/badge/Release-v2.4.0-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Web%20%7C%20Windows-brightgreen.svg)](https://manofkimchi08.github.io/guitar-scale-tuner/)
 
 > 🌐 **Live Web App (No Install)**: **[https://manofkimchi08.github.io/guitar-scale-tuner/](https://manofkimchi08.github.io/guitar-scale-tuner/)**  
 > 🗣️ **Language / 언어 / 言語**: **[🇺🇸 English](README.md)** | **[🇰🇷 한국어 전문 (Korean)](README.ko.md)** | **[🇯🇵 日本語全文 (Japanese)](README.ja.md)**  
-> 🔽 **In-Page Quick Jump**: [🇺🇸 English](#-key-features-v230) · [🇰🇷 한국어 설명](#-한국어-설명-korean-overview) · [🇯🇵 日本語説明](#-日本語説明-japanese-overview)
+> 🔽 **In-Page Quick Jump**: [🇺🇸 English](#-key-features-v240) · [🇰🇷 한국어 설명](#-한국어-설명-korean-overview) · [🇯🇵 日本語説明](#-日本語説明-japanese-overview)
 
 ---
 
 ## 📸 Screenshots & UI Tour
 
-| 🧊 3D Studio Fretboard (`Carbon` Theme · Realistic 12-TET Scale) | ⚡ Hybrid 2+4 Smart ASIO Diagnostic & Setup Dock |
+| 🖐️ 3D IK Arch Coach Left-Hand Avatar (`Box 1 · 5F~8F`) | ⚡ Hybrid 2+4 Smart ASIO Diagnostic & 3D Hand Preview |
 | :---: | :---: |
-| ![3D Studio Fretboard](docs/screenshots/screenshot_main.png) | ![Hybrid ASIO Smart Popover](docs/screenshots/screenshot_asio_hybrid.png) |
+| ![3D IK Arch Coach Fretboard](docs/screenshots/screenshot_main.png) | ![Hybrid ASIO Smart Popover](docs/screenshots/screenshot_asio_hybrid.png) |
 
-| 🎮 Rhythm & Fretboard Trainer (Scale Run + Hybrid Hand Avatar) | 🖐️ 6/8 Time Signature + CAGED Barre Chord Hand Guide |
+| 🎮 Rhythm & Fretboard Trainer (`3D Laser Highway` + 3D Arched Hand) | 🖐️ 6/8 Time Signature + CAGED Barre Chord (`BARRE 5F`) 3D Hand |
 | :---: | :---: |
 | ![Rhythm Game & Hand Avatar](docs/screenshots/screenshot_rhythm_game.png) | ![6/8 Rhythm & CAGED Barre Chord Hand](docs/screenshots/screenshot_rhythm_68_barre.png) |
 
@@ -29,9 +29,15 @@ A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic f
 
 ---
 
-## 🌟 Key Features (v2.3.0)
+## 🌟 Key Features (v2.4.0)
 
-### 0. 🧊 3D Studio Fretboard & Hybrid 2+4 Smart ASIO Dock (New in v2.3.0)
+### 0. 🖐️ 3D IK Arch Coach Left-Hand Avatar (`IK Arch Coach Lab`) & Player Perspective (New in v2.4.0)
+- **Authentic Player-Perspective 3D Orientation (`Headstock Left 1F → Body Right 15F`, `Top 1E → Bottom 6E`)**: Aligns naturally with how a right-handed guitarist looks down at their fretting hand (`PITCH 38° · YAW +12°`), combining a left headstock (`1E..6E` open string labels), realistic bottom `6E` cream binding with side dots, 4 arched fingers curling downward from above `1E` (`① Index → ④ Pinky`), and the thumb wrapping upward across `6E`.
+- **3D Catmull-Rom Parametric Tubes & Anatomical Detail**: Translucent cobalt-blue 3D digit tubes (`#coachDigit`), color-coded **PIP/DIP arch joint rings**, fingernails + white lunula, glowing yellow target pucks (`#glowYellowHand`), and a dynamically faded wrist silhouette (`#fretboardHandBehindNeckLayer` + `#forearmFadeMask`) preserve complete fretboard note legibility while showing lifelike finger curvature.
+- **Coaching HUD & Adaptive Scaling**: Displays elevated `1..15` fret numbers, top `① ② ③ ④` knuckle badges, the **`ARCH 74° OK`** posture callout, **`👍 하단 6E 엄지`** thumb anchor cue, and the **`HAND POS` / `BARRE`** dock, automatically scaling digit thickness across higher frets and reacting live to idle scale previews, hover, rhythm playback, CAGED barre voicings, and microphone input.
+- **Clear `Right-Handed / Left-Handed` Toggle**: Refines hand selection labels to **`Right-Handed / Left-Handed`** (`오른손잡이 / 왼손잡이`, `右利き / 左利き`) and mirrors 3D yaw and finger orientation cues symmetrically when switched.
+
+### 1. 🧊 3D Studio Fretboard & Hybrid 2+4 Smart ASIO Dock (v2.3.0)
 - **Realistic 12-TET Fret Proportions ($2^{-n/12}$)**: Fret spacing accurately narrows down the neck toward the body following the physical 12-tone equal temperament formula.
 - **Interactive 3D Perspective Modes**: Switch between **`2D Flat`**, **`3D Studio (38°)`**, and **`Deep 3D (52°)`**, drag to orbit **Pitch / Yaw** freely with live angle readouts, reset the camera in one click, and inspect orientation with the top-right **3D Axis Gizmo**.
 - **3D Extruded Note Pucks & 4 Studio Neck Themes**: Combines an Antigravity dark carbon palette with tactile 3D shadowed pucks and **`Carbon`**, **`Rosewood`**, **`Maple`**, and **`Synth`** neck styles.
@@ -80,7 +86,11 @@ A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic f
 
 > 📄 **전체 한국어 문서는 [README.ko.md](README.ko.md)에서도 보실 수 있습니다.**
 
-**Scales, heard. (Guitar Scale Tuner v2.3.0)** 는 실제 일렉트릭 기타와 베이스 기타 소리를 실시간으로 인식하는 초저지연 **3D 지판 스케일 가이드, 리듬 게임 & 인체공학적 운지 트레이너**입니다.
+**Scales, heard. (Guitar Scale Tuner v2.4.0)** 는 실제 일렉트릭 기타와 베이스 기타 소리를 실시간으로 인식하는 초저지연 **3D 지판 스케일 가이드, IK 아치 교정형 3D 왼손 운지 코치 & 리듬 게임 트레이너**입니다.
+
+### ✨ v2.4.0 핵심 업데이트
+1. **🖐️ 3D IK 아치 교정형 왼손 코치 (`IK Arch Coach Lab`)**: 좌측 헤드(`1F`, `1E..6E`) → 우측 바디(`15F`), 상단 `1E`에서 아래로 감아 내리는 3D Catmull-Rom 튜브 손가락(`①~④`, PIP/DIP 관절 링·손톱/반월 포함)과 하단 `6E` 크림 바인딩·엄지·동적 페이드 손목 실루엣, `ARCH 74° OK` & `HAND POS` 교육용 HUD를 탑재했습니다.
+2. **🔄 직관적인 `오른손잡이 / 왼손잡이` 설정 & 원클릭 실행 패키지 최신화**: 연주자 기준 토글 라벨로 정비하고 전환 시 3D 카메라 Yaw와 손/지판 구도를 자동 미러링합니다.
 
 ### ✨ v2.3.0 핵심 업데이트
 1. **🧊 3D 스튜디오 지판 & 실제 12-TET 프렛 비례 ($2^{-n/12}$)**: `2D 평면`, `3D Studio (38°)`, `Deep 3D (52°)` 시점, 드래그 Pitch/Yaw 회전과 3D 축 기즈모, 입체 3D 노트 퍽, 4종 넥 테마(`Carbon`, `Rosewood`, `Maple`, `Synth`)를 지원합니다.
@@ -105,7 +115,11 @@ A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic f
 
 > 📄 **日本語の完全なドキュメントは [README.ja.md](README.ja.md) でもご覧いただけます。**
 
-**Scales, heard. (Guitar Scale Tuner v2.3.0)** は、エレキギター＆ベースの実音をリアルタイムで聴き取る超低遅延の**3Dフレットボード・スケールガイド、リズムゲーム＆スマート運指トレーナー**です。
+**Scales, heard. (Guitar Scale Tuner v2.4.0)** は、エレキギター＆ベースの実音をリアルタイムで聴き取る超低遅延の**3Dフレットボード・スケールガイド、3D IKアーチ運指コーチ＆リズムゲームトレーナー**です。
+
+### ✨ v2.4.0 主なアップデート
+1. **🖐️ 3D IKアーチ型・左手運指コーチ (`IK Arch Coach Lab`)**: 左ヘッド(`1F`, `1E..6E`) → 右ボディ(`15F`)の実演奏視点を忠実に再現。上側`1E`から下に曲げて押さえる3D Catmull-Romチューブ指(`①〜④`・PIP/DIP関節リング・爪/半月)と下側`6E`クリームバインディング・親指・フェード手首、`ARCH 74° OK`＆`HAND POS`コーチングHUDを搭載しました。
+2. **🔄 直感的な `右利き / 左利き` 切替＆ワンクリックEXE最新化**: プレイヤー基準のラベルへ刷新し、切替時に3DカメラYaw角と左右ミラーリングを連動させました。
 
 ### ✨ v2.3.0 主なアップデート
 1. **🧊 3Dスタジオ指板＆実物12-TETフレット比率 ($2^{-n/12}$)**: `2D平面`、`3D Studio (38°)`、`Deep 3D (52°)` 視点、ドラッグによるPitch/Yaw回転と3D軸ギズモ、立体3Dノートパック、4種のネックテーマ(`Carbon`, `Rosewood`, `Maple`, `Synth`)を搭載しました。
@@ -134,7 +148,7 @@ A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic f
 3. **Optional Hybrid ASIO Bridge Mode**: Selecting **`⚡ ASIO`** in the top bar automatically probes for the local ASIO bridge (`ws://127.0.0.1:8765`). If not installed yet, a compact Smart ASIO Diagnostic Dock opens right below the selector so you can either download the helper `.exe` for ultra-low-latency polyphonic detection or switch right back to your browser microphone with one click.
 
 ### Option A: Windows One-Click Executable
-1. Download and extract the latest release archive (`GuitarScaleTuner-v2.3.0-windows-x64.zip`) from [Releases](https://github.com/ManofKimchi08/guitar-scale-tuner/releases), or clone the repository.
+1. Download and extract the latest release archive (`GuitarScaleTuner-v2.4.0-windows-x64.zip`) from [Releases](https://github.com/ManofKimchi08/guitar-scale-tuner/releases), or clone the repository.
 2. Double-click **`GuitarScaleTuner.exe`** (or `Run_GuitarScaleTuner.bat`) in the root folder. No Python installation required!
 
 ### Option B: Run from Source

@@ -4,6 +4,37 @@
 
 ---
 
+## 🖐️ [v2.4.0] - 3D IK 아치 교정형 왼손 운지 코치(IK Arch Coach Lab), 오른손잡이/왼손잡이 직관적 시점 정렬 & 원클릭 실행 패키지 최신화 (2026-11-15)
+
+### 📌 개요
+실제 오른손잡이 기타리스트가 자신의 왼손 운지를 1인칭·연주자 시점으로 직관적으로 보고 연습할 수 있도록 **3D Catmull-Rom 파라메트릭 튜브 기반의 `IK 아치 교정형 왼손 운지 코치(IK Arch Coach Lab)`**를 전면 탑재한 메이저 업데이트입니다. 좌측 헤드스톡(`1F`) → 우측 바디(`15F`), 상단 `1E` 세현 → 하단 `6E` 굵은 현·크림 바인딩 구조를 정밀 구현했으며, 설정 토글 라벨을 **`오른손잡이 / 왼손잡이`** 로 직관화하고 원클릭 실행 패키지까지 최신화했습니다.
+
+### 📸 주요 화면 미리보기
+| 🖐️ 3D IK 아치 교정형 왼손 코치 (`Box 1 · 5F~8F` 스케일 가이드) | ⚡ 하이브리드 2+4 스마트 ASIO 진단 팝오버 & 3D 왼손 연동 |
+| :---: | :---: |
+| ![3D IK Arch Coach Main](docs/screenshots/screenshot_main.png) | ![Hybrid ASIO & 3D Hand](docs/screenshots/screenshot_asio_hybrid.png) |
+
+| 🎮 리듬 & 지판·운지 트레이너 (`3D 레이저 하이웨이` + 아치 운지 코치) | 🎼 `6/8박` 겹박자 리듬 & `CAGED E-Shape` 바레 코드(`BARRE 5F`) 손 자세 |
+| :---: | :---: |
+| ![Rhythm Game & 3D Left Hand](docs/screenshots/screenshot_rhythm_game.png) | ![6/8 Barre Chord 3D Left Hand](docs/screenshots/screenshot_rhythm_68_barre.png) |
+
+### 🛠️ 주요 변경사항
+* **🖐️ 3D Catmull-Rom 튜브 기반 `IK 아치 교정형 왼손 코치` (`src/main.js`, `index.html`)**:
+  - **연주자 기준 3D 해부학 방향 정렬 (`PITCH 38° · YAW +12°`)**: 좌측 헤드스톡(`1F`, `1E..6E` 개방현 라벨)에서 우측 바디(`15F`)로 이어지는 3D 넥 구도를 확립하고, 위쪽 `1E` 너머에서 아래로 감아 내리는 4손가락(`① 검지 → ② 중지 → ③ 약지 → ④ 소지`)과 아래쪽 `6E` 크림 바인딩(`#dfd4bc` + `#181512` 사이드 닷)을 넘어 위로 감아 올리는 엄지를 입체 튜브로 구현했습니다.
+  - **3겹 SVG 깊이 계층 & 동적 손목 페이드 (`renderStaticFretboard`, `renderFretboardHandOverlay`)**:
+    - `#fretboardHandBehindNeckLayer`: 지판 뒤로 보이는 상단 손바닥 쿠션과 하단 엄지근(Thenar)·손목 실루엣을 렌더링하고 `#forearmFadeGrad`가 현재 프렛 박스 위치 및 카메라 회전 각도를 실시간 추적해 화면 하단 경계 없이 자연스럽게 페이드 아웃되도록 처리했습니다.
+    - `#fretboardHandBackLayer`: 각 손가락 패드와 엄지가 지판·현 위에 드리우는 3D 그림자를 노트 퍽 하단에 렌더링합니다.
+    - `#fretboardHandTipLayer`: 반투명 코발트 블루 3D 손가락 튜브(`#coachDigit`), 손가락별 컬러 **PIP/DIP 아치 관절 링**, 손톱 및 흰색 반월(Lunula), 활성 타겟 노란색 발광 퍽(`#glowYellowHand`), 다음 노트 예고 점선 아크를 노트 가독성을 해치지 않으면서 선명하게 표시합니다.
+  - **교육용 코칭 HUD & 자동 포지션 Scaling**: `viewBox="0 0 1060 430"`으로 캔버스를 확장하여 상단 프렛 레일(`1..15`, 활성 박스 하이라이트), 상단 `① ② ③ ④` 너클 배지, **`ARCH 74° OK`** 아치 각도 가이드, **`👍 하단 6E 엄지`** 라벨, **`HAND POS` / `BARRE` 포지션 도크**가 서로 겹치지 않도록 배치했습니다. 또한 프렛 폭 비율(`localFretSpan / 62`)에 맞춰 손가락 두께를 자동 스케일링해 하이 프렛(`9~15F`)에서도 손가락이 뭉치지 않습니다.
+  - **기본 3D 뷰 즉시 표시 & 다양한 모드 연동**: 연습(Scale) 기본 3D 화면에서도 활성 박스 루트/스케일 포지션 기준의 기본 왼손 코치 자세를 즉시 표시하며, 마우스 호버·리듬 게임·CAGED 바레 코드(`barreInfo`)·마이크 실시간 피치 입력(`litPcs`)에 맞춰 손가락 아치와 엄지가 실시간 이동합니다.
+  - **곡률 투영 보정 (`project3D`)**: 지판 곡률 `normY`를 `[-1, 1]`로 클램프해 지판 바깥 손가락 너클(`-88`)과 손목(`+195`) 투영 시 Z-축 왜곡이 발생하지 않도록 안정화했습니다.
+* **🔄 직관적인 `오른손잡이 / 왼손잡이` 설정 라벨 통일 (`index.html`, `src/i18n.js`, `src/main.js`)**:
+  - 기존 혼동을 주던 `왼손 / 오른손` 버튼 표기를 플레이어 기준의 **`오른손잡이 / 왼손잡이`** (영어 `Right-Handed / Left-Handed`, 일본어 `右利き / 左利き`)로 전면 수정하고, 전환 시 3D 카메라 `fbYawDeg` 부호와 `HAND POS` 방향 문구(`왼손(①검지 → ④소지)` / `오른손(④소지 ← ①검지)`)가 함께 미러링되도록 개선했습니다.
+* **🖥️ 원클릭 실행 파일(`GuitarScaleTuner.exe`) 및 스크린샷/릴리즈 패키지 최신화 (`build_exe.py`)**:
+  - PyInstaller 6.21.0 기반 `dist/GuitarScaleTuner/GuitarScaleTuner.exe` 및 `GuitarScaleTuner-v2.4.0-windows-x64.zip` 배포 패키지를 최신 UI·3D 왼손 그래픽 기준으로 재빌드했습니다.
+
+---
+
 ## 🌐 [v2.3.0] - 3D 스튜디오 지판, 하이브리드 스마트 ASIO 진단 독, GitHub Pages 무설치 웹 배포 & 보안 강화 (2026-11-14)
 
 ### 📌 개요

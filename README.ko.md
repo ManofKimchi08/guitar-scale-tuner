@@ -3,7 +3,7 @@
 **실제 일렉트릭 기타와 베이스 기타 소리를 실시간으로 듣고 반응하는 초저지연 지판 스케일 가이드, 리듬 게임 & 스마트 운지 트레이너**
 
 [![Live Web App](https://img.shields.io/badge/Live%20Web%20App-%EB%AC%B4%EC%84%A4%EC%B9%98%20%EC%9B%B9%20%EC%8B%A4%ED%96%89-38bdf8?style=flat&logo=googlechrome&logoColor=white)](https://manofkimchi08.github.io/guitar-scale-tuner/)
-[![Release](https://img.shields.io/badge/Release-v2.3.0-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
+[![Release](https://img.shields.io/badge/Release-v2.4.0-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Web%20%7C%20Windows-brightgreen.svg)](https://manofkimchi08.github.io/guitar-scale-tuner/)
 
@@ -14,11 +14,11 @@
 
 ## 📸 주요 화면 미리보기 (Screenshots & UI Tour)
 
-| 🧊 3D 스튜디오 지판 (`Carbon` 테마 · 12-TET 실제 비례) | ⚡ 하이브리드 2+4 스마트 ASIO 진단 & 연결 도우미 |
+| 🖐️ 3D IK 아치 교정형 왼손 코치 (`Box 1 · 5F~8F` 스케일 가이드) | ⚡ 하이브리드 2+4 스마트 ASIO 진단 & 3D 왼손 연동 |
 | :---: | :---: |
-| ![3D Studio Fretboard](docs/screenshots/screenshot_main.png) | ![Hybrid ASIO Smart Popover](docs/screenshots/screenshot_asio_hybrid.png) |
+| ![3D IK Arch Coach Fretboard](docs/screenshots/screenshot_main.png) | ![Hybrid ASIO Smart Popover](docs/screenshots/screenshot_asio_hybrid.png) |
 
-| 🎮 리듬 & 지판·운지 트레이너 (`4/4박` 스케일 런 + 하이브리드 왼손 아바타) | 🖐️ `6/8박` 겹박자 하이웨이 + CAGED 바레 코드(`1 BARRE`) 손 가이드 |
+| 🎮 리듬 & 지판·운지 트레이너 (`4/4박` 스케일 런 + 3D 아치 왼손 코치) | 🖐️ `6/8박` 겹박자 하이웨이 + CAGED 바레 코드(`BARRE 5F`) 3D 손 가이드 |
 | :---: | :---: |
 | ![Rhythm Game & Hand Avatar](docs/screenshots/screenshot_rhythm_game.png) | ![6/8 Rhythm & CAGED Barre Chord Hand](docs/screenshots/screenshot_rhythm_68_barre.png) |
 
@@ -28,9 +28,15 @@
 
 ---
 
-## 🌟 핵심 기능 소개 (v2.3.0)
+## 🌟 핵심 기능 소개 (v2.4.0)
 
-### 0. 🧊 3D 스튜디오 지판 & 하이브리드 2+4 스마트 ASIO 진단 독 (v2.3.0 신규)
+### 0. 🖐️ 3D IK 아치 교정형 왼손 코치 (`IK Arch Coach Lab`) & 연주자 시점 정렬 (v2.4.0 신규)
+- **연주자 실제 1인칭 구도 (`좌측 헤드 1F → 우측 바디 15F`, `상단 1E → 하단 6E`)**: 오른손잡이 기타리스트가 실제 기타 넥을 내려다볼 때와 동일한 방향으로 정렬(`PITCH 38° · YAW +12°`)했으며, 상단 `1E` 너머에서 아래로 감아 내리는 4손가락(`① 검지 → ④ 소지`)과 하단 `6E` 크림 바인딩(`#dfd4bc` + 사이드 닷)을 넘어 위로 감아 올리는 엄지·페이드 손목을 입체 3D로 구현했습니다.
+- **3D Catmull-Rom 파라메트릭 튜브 & 해부학적 관절 디테일**: 반투명 코발트 블루 손가락 튜브(`#coachDigit`) 위에 손가락별 컬러 **PIP/DIP 아치 관절 링**, 손톱과 흰색 반월(Lunula), 활성 타겟 황색 발광 퍽을 배치하고 `#fretboardHandBehindNeckLayer` + 동적 `#forearmFadeMask`로 지판 뒤 손바닥·손목이 부드럽게 사라지도록 설계해 음이름·도수 가독성과 입체감을 동시에 확보했습니다.
+- **교육용 코칭 HUD & 자동 포지션 연동**: 상단 프렛 레일(`1..15`), **`① ② ③ ④`** 너클 배지, **`ARCH 74° OK`** 손가락 아치 가이드, **`👍 하단 6E 엄지`**, **`HAND POS` / `BARRE` 포지션 도크**를 제공하며, 기본 스케일 연습·마우스 호버·리듬 게임·CAGED 바레 코드·실시간 마이크 입력까지 3D 손 모델이 즉시 연동됩니다.
+- **직관적인 `오른손잡이 / 왼손잡이` 설정 토글**: 설정 라벨을 연주자 기준(`오른손잡이 / 왼손잡이`)으로 통일하고, 전환 시 3D 카메라 Yaw 각도와 좌우 지판·손 자세를 대칭 미러링합니다.
+
+### 1. 🧊 3D 스튜디오 지판 & 하이브리드 2+4 스마트 ASIO 진단 독 (v2.3.0)
 - **실제 기타와 동일한 12-TET 프렛 비례 ($2^{-n/12}$)**: 1프렛부터 22프렛까지 실제 기타 물리 스케일 공식을 적용해 바디 쪽으로 갈수록 프렛 간격이 자연스럽게 좁아집니다.
 - **인터랙티브 3D 원근 회전 & 4종 넥 테마**: **`2D 평면`**, **`3D Studio (38°)`**, **`Deep 3D (52°)`** 프리셋 전환, 드래그 Pitch/Yaw 회전, 원클릭 시점 리셋, 우측 상단 3D 축 기즈모와 입체 3D 노트 퍽(`Carbon`, `Rosewood`, `Maple`, `Synth`)을 지원합니다.
 - **무설치 라이브 웹 배포 & 자동 폴백**: [https://manofkimchi08.github.io/guitar-scale-tuner/](https://manofkimchi08.github.io/guitar-scale-tuner/) 접속 시 로컬 ASIO 브릿지가 없으면 자동으로 브라우저 웹 마이크(`mic_default` · `웹 마이크 사용 중`)로 전환되어 즉시 연주할 수 있습니다.
@@ -83,7 +89,7 @@
 3. **하이브리드 ASIO 브릿지 모드 (선택)**: 상단 입력 장치에서 **`⚡ ASIO`**를 선택하면 내 PC의 로컬 ASIO 브릿지 실행 여부를 자동 진단합니다. 미설치 시 스마트 안내 팝오버가 열려 초저지연 브릿지(`.exe`)를 설치하거나 원클릭으로 브라우저 마이크로 전환해 연주할 수 있습니다.
 
 ### 방법 A: Windows 로컬 패키지 실행
-1. [Releases 페이지](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)에서 최신 `GuitarScaleTuner-v2.3.0-windows-x64.zip` 파일을 다운로드하여 압축을 해제하거나 저장소를 클론합니다.
+1. [Releases 페이지](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)에서 최신 `GuitarScaleTuner-v2.4.0-windows-x64.zip` 파일을 다운로드하여 압축을 해제하거나 저장소를 클론합니다.
 2. 폴더 안의 **`GuitarScaleTuner.exe`** (또는 `Run_GuitarScaleTuner.bat`)를 더블클릭하면 파이썬 설치 없이 즉시 실행됩니다.
 
 ### 방법 B: 파이썬 소스 코드로 실행
