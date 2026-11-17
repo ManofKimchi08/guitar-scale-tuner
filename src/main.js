@@ -1050,41 +1050,82 @@ let fretboardGeom = null;
 let hoveredFretNote = null;
 let handAnchorFretSmoothed = null;
 let currentNeckWood = "ebony";
+const FB_TILT_MIN = -35, FB_TILT_MAX = 78;
+const FB_YAW_MIN = -80, FB_YAW_MAX = 80;
+const FB_ZOOM_MIN = 0.50, FB_ZOOM_MAX = 2.50;
 let fbViewMode = "studio"; // "2d" | "studio" | "deep" | "custom"
 let fbTiltDeg = 38;
 let fbYawDeg = 12;
+let fbZoom = 1.0;
+let fbPanX = 0;
+let fbPanY = 0;
 let isDragging3dCam = false;
+let isPanningCam = false;
 let wasDragged3d = false;
 let dragStartX = 0, dragStartY = 0, dragStartTilt = 38, dragStartYaw = 12;
+let dragStartPanX = 0, dragStartPanY = 0;
 
 function updateCam3dUI() {
+  const zoomPct = Math.round(fbZoom * 100);
   const readout = $("fbCamReadout");
   if (readout) {
-    readout.textContent = fbTiltDeg <= 1.5 && Math.abs(fbYawDeg) <= 1.5
-      ? "2D FLAT (0°)"
-      : `PITCH ${Math.round(fbTiltDeg)}° · YAW ${Math.round(fbYawDeg)}°`;
+    const yawVal = Math.round(fbYawDeg);
+    const yawStr = yawVal > 0 ? `+${yawVal}` : `${yawVal}`;
+    readout.textContent = (Math.abs(fbTiltDeg) <= 1.5 && Math.abs(fbYawDeg) <= 1.5)
+      ? `2D FLAT (0°) · ${zoomPct}%`
+      : `PITCH ${Math.round(fbTiltDeg)}° · YAW ${yawStr}° · ${zoomPct}%`;
   }
+  const zoomSlider = $("fbZoomSlider");
+  if (zoomSlider) zoomSlider.value = String(zoomPct);
+  const zoomValEl = $("fbZoomVal");
+  if (zoomValEl) zoomValEl.textContent = `${zoomPct}%`;
+
   document.querySelectorAll(".v3d-preset-btn").forEach(btn => {
     btn.classList.toggle("active", btn.getAttribute("data-view3d") === fbViewMode);
   });
   const fb = $("fb");
   if (fb) {
-    fb.classList.toggle("is-3d-orbit", fbTiltDeg > 1.5 || Math.abs(fbYawDeg) > 1.5);
+    fb.classList.toggle("is-3d-orbit", Math.abs(fbTiltDeg) > 1.5 || Math.abs(fbYawDeg) > 1.5 || fbZoom !== 1);
   }
+}
+
+function setFbZoom(nextZoom, focusSvgX = null, focusSvgY = null) {
+  const clamped = Math.max(FB_ZOOM_MIN, Math.min(FB_ZOOM_MAX, nextZoom));
+  if (focusSvgX !== null && focusSvgY !== null && fbZoom > 0) {
+    const ratio = clamped / fbZoom;
+    fbPanX = (focusSvgX - 535) * (1 - ratio) + fbPanX * ratio;
+    fbPanY = (focusSvgY - 200) * (1 - ratio) + fbPanY * ratio;
+  }
+  if (clamped <= 1.0 && Math.abs(fbPanX) + Math.abs(fbPanY) > 0) {
+    fbPanX *= 0.5;
+    fbPanY *= 0.5;
+    if (Math.abs(fbPanX) < 1) fbPanX = 0;
+    if (Math.abs(fbPanY) < 1) fbPanY = 0;
+  }
+  fbPanX = Math.max(-340, Math.min(340, fbPanX));
+  fbPanY = Math.max(-190, Math.min(190, fbPanY));
+  fbZoom = clamped;
+  updateCam3dUI();
+  drawFB();
 }
 
 function setFbViewMode(mode) {
   fbViewMode = mode;
+  fbPanX = 0;
+  fbPanY = 0;
   if (mode === "2d") {
     fbTiltDeg = 0;
     fbYawDeg = 0;
+    fbZoom = 1.0;
   } else if (mode === "deep") {
-    fbTiltDeg = 52;
+    fbTiltDeg = 56;
     fbYawDeg = 0;
+    fbZoom = 1.15;
   } else {
     fbViewMode = "studio";
     fbTiltDeg = 38;
     fbYawDeg = isLeftHand ? -12 : 12;
+    fbZoom = 1.0;
   }
   updateCam3dUI();
   drawFB();
@@ -1111,10 +1152,10 @@ function renderStaticFretboard() {
   const W = 1060, H = 430;
   fb.setAttribute("viewBox", `0 0 ${W} ${H}`);
   const ns = "http://www.w3.org/2000/svg";
-  const is3D = (fbTiltDeg > 1.5 || Math.abs(fbYawDeg) > 1.5);
+  const is3D = (Math.abs(fbTiltDeg) > 1.5 || Math.abs(fbYawDeg) > 1.5);
   const tiltRad = is3D ? (fbTiltDeg * Math.PI) / 180 : 0;
   const yawRad = is3D ? (fbYawDeg * Math.PI) / 180 : 0;
-  const camDist = fbViewMode === "deep" ? 560 : (fbTiltDeg > 45 ? 580 : 920);
+  const camDist = 920;
 
   const showHandArea = is3D || (appMode === "rhythm") || (labelMode === "finger") || (guideMode === "chord" && voicingMode && currentInstrument !== "bass") || (hoveredFretNote !== null);
   const cxScreen = 535;
@@ -1188,7 +1229,7 @@ function renderStaticFretboard() {
       <stop offset="100%" stop-color="white" stop-opacity="0"/>
     </linearGradient>
     <mask id="forearmFadeMask">
-      <rect x="0" y="0" width="${W}" height="${H}" fill="url(#forearmFadeGrad)"/>
+      <rect x="-1000" y="-1000" width="${W + 2000}" height="${H + 2000}" fill="url(#forearmFadeGrad)"/>
     </mask>
     <filter id="glowYellowHand" x="-80%" y="-80%" width="260%" height="260%">
       <feGaussianBlur stdDeviation="5.0" result="blur"/>
@@ -1238,7 +1279,12 @@ function renderStaticFretboard() {
   // True 3D Perspective Camera Projection (collapses cleanly to 2D Flat when !is3D)
   const project3D = (wx, wy, wz = 0) => {
     if (!is3D) {
-      return { x: cxScreen + wx, y: cyScreen + wy, scale: 1, depth: 0 };
+      return {
+        x: cxScreen + fbPanX + wx * fbZoom,
+        y: cyScreen + fbPanY + wy * fbZoom,
+        scale: fbZoom,
+        depth: 0
+      };
     }
     const normY = Math.max(-1, Math.min(1, wy / 68));
     const archZ = 10 * (1 - normY * normY);
@@ -1251,10 +1297,10 @@ function renderStaticFretboard() {
     const y2 = y1 * Math.cos(tiltRad) - z1 * Math.sin(tiltRad);
     const z2 = y1 * Math.sin(tiltRad) + z1 * Math.cos(tiltRad);
 
-    const persp = camDist / Math.max(140, camDist - z2);
+    const persp = (camDist / Math.max(240, camDist - z2)) * fbZoom;
     return {
-      x: cxScreen + x1 * persp,
-      y: cyScreen + y2 * persp,
+      x: cxScreen + fbPanX + x1 * persp,
+      y: cyScreen + fbPanY + y2 * persp,
       scale: persp,
       depth: z2
     };
@@ -1288,7 +1334,7 @@ function renderStaticFretboard() {
     fretX, fretRatio, stringY, fretCenterX, project3D, projectNote, noteWorldCoord,
     wxAtRatio, halfNeckAt, halfStrAt, strYWorld, ratioOfFret, dirSign,
     nutHalfNeck, endHalfNeck, neckHalfLen,
-    is3D, tiltRad, yawRad, W, H, neckH: H, fullH: H, frets, numStrings, cyScreen, showHandArea
+    is3D, tiltRad, yawRad, fbZoom, fbPanX, fbPanY, W, H, neckH: H, fullH: H, frets, numStrings, cyScreen, showHandArea
   };
 
   // ==============================================================
@@ -1347,8 +1393,8 @@ function renderStaticFretboard() {
       const pole = document.createElementNS(ns, "ellipse");
       pole.setAttribute("cx", pp.x.toFixed(1));
       pole.setAttribute("cy", pp.y.toFixed(1));
-      pole.setAttribute("rx", "3");
-      pole.setAttribute("ry", (2.8 * Math.cos(tiltRad)).toFixed(1));
+      pole.setAttribute("rx", (3 * pp.scale).toFixed(1));
+      pole.setAttribute("ry", (2.8 * Math.abs(Math.cos(tiltRad)) * pp.scale).toFixed(1));
       pole.setAttribute("fill", "#a1a1aa");
       fb.appendChild(pole);
     }
@@ -1538,12 +1584,12 @@ function renderStaticFretboard() {
       }
       const fShad = document.createElementNS(ns, "path");
       fShad.setAttribute("d", dShadow); fShad.setAttribute("fill", "none");
-      fShad.setAttribute("stroke", "rgba(0,0,0,0.58)"); fShad.setAttribute("stroke-width", "2.2");
+      fShad.setAttribute("stroke", "rgba(0,0,0,0.58)"); fShad.setAttribute("stroke-width", (2.2 * Math.pow(fbZoom, 0.5)).toFixed(2));
       fb.appendChild(fShad);
 
       const fLine = document.createElementNS(ns, "path");
       fLine.setAttribute("d", dWire); fLine.setAttribute("fill", "none");
-      fLine.setAttribute("stroke", nt.fret); fLine.setAttribute("stroke-width", "1.95");
+      fLine.setAttribute("stroke", nt.fret); fLine.setAttribute("stroke-width", (1.95 * Math.pow(fbZoom, 0.5)).toFixed(2));
       fLine.setAttribute("stroke-opacity", "0.75"); fLine.setAttribute("stroke-linecap", "round");
       fb.appendChild(fLine);
 
@@ -1578,7 +1624,7 @@ function renderStaticFretboard() {
   // LAYER 3: Pearloid Inlays & Tapered Rhythm Box Zone
   // ==============================================================
   const inlayFill = currentNeckWood === "maple" ? "#27272a" : "url(#pearlInlayGrad)";
-  const ryRatio = is3D ? Math.max(0.35, Math.cos(tiltRad)) : 1.0;
+  const ryRatio = is3D ? Math.max(0.35, Math.abs(Math.cos(tiltRad))) : 1.0;
 
   [3, 5, 7, 9, 15].forEach(f => {
     if (f <= frets) {
@@ -1641,7 +1687,7 @@ function renderStaticFretboard() {
   for (let s = 0; s < numStrings; s++) {
     const x0W = wxAtRatio(0), x1W = wxAtRatio(1);
     const y0W = strYWorld(s, 0), y1W = strYWorld(s, 1);
-    const strokeW = (currentInstrument === "bass") ? (2.1 + s * 1.05) : (1.0 + s * 0.45);
+    const strokeW = ((currentInstrument === "bass") ? (2.1 + s * 1.05) : (1.0 + s * 0.45)) * Math.pow(fbZoom, 0.55);
     const isWound = (currentInstrument === "bass") || (s >= 3);
 
     if (is3D) {
@@ -1698,7 +1744,7 @@ function renderStaticFretboard() {
   }
   currentChordPcs = isChordMode ? getChordPcs(rootPc, chordTypeVal) : [];
 
-  const puckRyScale = is3D ? Math.max(0.48, Math.cos(tiltRad) * 0.84) : 1.0;
+  const puckRyScale = is3D ? Math.max(0.48, Math.abs(Math.cos(tiltRad)) * 0.84) : 1.0;
 
   for (let s = 0; s < numStrings; s++) {
     const openMidi = strings[s];
@@ -1823,7 +1869,7 @@ function renderStaticFretboard() {
 
     const ring = document.createElementNS(ns, "ellipse");
     ring.setAttribute("cx", gx); ring.setAttribute("cy", gy);
-    ring.setAttribute("rx", "17"); ring.setAttribute("ry", (17 * Math.max(0.35, Math.cos(tiltRad))).toFixed(1));
+    ring.setAttribute("rx", "17"); ring.setAttribute("ry", (17 * Math.max(0.35, Math.abs(Math.cos(tiltRad)))).toFixed(1));
     ring.setAttribute("fill", "none"); ring.setAttribute("stroke", "#38bdf8");
     ring.setAttribute("stroke-width", "1"); ring.setAttribute("stroke-dasharray", "3 2"); ring.setAttribute("opacity", "0.65");
     gBox.appendChild(ring);
@@ -1924,7 +1970,7 @@ function renderFretboardHandOverlay(nowRel = 0) {
   } = fretboardGeom;
   const ns = "http://www.w3.org/2000/svg";
   const zNoteTop = is3D ? 7.2 : 0;
-  const ryScale3d = is3D ? Math.max(0.48, Math.cos(tiltRad) * 0.84) : 1.0;
+  const ryScale3d = is3D ? Math.max(0.48, Math.abs(Math.cos(tiltRad)) * 0.84) : 1.0;
 
   const svgEl = (tag, attrs, parent) => {
     const node = document.createElementNS(ns, tag);
@@ -4775,7 +4821,7 @@ function drawRhythmHighway(nowRel = 0) {
   const ns = "http://www.w3.org/2000/svg";
   const meter = getRhythmMeterInfo();
   const pulseSec = meter.pulseSec;
-  const ryScale = is3D ? Math.max(0.45, Math.cos(tiltRad) * 0.84) : 1.0;
+  const ryScale = is3D ? Math.max(0.45, Math.abs(Math.cos(tiltRad)) * 0.84) : 1.0;
 
   // Pulse the Fret Box Zone border in sync with the current beat
   const boxRect = $("rhythmBoxZoneRect");
@@ -5375,6 +5421,15 @@ function bindEvents() {
   if ($("btnResetCam3d")) {
     $("btnResetCam3d").onclick = () => setFbViewMode("studio");
   }
+  if ($("btnZoomOut")) {
+    $("btnZoomOut").onclick = () => setFbZoom(Math.round((fbZoom - 0.15) * 20) / 20);
+  }
+  if ($("btnZoomIn")) {
+    $("btnZoomIn").onclick = () => setFbZoom(Math.round((fbZoom + 0.15) * 20) / 20);
+  }
+  if ($("fbZoomSlider")) {
+    $("fbZoomSlider").oninput = e => setFbZoom(parseInt(e.target.value, 10) / 100);
+  }
   if ($("startBtn")) $("startBtn").onclick = () => running ? stop() : start();
   if ($("keySel")) {
     $("keySel").onchange = e => {
@@ -5683,38 +5738,78 @@ function bindEvents() {
   });
 
   if ($("fb")) {
-    $("fb").onpointerdown = e => {
-      if (e.button !== 0 && e.pointerType === "mouse") return;
-      isDragging3dCam = true;
+    const fbEl = $("fb");
+    fbEl.onpointerdown = e => {
+      const wantPan = e.shiftKey || e.button === 1 || e.button === 2;
+      if (e.button === 1) e.preventDefault();
+      if (!wantPan && e.button !== 0 && e.pointerType === "mouse") return;
       wasDragged3d = false;
       dragStartX = e.clientX;
       dragStartY = e.clientY;
-      dragStartTilt = fbTiltDeg;
-      dragStartYaw = fbYawDeg;
+      if (wantPan) {
+        isPanningCam = true;
+        dragStartPanX = fbPanX;
+        dragStartPanY = fbPanY;
+        fbEl.classList.add("panning");
+      } else {
+        isDragging3dCam = true;
+        dragStartTilt = fbTiltDeg;
+        dragStartYaw = fbYawDeg;
+        fbEl.classList.add("dragging");
+      }
     };
     window.addEventListener("pointermove", e => {
-      if (!isDragging3dCam) return;
+      if (!isDragging3dCam && !isPanningCam) return;
       const dx = e.clientX - dragStartX;
       const dy = e.clientY - dragStartY;
       if (Math.hypot(dx, dy) > 4) {
         wasDragged3d = true;
-        fbYawDeg = Math.max(-24, Math.min(24, dragStartYaw + dx * 0.14));
-        fbTiltDeg = Math.max(0, Math.min(56, dragStartTilt + dy * 0.22));
-        fbViewMode = (fbTiltDeg <= 1.5 && Math.abs(fbYawDeg) <= 1.5) ? "2d" : "custom";
-        drawFB();
+        if (isPanningCam) {
+          const rect = fbEl.getBoundingClientRect();
+          const scaleX = rect.width > 0 ? 1060 / rect.width : 1;
+          const scaleY = rect.height > 0 ? 430 / rect.height : 1;
+          fbPanX = Math.max(-340, Math.min(340, dragStartPanX + dx * scaleX));
+          fbPanY = Math.max(-190, Math.min(190, dragStartPanY + dy * scaleY));
+          drawFB();
+        } else if (isDragging3dCam) {
+          fbYawDeg = Math.max(FB_YAW_MIN, Math.min(FB_YAW_MAX, dragStartYaw + dx * 0.24));
+          fbTiltDeg = Math.max(FB_TILT_MIN, Math.min(FB_TILT_MAX, dragStartTilt + dy * 0.26));
+          fbViewMode = (Math.abs(fbTiltDeg) <= 1.5 && Math.abs(fbYawDeg) <= 1.5) ? "2d" : "custom";
+          drawFB();
+        }
       }
     });
-    window.addEventListener("pointerup", () => {
-      if (!isDragging3dCam) return;
+    const endCamDrag = () => {
+      if (!isDragging3dCam && !isPanningCam) return;
       isDragging3dCam = false;
+      isPanningCam = false;
+      fbEl.classList.remove("dragging", "panning");
       if (wasDragged3d) {
         setTimeout(() => { wasDragged3d = false; }, 60);
       }
-    });
+    };
+    window.addEventListener("pointerup", endCamDrag);
     window.addEventListener("pointercancel", () => {
       isDragging3dCam = false;
+      isPanningCam = false;
       wasDragged3d = false;
+      fbEl.classList.remove("dragging", "panning");
     });
+    fbEl.addEventListener("contextmenu", e => e.preventDefault());
+    fbEl.addEventListener("wheel", e => {
+      e.preventDefault();
+      const rect = fbEl.getBoundingClientRect();
+      let svgX = null, svgY = null;
+      if (rect.width > 0 && rect.height > 0) {
+        const scale = Math.min(rect.width / 1060, rect.height / 430) || 1;
+        const padX = (rect.width - 1060 * scale) * 0.5;
+        const padY = (rect.height - 430 * scale) * 0.5;
+        svgX = (e.clientX - rect.left - padX) / scale;
+        svgY = (e.clientY - rect.top - padY) / scale;
+      }
+      const nextZ = Math.round((e.deltaY < 0 ? fbZoom * 1.10 : fbZoom * 0.91) * 100) / 100;
+      setFbZoom(nextZ, svgX, svgY);
+    }, { passive: false });
 
     $("fb").onclick = e => {
       if (wasDragged3d) {
@@ -5731,7 +5826,7 @@ function bindEvents() {
       }
     };
     $("fb").onmousemove = e => {
-      if (isDragging3dCam) return;
+      if (isDragging3dCam || isPanningCam) return;
       const dot = e.target.closest(".note-dot");
       if (dot) {
         const s = parseInt(dot.getAttribute("data-str"), 10);

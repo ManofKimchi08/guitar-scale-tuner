@@ -2265,6 +2265,63 @@ body[data-neck-wood="cyber"] .fretboard-card .fb-svg-container {
   cursor: grabbing;
 }
 
+.fb-view3d-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #16161b;
+  border: 1px solid #2c2c35;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+.v3d-zoom-btn {
+  appearance: none;
+  background: #22222a;
+  border: 1px solid #383844;
+  color: #e4e4e7;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 800;
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.12s ease;
+}
+
+.v3d-zoom-btn:hover {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+.v3d-zoom-slider {
+  width: 78px;
+  height: 4px;
+  accent-color: #38bdf8;
+  cursor: pointer;
+}
+
+.v3d-zoom-val {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: #7dd3fc;
+  min-width: 34px;
+  text-align: right;
+}
+
+#fb.panning {
+  cursor: move !important;
+  user-select: none;
+}
+
 /* 3D Cylinder Note Puck States (.note-cap ellipse preserves perspective rx/ry ratio) */
 .note-dot .note-cap {
   transform-box: fill-box;

@@ -1,6 +1,6 @@
 # 📖 Guitar Scale Tuner - 기술 명세서 & 시스템 아키텍처 (Technical Documentation)
 
-본 문서는 **Guitar Scale Tuner (Scales, heard.) v2.4.0**의 전체 소프트웨어 구조, 오디오 신호 처리(DSP) 알고리즘, 적응형 샘플레이트 협상 시스템, 3-Tier 레코딩 엔진, 3D 원근 지판·Catmull-Rom 튜브 기반 IK 왼손 아치 코치·하이브리드 ASIO 진단 아키텍처, 그리고 보안 및 패키징 기법을 기술적으로 상세히 서술한 엔지니어링 명세서입니다.
+본 문서는 **Guitar Scale Tuner (Scales, heard.) v2.5.0**의 전체 소프트웨어 구조, 오디오 신호 처리(DSP) 알고리즘, 적응형 샘플레이트 협상 시스템, 3-Tier 레코딩 엔진, 광각 3D 원근·줌/패닝 지판 엔진·Catmull-Rom 튜브 기반 IK 왼손 아치 코치·하이브리드 ASIO 진단 아키텍처, 그리고 보안 및 패키징 기법을 기술적으로 상세히 서술한 엔지니어링 명세서입니다.
 
 ---
 
@@ -175,8 +175,8 @@ $$M = \left\lfloor \frac{1400}{\Delta f} \right\rfloor - \left\lfloor \frac{30}{
 ### 6.3 12-TET 실제 기타 프렛 비례 모델 및 3D 원근 지판 엔진
 - **12-TET 로그/등비 프렛 위치 계산**:
   실제 기타의 스케일 길이 $L$ 에 대한 $n$ 번째 프렛의 거리를 평균율 물리 공식 $d(n) = L \cdot (1 - 2^{-n/12})$ 기반으로 정규화하여 고프렛(12~22F)으로 갈수록 프렛 간격이 정밀하게 좁아지는 실제 지판 비율을 구현했습니다.
-- **CPU/GPU 친화적 3D SVG 뷰 & 3축 기즈모**:
-  `2D 평면`, `3D Studio (38°)`, `Deep 3D (52°)` 시점 전환과 드래그 기반 Pitch/Yaw 원근 회전, 실시간 각도 표시 및 3D 축 기즈모를 제공합니다. 음정 노트는 3D 입체 퍽(Extruded Puck)과 넥 테마(`Carbon`, `Rosewood`, `Maple`, `Synth`)로 렌더링됩니다.
+- **CPU/GPU 친화적 광각 3D SVG 뷰, 커서 중심 줌/패닝 & 3축 기즈모**:
+  `2D 평면`, `3D Studio (38°)`, `Deep 3D (56° · 115%)` 시점 전환과 드래그 기반 광각 회전(`Pitch -35° ~ +78°`, `Yaw -80° ~ +80°`), 연속 원근 초점거리(`camDist = 920` · `Math.abs(Math.cos(tiltRad))` 타원 보정), 커서 앵커 기반 휠/슬라이더 확대·축소(`setFbZoom()`: `50% ~ 250%`), `Shift+드래그` 시점 이동(`fbPanX ∈ [-340, 340]`, `fbPanY ∈ [-190, 190]`), 실시간 각도/배율 표시 및 3D 축 기즈모를 제공합니다. 음정 노트는 3D 입체 퍽(Extruded Puck)과 넥 테마(`Carbon`, `Rosewood`, `Maple`, `Synth`)로 렌더링됩니다.
 
 ### 6.4 하이브리드 2+4 스마트 ASIO 브릿지 진단 아키텍처
 - **웹 배포 무설치 Fallback (`initDeviceSel`)**: GitHub Pages 등 HTTPS 원격 웹 환경에서는 로컬 브릿지 프로브(`probeAsioBridgeSilent`) 실패 또는 미실행 시 자동으로 브라우저 내장 Web Audio 마이크(`mic_default`)로 전환되며, `navigator.mediaDevices.enumerateDevices()`에는 500ms 타임아웃 가드를 적용해 초기 UI 지연을 방지합니다.
@@ -187,7 +187,7 @@ $$M = \left\lfloor \frac{1400}{\Delta f} \right\rfloor - \left\lfloor \frac{30}{
   - `#fretboardHandBehindNeckLayer`: 3D 바닥 그림자·컷어웨이 바디 직후, 헤드스톡·크림 바인딩·지판 우드 아래에 배치하여 상단 `1E` 너머 손바닥 쿠션과 하단 `6E` 바인딩 아래로 내려오는 엄지근·손목 실루엣을 자연스럽게 가림/노출 처리합니다.
   - `#fretboardHandBackLayer`: 각 손가락 끝과 엄지가 현 위에 드리우는 타원형 3D 캐스트 섀도우를 음정 노트 퍽 하단에 배치합니다.
   - `#fretboardHandTipLayer`: Painter's Algorithm 순서(`④ 소지 → ① 검지 → 하단 6E 엄지`)로 4-노드 Catmull-Rom 스플라인(`buildTubePoints`, `tubeOutlineSvgPath`) 기반 반투명 코발트 블루 손가락 튜브(`#coachDigit`), 손가락별 PIP/DIP 관절 링, 손톱·반월(Lunula), 활성 타겟 황색 발광 퍽(`#glowYellowHand`), 상단 `①②③④` 너클 배지, `ARCH 74° OK` 각도 호, `👍 하단 6E 엄지` 및 `HAND POS` / `BARRE` HUD를 렌더링합니다.
-- **지판 곡률 투영 클램핑 & 동적 손목 페이드 마스크 (`#forearmFadeMask`)**: `project3D()` 내 지판 곡률 계수 `normY`를 `[-1, 1]`로 클램프해 지판 외부 너클(`-88`)·손목(`+195`) 좌표의 Z-축 왜곡을 제거하고, 매 프레임 투영된 손목 시작/끝 좌표로 `#forearmFadeGrad`의 `(x1, y1, x2, y2)`를 동기화해 어느 프렛 박스(`1~15F`) 및 3D 카메라 회전 각도에서도 하단 경계 없이 부드럽게 투명화합니다.
+- **지판 곡률 투영 클램핑 & 동적 손목 페이드 마스크 (`#forearmFadeMask`)**: `project3D()` 내 지판 곡률 계수 `normY`를 `[-1, 1]`로 클램프해 지판 외부 너클(`-88`)·손목(`+195`) 좌표의 Z-축 왜곡을 제거하고, `#forearmFadeMask` 영역을 `-1000..+3000`으로 확장해 `50% ~ 250%` 확대 및 패닝 상태에서도 매 프레임 동기화되는 `#forearmFadeGrad` 손목 페이드가 잘리지 않도록 보장합니다.
 - **오른손잡이 / 왼손잡이 미러링 & 프렛 폭 적응형 스케일링**: `dirSign` 및 `fbYawDeg` 부호 반전과 함께 `localFretSpan / 62` 비율(`0.72 ~ 1.02`)로 손가락 반경을 보정해 로우 프렛과 하이 프렛 모두에서 해부학적 비례를 유지합니다.
 
 ---
@@ -209,6 +209,6 @@ $$M = \left\lfloor \frac{1400}{\Delta f} \right\rfloor - \left\lfloor \frac{30}{
 
 ---
 
-*문서 작성일: 2026년 11월 15일*  
-*소프트웨어 버전: Guitar Scale Tuner v2.4.0*  
+*문서 작성일: 2026년 11월 17일*  
+*소프트웨어 버전: Guitar Scale Tuner v2.5.0*  
 *작성자: Advanced Agentic Engineer (Antigravity)*

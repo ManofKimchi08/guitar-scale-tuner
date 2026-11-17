@@ -3,7 +3,7 @@
 **エレキギター＆ベースの実音をリアルタイムで聴き取る、超低遅延フレットボード・スケールガイド、リズムゲーム＆スマート運指トレーナー**
 
 [![Live Web App](https://img.shields.io/badge/Live%20Web%20App-Try%20Without%20Install-38bdf8?style=flat&logo=googlechrome&logoColor=white)](https://manofkimchi08.github.io/guitar-scale-tuner/)
-[![Release](https://img.shields.io/badge/Release-v2.4.0-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
+[![Release](https://img.shields.io/badge/Release-v2.5.0-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Web%20%7C%20Windows-brightgreen.svg)](https://manofkimchi08.github.io/guitar-scale-tuner/)
 
@@ -14,23 +14,32 @@
 
 ## 📸 スクリーンショット & UIツアー (Screenshots)
 
-| 🖐️ 3D IKアーチ型・左手運指コーチ (`Box 1 · 5F~8F`) | ⚡ ハイブリッド 2+4 スマート ASIO 診断ドック |
+| 🖐️ 3D IKアーチ左手コーチ + ズームバー (`PITCH 38° · YAW +12° · 100%`) | 🎥 広角3D回転 & 140%拡大 (`PITCH 68° · YAW -55° · 140%`) |
 | :---: | :---: |
-| ![3D IK Arch Coach Fretboard](docs/screenshots/screenshot_main.png) | ![Hybrid ASIO Smart Popover](docs/screenshots/screenshot_asio_hybrid.png) |
+| ![3D IK Arch Coach Fretboard](docs/screenshots/screenshot_main.png) | ![Wide Orbit and 140% Zoom](docs/screenshots/screenshot_3d_zoom_orbit.png) |
 
-| 🎮 リズム＆指板・運指トレーナー (`3Dレーザーハイウェイ` + アーチ左手モデル) | 🖐️ `6/8拍子` 複合拍子ハイウェイ + CAGEDバレーコード(`BARRE 5F`) 運指ガイド |
+| ⚡ ハイブリッド 2+4 スマート ASIO 診断ドック | 🎮 リズム＆指板・運指トレーナー (`3Dレーザーハイウェイ` + 左手モデル) |
 | :---: | :---: |
-| ![Rhythm Game & Hand Avatar](docs/screenshots/screenshot_rhythm_game.png) | ![6/8 Rhythm & CAGED Barre Chord Hand](docs/screenshots/screenshot_rhythm_68_barre.png) |
+| ![Hybrid ASIO Smart Popover](docs/screenshots/screenshot_asio_hybrid.png) | ![Rhythm Game & Hand Avatar](docs/screenshots/screenshot_rhythm_game.png) |
 
-| 🎸 4弦ベースギター (1-5-8 グルーヴガイド) | 🎙️ 3-Tier レコーディングスタジオ & 指板シンクロ再生 |
+| 🖐️ `6/8拍子` 複合拍子ハイウェイ + CAGEDバレーコード(`BARRE 5F`) ガイド | 🎸 4弦ベースギター (1-5-8 グルーヴガイド) |
 | :---: | :---: |
-| ![4-String Bass View](docs/screenshots/screenshot_bass.png) | ![Recording Studio Drawer](docs/screenshots/screenshot_recording.png) |
+| ![6/8 Rhythm & CAGED Barre Chord Hand](docs/screenshots/screenshot_rhythm_68_barre.png) | ![4-String Bass View](docs/screenshots/screenshot_bass.png) |
+
+| 🎙️ 3-Tier レコーディングスタジオ & 指板シンクロ再生 | |
+| :---: | :---: |
+| ![Recording Studio Drawer](docs/screenshots/screenshot_recording.png) | |
 
 ---
 
-## 🌟 主な機能 (v2.4.0)
+## 🌟 主な機能 (v2.5.0)
 
-### 0. 🖐️ 3D IKアーチ型・左手運指コーチ (`IK Arch Coach Lab`)＆プレイヤー視点対応 (v2.4.0 新機能)
+### 0-A. 🔍 広角3Dカメラ回転・拡大縮小(Zoom)＆視点移動(Pan) (v2.5.0 新機能)
+- **拡張された3D回転可動域**: **`Yaw ±80°`**・**`Pitch -35° ~ +78°`** まで自在に回転でき、連続投影(`camDist = 920`)により45°付近の段差なく裏側見上げから俯瞰角度まで滑らかに確認できます。
+- **カーソル基準 50% ~ 250% ズーム**: ツールバー (`−` / スライダー / `+`) または **マウスホイール** でカーソル位置を中心に拡大・縮小でき、弦・フレットの太さもズーム率に応じて自動補正されます。
+- **`Shift + ドラッグ` パン移動 & リセット**: 拡大中に `Shift+左ドラッグ` (または中/右ドラッグ) で見たいポジションへ移動し、`↺ 시점 리셋` ボタンで回転・倍率(100%)・位置を一括リセットできます。(`Deep 3D` プリセット `56° / 115%` 搭載)
+
+### 0. 🖐️ 3D IKアーチ型・左手運指コーチ (`IK Arch Coach Lab`)＆プレイヤー視点対応 (v2.4.0)
 - **実演奏に即した左手視点 (`左ヘッド 1F → 右ボディ 15F` / `上 1E → 下 6E`)**: 右利きプレイヤーが見下ろす向きと同一の構図 (`PITCH 38° · YAW +12°`) を採用。左ヘッド側 `1E..6E` ラベル、下端 `6E` クリームバインディング＆サイドドット、上側 `1E` から下に曲げて押さえる4本の指(`① 人差し指 → ④ 小指`)、下側 `6E` から上に添える親指と自然フェード手首を立体描画します。
 - **3D Catmull-Rom パラメトリックチューブ＆解剖学的関節ディテール**: 半透明コバルトブルーの3Dチューブ (`#coachDigit`)、指ごとのカラー **PIP/DIP 関節リング**、爪・半月、発光ターゲットパック (`#glowYellowHand`)、そして動的 `#forearmFadeMask` による手首のフェード処理で音名視認性と立体感を両立しました。
 - **コーチングHUD＆自動追従スケーリング**: 上段フレット数字レール(`1..15`)、指番号バッジ(`① ② ③ ④`)、**`ARCH 74° OK`** フォームガイド、**`👍 하단 6E 엄지`** ラベル、**`HAND POS` / `BARRE`** ドックを備え、通常練習・ホバー・リズムゲーム・CAGEDバレーコード・マイク入力にリアルタイム連動します。
@@ -89,7 +98,7 @@
 3. **ハイブリッドASIOブリッジモード (任意)**: 上部ドロップダウンから **`⚡ ASIO`** を選ぶと、PC上のローカルASIOブリッジ(`127.0.0.1:8765`)を自動診断します。未導入の場合はスマート診断ポップオーバーが表示され、超低遅延ブリッジ(`.exe`)を導入するか、ワンクリックでブラウザ標準マイクへ切り替えてすぐ演奏できます。
 
 ### 方法 A: Windows ローカル実行ファイル
-1. [Releasesページ](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)から最新の `GuitarScaleTuner-v2.4.0-windows-x64.zip` をダウンロードして解凍するか、リポジトリをクローンします。
+1. [Releasesページ](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)から最新の `GuitarScaleTuner-v2.5.0-windows-x64.zip` をダウンロードして解凍するか、リポジトリをクローンします。
 2. フォルダ内の **`GuitarScaleTuner.exe`** (または `Run_GuitarScaleTuner.bat`) をダブルクリックするだけで、Pythonのインストールなしで即座に起動します。
 
 ### 方法 B: ソースコードから実行

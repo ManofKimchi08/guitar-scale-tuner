@@ -348,12 +348,18 @@
           <div class="fb-view3d-presets">
             <button type="button" class="v3d-preset-btn" data-view3d="2d">📐 2D 평면</button>
             <button type="button" class="v3d-preset-btn active" data-view3d="studio">🎸 3D Studio (38°)</button>
-            <button type="button" class="v3d-preset-btn" data-view3d="deep">🚀 Deep 3D (52°)</button>
+            <button type="button" class="v3d-preset-btn" data-view3d="deep">🚀 Deep 3D (56°)</button>
+          </div>
+          <div class="fb-view3d-zoom" title="마우스 휠 또는 슬라이더로 지판 확대/축소 (50% ~ 250%)">
+            <button type="button" class="v3d-zoom-btn" id="btnZoomOut" title="축소 (Zoom Out)">−</button>
+            <input type="range" class="v3d-zoom-slider" id="fbZoomSlider" min="50" max="250" step="5" value="100">
+            <button type="button" class="v3d-zoom-btn" id="btnZoomIn" title="확대 (Zoom In)">+</button>
+            <span class="v3d-zoom-val" id="fbZoomVal">100%</span>
           </div>
           <div class="fb-view3d-meta">
-            <span class="v3d-cam-readout" id="fbCamReadout">PITCH 38° · YAW +12°</span>
-            <button type="button" class="v3d-reset-btn" id="btnResetCam3d" title="시점 초기화">↺ 시점 리셋</button>
-            <span class="v3d-drag-hint">🖱️ 드래그하여 3D 각도 회전</span>
+            <span class="v3d-cam-readout" id="fbCamReadout">PITCH 38° · YAW +12° · 100%</span>
+            <button type="button" class="v3d-reset-btn" id="btnResetCam3d" title="시점 및 확대 초기화">↺ 시점 리셋</button>
+            <span class="v3d-drag-hint">🖱️ 드래그: 회전(±80°) · 휠: 확대/축소 · Shift+드래그: 이동</span>
           </div>
         </div>
 
