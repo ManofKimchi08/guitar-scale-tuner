@@ -3,7 +3,7 @@
 **실제 일렉트릭 기타와 베이스 기타 소리를 실시간으로 듣고 반응하는 초저지연 지판 스케일 가이드, 리듬 게임 & 스마트 운지 트레이너**
 
 [![Live Web App](https://img.shields.io/badge/Live%20Web%20App-%EB%AC%B4%EC%84%A4%EC%B9%98%20%EC%9B%B9%20%EC%8B%A4%ED%96%89-38bdf8?style=flat&logo=googlechrome&logoColor=white)](https://manofkimchi08.github.io/guitar-scale-tuner/)
-[![Release](https://img.shields.io/badge/Release-v2.5.0-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
+[![Release](https://img.shields.io/badge/Release-v2.5.1-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Web%20%7C%20Windows-brightgreen.svg)](https://manofkimchi08.github.io/guitar-scale-tuner/)
 
@@ -14,25 +14,30 @@
 
 ## 📸 주요 화면 미리보기 (Screenshots & UI Tour)
 
-| 🖐️ 3D IK 아치 교정형 왼손 코치 + 줌 바 (`PITCH 38° · YAW +12° · 100%`) | 🎥 광각 3D 회전 & 140% 확대 (`PITCH 68° · YAW -55° · 140%`) |
+| 🖐️ 반투명 하늘색 3D 입체 손바닥 & 미사용 손가락 부양 대기 뷰 (`38° · 100%`) | 🎼 오픈 `A Major` ①②③ 분리 & ④ 소지 부양 자세 (`38° · 125%`) |
 | :---: | :---: |
-| ![3D IK Arch Coach Fretboard](docs/screenshots/screenshot_main.png) | ![Wide Orbit and 140% Zoom](docs/screenshots/screenshot_3d_zoom_orbit.png) |
+| ![3D Sculpted Translucent Sky-Blue Hand](docs/screenshots/screenshot_main.png) | ![A Major Fanned Chord and Lifted Pinky](docs/screenshots/screenshot_3d_chord_lifted.png) |
 
-| ⚡ 하이브리드 2+4 스마트 ASIO 진단 & 3D 왼손 연동 | 🎮 리듬 & 지판·운지 트레이너 (`4/4박` + 3D 아치 왼손 코치) |
+| 🎥 광각 3D 회전 & 140% 확대 (`PITCH 64° · YAW -50° · 140%`) | ⚡ 하이브리드 2+4 스마트 ASIO 진단 & 3D 왼손 연동 |
 | :---: | :---: |
-| ![Hybrid ASIO Smart Popover](docs/screenshots/screenshot_asio_hybrid.png) | ![Rhythm Game & Hand Avatar](docs/screenshots/screenshot_rhythm_game.png) |
+| ![Wide Orbit and 140% Zoom](docs/screenshots/screenshot_3d_zoom_orbit.png) | ![Hybrid ASIO Smart Popover](docs/screenshots/screenshot_asio_hybrid.png) |
 
-| 🖐️ `6/8박` 겹박자 하이웨이 + CAGED 바레 코드(`BARRE 5F`) 3D 손 가이드 | 🎸 4현 베이스 기타 (1-5-8 그루브 가이드) |
+| 🎮 리듬 & 지판·운지 트레이너 (`4/4박` + 3D 아치 왼손 코치) | 🖐️ `6/8박` 겹박자 하이웨이 + CAGED 바레 코드(`BARRE 5F`) 3D 손 가이드 |
 | :---: | :---: |
-| ![6/8 Rhythm & CAGED Barre Chord Hand](docs/screenshots/screenshot_rhythm_68_barre.png) | ![4-String Bass View](docs/screenshots/screenshot_bass.png) |
+| ![Rhythm Game & Hand Avatar](docs/screenshots/screenshot_rhythm_game.png) | ![6/8 Rhythm & CAGED Barre Chord Hand](docs/screenshots/screenshot_rhythm_68_barre.png) |
 
-| 🎙️ 3-Tier 레코딩 스튜디오 & 지판 싱크 복기 | |
+| 🎸 4현 베이스 기타 (1-5-8 그루브 가이드) | 🎙️ 3-Tier 레코딩 스튜디오 & 지판 싱크 복기 |
 | :---: | :---: |
-| ![Recording Studio Drawer](docs/screenshots/screenshot_recording.png) | |
+| ![4-String Bass View](docs/screenshots/screenshot_bass.png) | ![Recording Studio Drawer](docs/screenshots/screenshot_recording.png) |
 
 ---
 
-## 🌟 핵심 기능 소개 (v2.5.0)
+## 🌟 핵심 기능 소개 (v2.5.1)
+
+### 0-B. 🖐️ 반투명 하늘색 3D 입체 손바닥, 미사용 손가락 부양 대기 자세 & 코드 겹침 해소 (v2.5.1 신규)
+- **3D 입체 파라메트릭 손바닥·손목 (`2+4 하이브리드` 반투명 하늘색)**: 평평한 2D 손바닥 실루엣을 `22×20` 3D 로프트 메시(`evalPalmPoint`)로 재구축하여 무지구(Thenar)·소지구(Hypothenar)·중앙 오목부 굴곡과 Blinn-Phong/Fresnel/SSS 셰이딩을 적용하고, `#thumbBlendMask`로 엄지 뿌리를 손바닥 안쪽에 자연스럽게 융합했습니다.
+- **미사용 손가락 지판 위 살짝 든 대기 자세**: 사용하지 않는 손가락을 지우지 않고 4지 모두 유지한 채 `1E..2B` 상단 위(`wz3 = 21.0`)로 들어 올렸으며, 부드러운 반투명도(`opacity 0.58` vs 활성 `0.95`), 점선 아웃라인 뱃지, 지판 위로 넓고 옅게 이격된 공중 그림자(`dx = ±5, dy = 11`)로 누르는 손가락과 대기 손가락을 직관적으로 구분합니다.
+- **동일 프렛 코드 부채꼴 분산 & ①②③④ 뱃지 이격**: 오픈 `A Major` (`2F` ①②③)나 바레 `E Shape` (`7F` ③④)처럼 같은 프렛에 모이는 손가락을 부채꼴로 분산하고, 미사용 손가락을 인접 활성 손가락 옆(`~3F`)에 정렬하며 상단 뱃지를 최소 `24px` 간격으로 이격했습니다.
 
 ### 0-A. 🔍 광각 3D 카메라 회전, 확대·축소(Zoom) & 이동(Pan) (v2.5.0 신규)
 - **확장된 3D 오빗 회전 범위**: **`Yaw ±80°`**, **`Pitch -35° ~ +78°`** 까지 자유롭게 회전 가능하며 `camDist = 920` 연속 원근 투영으로 45° 경계 점프 없이 넥 하단부부터 상단 조감 뷰까지 매끄럽게 감상할 수 있습니다.
@@ -98,7 +103,7 @@
 3. **하이브리드 ASIO 브릿지 모드 (선택)**: 상단 입력 장치에서 **`⚡ ASIO`**를 선택하면 내 PC의 로컬 ASIO 브릿지 실행 여부를 자동 진단합니다. 미설치 시 스마트 안내 팝오버가 열려 초저지연 브릿지(`.exe`)를 설치하거나 원클릭으로 브라우저 마이크로 전환해 연주할 수 있습니다.
 
 ### 방법 A: Windows 로컬 패키지 실행
-1. [Releases 페이지](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)에서 최신 `GuitarScaleTuner-v2.5.0-windows-x64.zip` 파일을 다운로드하여 압축을 해제하거나 저장소를 클론합니다.
+1. [Releases 페이지](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)에서 최신 `GuitarScaleTuner-v2.5.1-windows-x64.zip` 파일을 다운로드하여 압축을 해제하거나 저장소를 클론합니다.
 2. 폴더 안의 **`GuitarScaleTuner.exe`** (또는 `Run_GuitarScaleTuner.bat`)를 더블클릭하면 파이썬 설치 없이 즉시 실행됩니다.
 
 ### 방법 B: 파이썬 소스 코드로 실행

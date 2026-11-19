@@ -3,37 +3,42 @@
 A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic fingering trainer** in the browser and desktop that **listens to your real electric & bass guitar** in real-time.
 
 [![Live Web App](https://img.shields.io/badge/Live%20Web%20App-Try%20Without%20Install-38bdf8?style=flat&logo=googlechrome&logoColor=white)](https://manofkimchi08.github.io/guitar-scale-tuner/)
-[![Release](https://img.shields.io/badge/Release-v2.5.0-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
+[![Release](https://img.shields.io/badge/Release-v2.5.1-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Web%20%7C%20Windows-brightgreen.svg)](https://manofkimchi08.github.io/guitar-scale-tuner/)
 
 > 🌐 **Live Web App (No Install)**: **[https://manofkimchi08.github.io/guitar-scale-tuner/](https://manofkimchi08.github.io/guitar-scale-tuner/)**  
 > 🗣️ **Language / 언어 / 言語**: **[🇺🇸 English](README.md)** | **[🇰🇷 한국어 전문 (Korean)](README.ko.md)** | **[🇯🇵 日本語全文 (Japanese)](README.ja.md)**  
-> 🔽 **In-Page Quick Jump**: [🇺🇸 English](#-key-features-v250) · [🇰🇷 한국어 설명](#-한국어-설명-korean-overview) · [🇯🇵 日本語説明](#-日本語説明-japanese-overview)
+> 🔽 **In-Page Quick Jump**: [🇺🇸 English](#-key-features-v251) · [🇰🇷 한국어 설명](#-한국어-설명-korean-overview) · [🇯🇵 日本語説明](#-日本語説明-japanese-overview)
 
 ---
 
 ## 📸 Screenshots & UI Tour
 
-| 🖐️ 3D IK Arch Coach + Zoom Bar (`PITCH 38° · YAW +12° · 100%`) | 🎥 Wide-Angle 3D Orbit & 140% Zoom (`PITCH 68° · YAW -55° · 140%`) |
+| 🖐️ 3D Sculpted Sky-Blue Hand & Lifted Standby Fingers (`38° · 100%`) | 🎼 Open `A Major` Fanned Chord & Lifted Pinky (`38° · 125%`) |
 | :---: | :---: |
-| ![3D IK Arch Coach Fretboard](docs/screenshots/screenshot_main.png) | ![Wide Orbit and 140% Zoom](docs/screenshots/screenshot_3d_zoom_orbit.png) |
+| ![3D Sculpted Translucent Sky-Blue Hand](docs/screenshots/screenshot_main.png) | ![A Major Fanned Chord and Lifted Pinky](docs/screenshots/screenshot_3d_chord_lifted.png) |
 
-| ⚡ Hybrid 2+4 Smart ASIO Diagnostic & 3D Hand Preview | 🎮 Rhythm & Fretboard Trainer (`3D Laser Highway` + 3D Arched Hand) |
+| 🎥 Wide-Angle 3D Orbit & 140% Zoom (`PITCH 64° · YAW -50° · 140%`) | ⚡ Hybrid 2+4 Smart ASIO Diagnostic & 3D Hand Preview |
 | :---: | :---: |
-| ![Hybrid ASIO Smart Popover](docs/screenshots/screenshot_asio_hybrid.png) | ![Rhythm Game & Hand Avatar](docs/screenshots/screenshot_rhythm_game.png) |
+| ![Wide Orbit and 140% Zoom](docs/screenshots/screenshot_3d_zoom_orbit.png) | ![Hybrid ASIO Smart Popover](docs/screenshots/screenshot_asio_hybrid.png) |
 
-| 🖐️ 6/8 Time Signature + CAGED Barre Chord (`BARRE 5F`) 3D Hand | 🎸 4-String Bass Guitar (1-5-8 Groove Guide) |
+| 🎮 Rhythm & Fretboard Trainer (`3D Laser Highway` + 3D Arched Hand) | 🖐️ 6/8 Time Signature + CAGED Barre Chord (`BARRE 5F`) 3D Hand |
 | :---: | :---: |
-| ![6/8 Rhythm & CAGED Barre Chord Hand](docs/screenshots/screenshot_rhythm_68_barre.png) | ![4-String Bass View](docs/screenshots/screenshot_bass.png) |
+| ![Rhythm Game & Hand Avatar](docs/screenshots/screenshot_rhythm_game.png) | ![6/8 Rhythm & CAGED Barre Chord Hand](docs/screenshots/screenshot_rhythm_68_barre.png) |
 
-| 🎙️ 3-Tier Recording Studio & Synced Replay | |
+| 🎸 4-String Bass Guitar (1-5-8 Groove Guide) | 🎙️ 3-Tier Recording Studio & Synced Replay |
 | :---: | :---: |
-| ![Recording Studio Drawer](docs/screenshots/screenshot_recording.png) | |
+| ![4-String Bass View](docs/screenshots/screenshot_bass.png) | ![Recording Studio Drawer](docs/screenshots/screenshot_recording.png) |
 
 ---
 
-## 🌟 Key Features (v2.5.0)
+## 🌟 Key Features (v2.5.1)
+
+### 0-B. 🖐️ Translucent Sky-Blue 3D Sculpted Palm, Lifted Standby Fingers & Chord De-Collision (New in v2.5.1)
+- **Volumetric 3D Parametric Palm & Wrist (`2+4 Hybrid` Sky-Blue Silhouette)**: Replaces the flat 2D palm outline with a sculpted `22×20` 3D lofted surface featuring anatomical **thenar & hypothenar eminences**, central palmar hollow, smooth Blinn-Phong/Fresnel/SSS shading, and `#thumbBlendMask` seamless thumb root blending.
+- **Lifted Standby Pose for Unused Fingers**: Keeps all 4 fingers visible while visibly elevating unused (`!isActive`) fingers slightly above the upper fretboard (`1E..2B` at `wz3 = 21.0`) with softer translucent shading (`opacity 0.58` vs `0.95` active), dashed outlined badges, and offset floating cast shadows (`dx = ±5, dy = 11`) so pressing vs. hovering digits are unmistakable from any 3D angle.
+- **Two-Pass Chord Fanning & Badge De-Collision**: Subtly fans active fingers sharing the same fret (such as ①②③ in Open `A Major` `2F` or ③④ in `E-Shape` Barre `7F`), anchors unused fingers naturally beside active neighbors (`~3F` instead of stranded frets), separates top ①②③④ knuckle badges with a minimum `24px` horizontal gap, and syncs the `ARCH 74° OK` arc anchor dynamically.
 
 ### 0-A. 🔍 Wide-Angle 3D Orbit, Zoom (50%–250%) & Pan Controls (New in v2.5.0)
 - **Expanded 3D Rotation Range**: Freely orbit **Yaw from `-80°` to `+80°`** and **Pitch from `-35°` to `+78°`**, backed by continuous `camDist = 920` perspective projection so there is no focal step when crossing `45°`.
@@ -95,7 +100,10 @@ A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic f
 
 > 📄 **전체 한국어 문서는 [README.ko.md](README.ko.md)에서도 보실 수 있습니다.**
 
-**Scales, heard. (Guitar Scale Tuner v2.5.0)** 는 실제 일렉트릭 기타와 베이스 기타 소리를 실시간으로 인식하는 초저지연 **3D 지판 스케일 가이드, IK 아치 교정형 3D 왼손 운지 코치 & 리듬 게임 트레이너**입니다.
+**Scales, heard. (Guitar Scale Tuner v2.5.1)** 는 실제 일렉트릭 기타와 베이스 기타 소리를 실시간으로 인식하는 초저지연 **3D 지판 스케일 가이드, IK 아치 교정형 3D 왼손 운지 코치 & 리듬 게임 트레이너**입니다.
+
+### ✨ v2.5.1 핵심 업데이트
+1. **🖐️ 반투명 하늘색 3D 입체 손바닥·손목 & 미사용 손가락 부양 대기 자세**: `2+4 하이브리드` 반투명 하늘색 파라메트릭 3D 손바닥(`evalPalmPoint`)을 적용하고, 안 쓰는 손가락은 지판(`1E..2B`) 위에 살짝 들어 올린 자세(`wz3 = 21.0`)와 공중 부양 그림자·아웃라인 뱃지로 구분했습니다. 오픈 `A Major` 등 동일 프렛 코드 손가락 부채꼴 분산 및 ①②③④ 뱃지 최소 `24px` 이격도 함께 적용했습니다.
 
 ### ✨ v2.5.0 핵심 업데이트
 1. **🔍 광각 3D 카메라 회전(`Pitch -35°~+78° · Yaw ±80°`), 확대·축소(`50%~250%`) & 이동(Pan)**: `−/+`·슬라이더·커서 기준 마우스 휠 확대/축소, `Shift+드래그` 시점 이동, 연속 `camDist=920` 원근 투영 및 `Deep 3D (56° / 115%)` 프리셋을 추가했습니다.
@@ -127,7 +135,10 @@ A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic f
 
 > 📄 **日本語の完全なドキュメントは [README.ja.md](README.ja.md) でもご覧いただけます。**
 
-**Scales, heard. (Guitar Scale Tuner v2.5.0)** は、エレキギター＆ベースの実音をリアルタイムで聴き取る超低遅延の**3Dフレットボード・スケールガイド、3D IKアーチ運指コーチ＆リズムゲームトレーナー**です。
+**Scales, heard. (Guitar Scale Tuner v2.5.1)** は、エレキギター＆ベースの実音をリアルタイムで聴き取る超低遅延の**3Dフレットボード・スケールガイド、3D IKアーチ運指コーチ＆リズムゲームトレーナー**です。
+
+### ✨ v2.5.1 主なアップデート
+1. **🖐️ 半透明スカイブルー3D立体手のひら・手首＆未使用指の浮遊待機ポーズ**: `2+4ハイブリッド` 半透明スカイブルーの3Dパラメトリック手のひら (`evalPalmPoint`) を導入し、使わない指は指板(`1E..2B`)の上に軽く浮かせて待機 (`wz3 = 21.0`) させ、薄い浮遊影と点線バッジで押弦指と一目で区別できるようにしました。同フレットコード(`A Major` 等)の指分散と ①②③④ バッジ重なり解消も実装しています。
 
 ### ✨ v2.5.0 主なアップデート
 1. **🔍 広角3D回転(`Pitch -35°~+78° · Yaw ±80°`)・拡大縮小(`50%~250%`)＆視点移動(Pan)**: ツールバー＆マウスホイールによるカーソル中心ズーム、`Shift+ドラッグ` パン移動、連続パース投影 (`camDist=920`) と `Deep 3D (56° / 115%)` を追加しました。
@@ -163,7 +174,7 @@ A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic f
 3. **Optional Hybrid ASIO Bridge Mode**: Selecting **`⚡ ASIO`** in the top bar automatically probes for the local ASIO bridge (`ws://127.0.0.1:8765`). If not installed yet, a compact Smart ASIO Diagnostic Dock opens right below the selector so you can either download the helper `.exe` for ultra-low-latency polyphonic detection or switch right back to your browser microphone with one click.
 
 ### Option A: Windows One-Click Executable
-1. Download and extract the latest release archive (`GuitarScaleTuner-v2.5.0-windows-x64.zip`) from [Releases](https://github.com/ManofKimchi08/guitar-scale-tuner/releases), or clone the repository.
+1. Download and extract the latest release archive (`GuitarScaleTuner-v2.5.1-windows-x64.zip`) from [Releases](https://github.com/ManofKimchi08/guitar-scale-tuner/releases), or clone the repository.
 2. Double-click **`GuitarScaleTuner.exe`** (or `Run_GuitarScaleTuner.bat`) in the root folder. No Python installation required!
 
 ### Option B: Run from Source

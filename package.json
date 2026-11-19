@@ -1,6 +1,6 @@
 {
   "name": "guitar-scale-tuner",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "description": "Fretboard scale guide & rhythm trainer that listens to your real guitar and checks pitch, timing, and ergonomic fingering in real-time.",
   "license": "MIT",
   "private": true,

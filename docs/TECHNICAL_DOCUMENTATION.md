@@ -1,6 +1,6 @@
 # 📖 Guitar Scale Tuner - 기술 명세서 & 시스템 아키텍처 (Technical Documentation)
 
-본 문서는 **Guitar Scale Tuner (Scales, heard.) v2.5.0**의 전체 소프트웨어 구조, 오디오 신호 처리(DSP) 알고리즘, 적응형 샘플레이트 협상 시스템, 3-Tier 레코딩 엔진, 광각 3D 원근·줌/패닝 지판 엔진·Catmull-Rom 튜브 기반 IK 왼손 아치 코치·하이브리드 ASIO 진단 아키텍처, 그리고 보안 및 패키징 기법을 기술적으로 상세히 서술한 엔지니어링 명세서입니다.
+본 문서는 **Guitar Scale Tuner (Scales, heard.) v2.5.1**의 전체 소프트웨어 구조, 오디오 신호 처리(DSP) 알고리즘, 적응형 샘플레이트 협상 시스템, 3-Tier 레코딩 엔진, 광각 3D 원근·줌/패닝 지판 엔진·3D 입체 손바닥 및 Catmull-Rom 튜브 기반 IK 왼손 아치 코치·하이브리드 ASIO 진단 아키텍처, 그리고 보안 및 패키징 기법을 기술적으로 상세히 서술한 엔지니어링 명세서입니다.
 
 ---
 
@@ -182,11 +182,13 @@ $$M = \left\lfloor \frac{1400}{\Delta f} \right\rfloor - \left\lfloor \frac{30}{
 - **웹 배포 무설치 Fallback (`initDeviceSel`)**: GitHub Pages 등 HTTPS 원격 웹 환경에서는 로컬 브릿지 프로브(`probeAsioBridgeSilent`) 실패 또는 미실행 시 자동으로 브라우저 내장 Web Audio 마이크(`mic_default`)로 전환되며, `navigator.mediaDevices.enumerateDevices()`에는 500ms 타임아웃 가드를 적용해 초기 UI 지연을 방지합니다.
 - **인라인 진단 팝오버 & 1.5초 백그라운드 레이더**: 사용자가 ASIO 장치를 선택하거나 상태 배지를 클릭하면 3-노드 연결 상태 흐름도(`오디오 인터페이스 → ASIO Bridge 도우미 → 웹 브라우저 3D 지판`)와 1.5초 간격 자동 재감지 레이더를 실행해 로컬 브릿지가 실행되는 즉시 자동 연결합니다.
 
-### 6.5 3D Catmull-Rom 파라메트릭 튜브 기반 IK 아치 왼손 코치 엔진 (`renderFretboardHandOverlay`)
+### 6.5 3D 입체 파라메트릭 손바닥 & Catmull-Rom 튜브 IK 아치 왼손 코치 엔진 (`renderFretboardHandOverlay`)
 - **3-Layer SVG 깊이 분리 파이프라인 (`viewBox="0 0 1060 430"`)**:
-  - `#fretboardHandBehindNeckLayer`: 3D 바닥 그림자·컷어웨이 바디 직후, 헤드스톡·크림 바인딩·지판 우드 아래에 배치하여 상단 `1E` 너머 손바닥 쿠션과 하단 `6E` 바인딩 아래로 내려오는 엄지근·손목 실루엣을 자연스럽게 가림/노출 처리합니다.
-  - `#fretboardHandBackLayer`: 각 손가락 끝과 엄지가 현 위에 드리우는 타원형 3D 캐스트 섀도우를 음정 노트 퍽 하단에 배치합니다.
-  - `#fretboardHandTipLayer`: Painter's Algorithm 순서(`④ 소지 → ① 검지 → 하단 6E 엄지`)로 4-노드 Catmull-Rom 스플라인(`buildTubePoints`, `tubeOutlineSvgPath`) 기반 반투명 코발트 블루 손가락 튜브(`#coachDigit`), 손가락별 PIP/DIP 관절 링, 손톱·반월(Lunula), 활성 타겟 황색 발광 퍽(`#glowYellowHand`), 상단 `①②③④` 너클 배지, `ARCH 74° OK` 각도 호, `👍 하단 6E 엄지` 및 `HAND POS` / `BARRE` HUD를 렌더링합니다.
+  - `#fretboardHandBehindNeckLayer`: 3D 바닥 그림자·컷어웨이 바디 직후, 헤드스톡·크림 바인딩·지판 우드 아래에 배치되며, `Nu=22 × Nv=20` 3D 로프트 파라메트릭 메시(`evalPalmPoint`)로 무지구(Thenar)·소지구(Hypothenar)·중앙 장심 오목부를 조형하고 Blinn-Phong/Fresnel/SSS/AO 셰이딩, `#palmSmoothFilter`, `#palmClipPath`, `#thumbBlendMask`로 반투명 하늘색 입체 손바닥과 원통형 손목을 렌더링합니다.
+  - `#fretboardHandBackLayer`: `drawCastShadow()`로 누르는 손가락 아래에는 짙은 밀착 그림자(`dx = ±2, dy = 4`, `opacity 0.42`)를, 지판 위에 떠 있는 미사용 손가락 아래에는 넓고 옅은 부양 그림자(`dx = ±5, dy = 11`, `1.24×`, `opacity 0.20`)를 음정 노트 퍽 하단에 분리 배치합니다.
+  - `#fretboardHandTipLayer`: Painter's Algorithm 순서(`④ 소지 → ① 검지 → 하단 6E 엄지`)로 4-노드 Catmull-Rom 스플라인(`buildTubePoints`, `tubeOutlineSvgPath`) 기반 반투명 하늘색 손가락 튜브(`#coachDigit`), 손가락별 PIP/DIP 관절 링, 손톱·반월(Lunula), 활성 타겟 황색 발광 퍽(`#glowYellowHand`), 상단 `①②③④` 너클 배지(최소 `minBadgeGap = 24px` 수평 이격 및 미사용 점선 아웃라인 뱃지), 동적 `ARCH 74° OK` 각도 호, `👍 하단 6E 엄지` 및 `HAND POS` / `BARRE` HUD를 렌더링합니다.
+- **2-패스 코드·대기 운지 배치 & 미사용 손가락 부양 포즈**:
+  - Pass 1에서 동일 프렛 코드 손가락(예: 오픈 `A Major 2F ①②③`, 바레 `E Shape 7F ③④`)을 부채꼴로 분산(`tipF` ±0.13~0.17, `knuckleF` ±0.46)하고, Pass 2에서 미사용 손가락(`!isActive`)을 인접 활성 손가락 옆에 자연스럽게 정렬해 지판 상단(`1E..2B`) 위 `wz0 = 5.0`, `wz1 = 26.5`, `wz2 = 27.5`, `wz3 = 21.0` 높이로 부양시켜 누르는 손가락(`opacity 0.95`)과 대기 손가락(`opacity 0.58`)을 명확히 구분합니다.
 - **지판 곡률 투영 클램핑 & 동적 손목 페이드 마스크 (`#forearmFadeMask`)**: `project3D()` 내 지판 곡률 계수 `normY`를 `[-1, 1]`로 클램프해 지판 외부 너클(`-88`)·손목(`+195`) 좌표의 Z-축 왜곡을 제거하고, `#forearmFadeMask` 영역을 `-1000..+3000`으로 확장해 `50% ~ 250%` 확대 및 패닝 상태에서도 매 프레임 동기화되는 `#forearmFadeGrad` 손목 페이드가 잘리지 않도록 보장합니다.
 - **오른손잡이 / 왼손잡이 미러링 & 프렛 폭 적응형 스케일링**: `dirSign` 및 `fbYawDeg` 부호 반전과 함께 `localFretSpan / 62` 비율(`0.72 ~ 1.02`)로 손가락 반경을 보정해 로우 프렛과 하이 프렛 모두에서 해부학적 비례를 유지합니다.
 
@@ -209,6 +211,6 @@ $$M = \left\lfloor \frac{1400}{\Delta f} \right\rfloor - \left\lfloor \frac{30}{
 
 ---
 
-*문서 작성일: 2026년 11월 17일*  
-*소프트웨어 버전: Guitar Scale Tuner v2.5.0*  
+*문서 작성일: 2026년 11월 19일*  
+*소프트웨어 버전: Guitar Scale Tuner v2.5.1*  
 *작성자: Advanced Agentic Engineer (Antigravity)*

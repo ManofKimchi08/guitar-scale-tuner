@@ -1215,22 +1215,36 @@ function renderStaticFretboard() {
       <stop offset="100%" stop-color="#c084fc"/>
     </linearGradient>
     <linearGradient id="coachDigit" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="rgba(29, 78, 216, 0.64)"/>
-      <stop offset="52%" stop-color="rgba(59, 130, 246, 0.42)"/>
-      <stop offset="100%" stop-color="rgba(147, 197, 253, 0.68)"/>
+      <stop offset="0%" stop-color="rgba(14, 145, 218, 0.56)"/>
+      <stop offset="50%" stop-color="rgba(56, 189, 248, 0.34)"/>
+      <stop offset="100%" stop-color="rgba(186, 230, 253, 0.64)"/>
     </linearGradient>
     <linearGradient id="coachBehind" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="rgba(59, 130, 246, 0.46)"/>
-      <stop offset="100%" stop-color="rgba(30, 58, 138, 0.16)"/>
+      <stop offset="0%" stop-color="rgba(56, 189, 248, 0.46)"/>
+      <stop offset="100%" stop-color="rgba(14, 116, 144, 0.16)"/>
     </linearGradient>
     <linearGradient id="forearmFadeGrad" gradientUnits="userSpaceOnUse" x1="470" y1="285" x2="535" y2="425">
       <stop offset="0%" stop-color="white" stop-opacity="1"/>
-      <stop offset="45%" stop-color="white" stop-opacity="0.86"/>
+      <stop offset="48%" stop-color="white" stop-opacity="0.88"/>
       <stop offset="100%" stop-color="white" stop-opacity="0"/>
     </linearGradient>
     <mask id="forearmFadeMask">
-      <rect x="-1000" y="-1000" width="${W + 2000}" height="${H + 2000}" fill="url(#forearmFadeGrad)"/>
+      <rect x="-1500" y="-1500" width="${W + 3000}" height="${H + 3000}" fill="url(#forearmFadeGrad)"/>
     </mask>
+    <linearGradient id="thumbBlendGrad" gradientUnits="userSpaceOnUse" x1="250" y1="260" x2="250" y2="220">
+      <stop offset="0%" stop-color="white" stop-opacity="0"/>
+      <stop offset="65%" stop-color="white" stop-opacity="0.90"/>
+      <stop offset="100%" stop-color="white" stop-opacity="1"/>
+    </linearGradient>
+    <mask id="thumbBlendMask">
+      <rect x="-1500" y="-1500" width="${W + 3000}" height="${H + 3000}" fill="url(#thumbBlendGrad)"/>
+    </mask>
+    <filter id="palmSmoothFilter" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur stdDeviation="2.8"/>
+    </filter>
+    <clipPath id="palmClip">
+      <path id="palmClipPath" d=""/>
+    </clipPath>
     <filter id="glowYellowHand" x="-80%" y="-80%" width="260%" height="260%">
       <feGaussianBlur stdDeviation="5.0" result="blur"/>
       <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
@@ -1283,7 +1297,8 @@ function renderStaticFretboard() {
         x: cxScreen + fbPanX + wx * fbZoom,
         y: cyScreen + fbPanY + wy * fbZoom,
         scale: fbZoom,
-        depth: 0
+        depth: wz,
+        p3: [wx, wy, wz]
       };
     }
     const normY = Math.max(-1, Math.min(1, wy / 68));
@@ -1302,7 +1317,8 @@ function renderStaticFretboard() {
       x: cxScreen + fbPanX + x1 * persp,
       y: cyScreen + fbPanY + y2 * persp,
       scale: persp,
-      depth: z2
+      depth: z2,
+      p3: [x1, y2, z2]
     };
   };
 
@@ -2212,29 +2228,59 @@ function renderFretboardHandOverlay(nowRel = 0) {
   }
 
   function renderDigit3D(dense, opts) {
-    const g = svgEl("g", {}, tipLayer);
-    const { d, pts } = tubeOutlineSvgPath(dense, true, true);
-    const col = opts.color || "#93c5fd";
+    const gAttrs = opts.isThumb ? { mask: "url(#thumbBlendMask)" } : {};
+    const g = svgEl("g", gAttrs, tipLayer);
+    const { d, pts } = tubeOutlineSvgPath(dense, !opts.isThumb, true);
+    const col = opts.color || "#7dd3fc";
+    const isLifted = !opts.isThumb && !opts.isActive;
+    const strokeCol = isLifted ? "rgba(125, 211, 252, 0.54)" : "rgba(125, 211, 252, 0.88)";
+    const sw = isLifted ? "1.25" : (opts.isActive ? "1.9" : "1.45");
 
     svgEl("path", {
       d, fill: "url(#coachDigit)",
-      stroke: "rgba(147, 197, 253, 0.85)",
-      "stroke-width": opts.isActive ? "1.8" : "1.45",
+      stroke: opts.isThumb ? "none" : strokeCol,
+      "stroke-width": sw,
       "stroke-linejoin": "round",
-      opacity: opts.isActive ? "0.96" : "0.88"
+      opacity: opts.isThumb ? "0.94" : (opts.isActive ? "0.95" : "0.58")
     }, g);
 
+    // Thumb outer shaft/tip rim omitting proximal base so it melts seamlessly into 3D Thenar dome
+    if (opts.isThumb && pts.length > 10) {
+      const subPts = pts.slice(8);
+      const subLeft = [], subRight = [];
+      for (let i = 0; i < subPts.length; i++) {
+        const prev = subPts[Math.max(0, i - 1)], next = subPts[Math.min(subPts.length - 1, i + 1)];
+        let dx = next.x - prev.x, dy = next.y - prev.y;
+        const len = Math.hypot(dx, dy) || 1;
+        dx /= len; dy /= len;
+        const nx = -dy, ny = dx, rad = subPts[i].r3 * subPts[i].scale;
+        subLeft.push({ x: subPts[i].x + nx * rad, y: subPts[i].y + ny * rad });
+        subRight.push({ x: subPts[i].x - nx * rad, y: subPts[i].y - ny * rad });
+      }
+      const eP = subPts[subPts.length - 1], pEP = subPts[subPts.length - 2];
+      const ex = eP.x - pEP.x, ey = eP.y - pEP.y, elen = Math.hypot(ex, ey) || 1;
+      const eTip = { x: eP.x + (ex / elen) * (eP.r3 * eP.scale * 0.94), y: eP.y + (ey / elen) * (eP.r3 * eP.scale * 0.94) };
+      const lCut = dirSign > 0 ? Math.floor(subLeft.length * 0.20) : 0;
+      const rCut = dirSign > 0 ? 0 : Math.floor(subRight.length * 0.20);
+      let rimD = `M ${subLeft[lCut].x.toFixed(1)} ${subLeft[lCut].y.toFixed(1)} `;
+      for (let i = lCut + 1; i < subLeft.length; i++) rimD += `L ${subLeft[i].x.toFixed(1)} ${subLeft[i].y.toFixed(1)} `;
+      const rEnd = subRight[subRight.length - 1];
+      rimD += `Q ${eTip.x.toFixed(1)} ${eTip.y.toFixed(1)} ${rEnd.x.toFixed(1)} ${rEnd.y.toFixed(1)} `;
+      for (let i = subRight.length - 2; i >= rCut; i--) rimD += `L ${subRight[i].x.toFixed(1)} ${subRight[i].y.toFixed(1)} `;
+      svgEl("path", { d: rimD, fill: "none", stroke: strokeCol, "stroke-width": sw, "stroke-linecap": "round" }, g);
+    }
+
     // Subtle key light rim along proximal-to-distal surface
-    const pStart = pts[Math.floor(pts.length * 0.14)];
+    const pStart = pts[Math.floor(pts.length * 0.16)];
     const pMid = pts[Math.floor(pts.length * 0.44)];
     const pEnd = pts[Math.floor(pts.length * 0.72)];
     svgEl("path", {
       d: `M ${(pStart.x - 3).toFixed(1)} ${(pStart.y - 2).toFixed(1)} Q ${(pMid.x - 4).toFixed(1)} ${(pMid.y - 2).toFixed(1)} ${(pEnd.x - 2).toFixed(1)} ${(pEnd.y - 1).toFixed(1)}`,
-      fill: "none", stroke: "rgba(219, 234, 254, 0.65)",
-      "stroke-width": opts.isThumb ? "5.0" : "3.6", "stroke-linecap": "round", opacity: "0.38"
+      fill: "none", stroke: "rgba(224, 242, 254, 0.68)",
+      "stroke-width": opts.isThumb ? "5.0" : "3.6", "stroke-linecap": "round", opacity: isLifted ? "0.24" : "0.40"
     }, g);
 
-    // Colored PIP & DIP joint rings for top 4 fingers (2안 signature)
+    // Colored PIP & DIP joint rings (2안) + soft translucent knuckle creases (4안)
     if (!opts.isThumb) {
       [0.34, 0.62].forEach(frac => {
         const idx = Math.floor(pts.length * frac);
@@ -2245,128 +2291,416 @@ function renderFretboardHandOverlay(nowRel = 0) {
           cx: jp.x.toFixed(1), cy: jp.y.toFixed(1),
           rx: (jp.r3 * jp.scale * 0.94).toFixed(1), ry: (4.4 * jp.scale).toFixed(1),
           transform: `rotate(${ang.toFixed(1)} ${jp.x.toFixed(1)} ${jp.y.toFixed(1)})`,
-          fill: "none", stroke: col, "stroke-width": opts.isActive ? "2.0" : "1.55", opacity: opts.isActive ? "0.92" : "0.74"
+          fill: "none", stroke: col, "stroke-width": isLifted ? "1.3" : "2.0", opacity: isLifted ? "0.46" : "0.94"
         }, g);
       });
     }
+    const creFracs = opts.isThumb ? [0.46, 0.58] : [0.34, 0.56];
+    creFracs.forEach((frac, ci) => {
+      const idx = Math.floor(pts.length * frac);
+      const cp = pts[idx], cNext = pts[Math.min(pts.length - 1, idx + 1)];
+      const dx = cNext.x - cp.x, dy = cNext.y - cp.y, len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len, w = cp.r3 * cp.scale * (ci === 0 ? 0.48 : 0.40);
+      svgEl("path", {
+        d: `M ${(cp.x - nx * w).toFixed(1)} ${(cp.y - ny * w).toFixed(1)} Q ${(cp.x + dx * 0.12).toFixed(1)} ${(cp.y + dy * 0.12).toFixed(1)} ${(cp.x + nx * w).toFixed(1)} ${(cp.y + ny * w).toFixed(1)}`,
+        fill: "none", stroke: "rgba(186, 230, 253, 0.36)", "stroke-width": "1.2", "stroke-linecap": "round",
+        opacity: isLifted ? "0.55" : "1.0"
+      }, g);
+    });
 
     // Anatomical Fingernail + Lunula (~78% along distal phalanx)
-    const nailIdx = Math.floor(pts.length * (opts.isThumb ? 0.76 : 0.78));
+    const nailIdx = Math.floor(pts.length * (opts.isThumb ? 0.78 : 0.78));
     const np = pts[nailIdx];
     const nPrev = pts[Math.max(0, nailIdx - 2)];
     const angleDeg = Math.atan2(np.y - nPrev.y, np.x - nPrev.x) * 180 / Math.PI;
     const nailW = np.r3 * np.scale * (opts.isThumb ? 1.24 : 0.96);
     const nailH = np.r3 * np.scale * (opts.isThumb ? 1.12 : 0.98);
     const ng = svgEl("g", {
-      transform: `translate(${np.x.toFixed(1)} ${np.y.toFixed(1)}) rotate(${angleDeg.toFixed(1)})`
+      transform: `translate(${np.x.toFixed(1)} ${np.y.toFixed(1)}) rotate(${angleDeg.toFixed(1)})`,
+      opacity: isLifted ? "0.62" : "1.0"
     }, g);
     svgEl("rect", {
       x: (-nailW * 0.50).toFixed(1), y: (-nailH * 0.52).toFixed(1),
       width: (nailW * 1.00).toFixed(1), height: (nailH * 1.04).toFixed(1),
       rx: (nailH * 0.42).toFixed(1),
-      fill: "rgba(219, 234, 254, 0.34)", stroke: "rgba(191, 219, 254, 0.78)", "stroke-width": "1.0"
+      fill: "rgba(224, 242, 254, 0.34)", stroke: "rgba(186, 230, 253, 0.80)", "stroke-width": "1.0"
     }, ng);
     svgEl("path", {
       d: `M ${(-nailW * 0.44).toFixed(1)} ${(-nailH * 0.34).toFixed(1)} Q ${(-nailW * 0.02).toFixed(1)} 0 ${(-nailW * 0.44).toFixed(1)} ${(nailH * 0.34).toFixed(1)} Z`,
-      fill: "rgba(255, 255, 255, 0.36)"
+      fill: "rgba(255, 255, 255, 0.38)"
     }, ng);
     svgEl("ellipse", {
       cx: (nailW * 0.08).toFixed(1), cy: (-nailH * 0.18).toFixed(1),
       rx: (nailW * 0.24).toFixed(1), ry: (nailH * 0.12).toFixed(1),
-      fill: "rgba(255, 255, 255, 0.34)"
+      fill: "rgba(255, 255, 255, 0.36)"
     }, ng);
 
     return { pts, g };
   }
 
-  // 4. Behind-Neck Hand Layer (Top-Right Inner Palm Cushion + Bottom Seamless Thenar & Faded Wrist)
+  // 4. Behind-Neck Hand Layer (2안 + 4안 Translucent Sky-Blue 3D Volumetric Sculpted Palm & Cylindrical Wrist)
   if (behindLayer) {
-    // 4a. Top inner palm cushion peeking above top 1E behind ③ & ④
-    const pc0 = fretCoord(0, anchorF - 0.05);
-    const pc1 = fretCoord(0, anchorF + 0.85);
-    const pc2 = fretCoord(0, anchorF + 2.20);
-    const pc3 = fretCoord(0, anchorF + 3.05);
-    const pc4 = fretCoord(0, anchorF + 2.88);
-    const pA = project3D(pc0.wx, -halfNeckAt(Math.max(0, pc0.t)) + 2, -6);
-    const pB = project3D(pc1.wx, -halfNeckAt(Math.max(0, pc1.t)) - 34, -6);
-    const pC = project3D(pc2.wx, -halfNeckAt(Math.max(0, Math.min(1, pc2.t))) - 36, -6);
-    const pD = project3D(pc3.wx, -halfNeckAt(Math.max(0, Math.min(1, pc3.t))) - 12, -4);
-    const pE = project3D(pc4.wx, -halfNeckAt(Math.max(0, Math.min(1, pc4.t))) + 6, -12);
-    svgEl("path", {
-      d: `M ${pA.x.toFixed(1)} ${pA.y.toFixed(1)} C ${pB.x.toFixed(1)} ${pB.y.toFixed(1)}, ${pC.x.toFixed(1)} ${pC.y.toFixed(1)}, ${pD.x.toFixed(1)} ${pD.y.toFixed(1)} L ${pE.x.toFixed(1)} ${pE.y.toFixed(1)} Z`,
-      fill: "url(#coachBehind)", stroke: "rgba(147, 197, 253, 0.72)", "stroke-width": "1.1", opacity: "0.92"
-    }, behindLayer);
-
-    // 4b. Unified Seamless Bottom Thenar + Palm + Forearm descending below bottom 6E binding
-    const uc = (df, wyOff, wz) => {
-      const c = fretCoord(numStrings - 1, anchorF + df);
-      const tClamped = Math.max(0, Math.min(1, c.t));
-      return project3D(c.wx, halfNeckAt(tClamped) + wyOff, wz);
+    const mixCol = (c0, c1, t) => {
+      const k = Math.max(0, Math.min(1, t));
+      return [c0[0] + (c1[0] - c0[0]) * k, c0[1] + (c1[1] - c0[1]) * k, c0[2] + (c1[2] - c0[2]) * k];
     };
-    const u0 = uc(-1.68, -4, -2);
-    const u1 = uc(-1.55, 34, 4);
-    const u2 = uc(-0.70, 54, 2);
-    const u3 = uc(-0.15, 108, -14);
-    const u4 = uc(0.55, 195, -32);
-    const u5 = uc(2.45, 195, -32);
-    const u6 = uc(2.25, 92, -16);
-    const u7 = uc(2.52, 20, -8);
-    const u8 = uc(2.55, -6, -8);
+    const rgbStr = (c) => `rgb(${Math.round(Math.max(0, Math.min(255, c[0])))}, ${Math.round(Math.max(0, Math.min(255, c[1])))}, ${Math.round(Math.max(0, Math.min(255, c[2])))})`;
+    const vNorm = (v) => { const L = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / L, v[1] / L, v[2] / L]; };
+    const vCross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    const vDot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const smoothstep = (e0, e1, x) => { const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+    const smoothPath2D = (pts, closed = false) => {
+      if (!pts || pts.length < 2) return "";
+      const n = pts.length;
+      const getP = (i) => closed ? pts[(i + n) % n] : pts[Math.max(0, Math.min(n - 1, i))];
+      let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)} `;
+      const segs = closed ? n : n - 1;
+      for (let i = 0; i < segs; i++) {
+        const p0 = getP(i - 1), p1 = getP(i), p2 = getP(i + 1), p3 = getP(i + 2);
+        const cp1x = p1.x + (p2.x - p0.x) / 6, cp1y = p1.y + (p2.y - p0.y) / 6;
+        const cp2x = p2.x - (p3.x - p1.x) / 6, cp2y = p2.y - (p3.y - p1.y) / 6;
+        d += `C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)} `;
+      }
+      return closed ? d + "Z" : d;
+    };
 
-    // Sync #forearmFadeGrad linearly along the projected bottom wrist direction for any box/orbit angle
+    const wScale = 0.45 + 0.55 * rScale;
+    const evalPalmPoint = (u, theta) => {
+      const cT = Math.cos(theta), sT = Math.sin(theta);
+      const fCenter = anchorF + 1.68 - 1.20 * smoothstep(0.0, 0.54, u) + 0.84 * smoothstep(0.58, 1.0, u);
+      const spineC = fretCoord(0, fCenter);
+      const hwSpine = halfNeckAt(Math.max(0, Math.min(1, spineC.t)));
+
+      const wyKnots = [hwSpine + 178, hwSpine + 110, hwSpine + 48, 24, -hwSpine - 4];
+      const wzKnots = [-44, -25, -14, -30, -12];
+      const uScaled = u * 4;
+      const k0 = Math.min(3, Math.floor(uScaled));
+      const kf = uScaled - k0;
+      const kSmooth = kf * kf * (3 - 2 * kf);
+      const spineWy = wyKnots[k0] + (wyKnots[k0 + 1] - wyKnots[k0]) * kSmooth;
+      const spineWz = wzKnots[k0] + (wzKnots[k0 + 1] - wzKnots[k0]) * kSmooth;
+
+      const radialW = (
+        50 * (1 - 0.14 * smoothstep(0.0, 0.30, u)) +
+        42 * Math.exp(-Math.pow((u - 0.56) / 0.21, 2)) -
+        38 * smoothstep(0.74, 1.0, u)
+      ) * wScale;
+      const ulnarW = (
+        50 - 4 * Math.exp(-Math.pow((u - 0.24) / 0.14, 2)) +
+        26 * Math.exp(-Math.pow((u - 0.52) / 0.24, 2)) +
+        14 * smoothstep(0.74, 1.0, u)
+      ) * wScale;
+
+      const halfWidthX = cT < 0 ? radialW : ulnarW;
+      const baseThick = 24.0 * (1 - 0.25 * smoothstep(0.55, 0.92, u)) * (1 - 0.80 * Math.pow(smoothstep(0.88, 1.0, u), 1.4));
+
+      let dx = cT * halfWidthX;
+      let dy = sT * (baseThick * 0.40) * (1 - smoothstep(0.55, 0.95, u));
+      let dz = sT * baseThick;
+
+      const palmarMask = Math.max(0, sT);
+      const dorsalMask = Math.max(0, -sT);
+
+      // (a) 3D Thenar eminence mound
+      const thenarDome = Math.exp(-Math.pow((u - 0.61) / 0.21, 2)) * Math.exp(-Math.pow((cT + 0.66) / 0.48, 2)) * Math.pow(palmarMask, 0.56);
+      dz += 17.5 * thenarDome;
+      dy -= 20.0 * thenarDome;
+      dx -= 5.0 * thenarDome * wScale;
+
+      // (b) Central palmar hollow
+      const hollowBowl = Math.exp(-Math.pow((u - 0.56) / 0.16, 2)) * Math.exp(-Math.pow((cT - 0.12) / 0.35, 2)) * Math.pow(palmarMask, 0.80);
+      dz -= 10.0 * hollowBowl;
+
+      // (c) Hypothenar eminence cushion
+      const hypoDome = Math.exp(-Math.pow((u - 0.53) / 0.20, 2)) * Math.exp(-Math.pow((cT - 0.76) / 0.36, 2)) * Math.pow(palmarMask, 0.68);
+      dz += 11.0 * hypoDome;
+      dx += 5.0 * hypoDome * wScale;
+
+      // (d) Wrist flexor tendons
+      const wristU = Math.exp(-Math.pow((u - 0.26) / 0.14, 2));
+      dz += Math.cos(cT * Math.PI * 2.2) * 2.1 * wristU * palmarMask;
+
+      // (e) Cupped behind-neck arch
+      const cupU = smoothstep(0.38, 0.72, u);
+      dz += (Math.pow(cT, 2) * 14.0 - 5.0) * cupU * (0.45 + 0.55 * dorsalMask);
+
+      // (f) Top MCP palmar cushion peeking cleanly above 1E
+      const mcpSwell = Math.exp(-Math.pow((cT - 0.35) / 0.55, 2)) * smoothstep(0.84, 1.0, u);
+      dy -= 12.0 * mcpSwell;
+      dz += 5.0 * mcpSwell * palmarMask;
+
+      if (u > 0.96) {
+        const capK = 1 - (u - 0.96) / 0.04;
+        dy += 5.0 * (1 - capK);
+        dz *= (0.35 + 0.65 * Math.sqrt(Math.max(0, capK)));
+      }
+
+      return { wx: spineC.wx + dirSign * dx, wy: spineWy + dy, wz: spineWz + dz };
+    };
+
+    const Nu = 22, Nv = 20;
+    const grid = [], centers = [];
+    for (let i = 0; i <= Nu; i++) {
+      const u = i / Nu, ring = [];
+      let cx = 0, cy = 0;
+      for (let j = 0; j < Nv; j++) {
+        const theta = (j / Nv) * Math.PI * 2;
+        const wpt = evalPalmPoint(u, theta);
+        const pr = project3D(wpt.wx, wpt.wy, wpt.wz);
+        ring.push({ u, theta, wpt, pr });
+        cx += pr.x; cy += pr.y;
+      }
+      grid.push(ring);
+      centers.push({ x: cx / Nv, y: cy / Nv });
+    }
+
+    const leftSil = [], rightSil = [];
+    for (let i = 0; i <= Nu; i++) {
+      const prevC = centers[Math.max(0, i - 1)], nextC = centers[Math.min(Nu, i + 1)];
+      let tx = nextC.x - prevC.x, ty = nextC.y - prevC.y;
+      const tLen = Math.hypot(tx, ty) || 1;
+      tx /= tLen; ty /= tLen;
+      const nx = -ty, ny = tx;
+      let minProj = Infinity, maxProj = -Infinity, bestL = grid[i][0].pr, bestR = grid[i][0].pr;
+      for (const v of grid[i]) {
+        const proj = (v.pr.x - centers[i].x) * nx + (v.pr.y - centers[i].y) * ny;
+        if (proj < minProj) { minProj = proj; bestL = v.pr; }
+        if (proj > maxProj) { maxProj = proj; bestR = v.pr; }
+      }
+      leftSil.push(bestL);
+      rightSil.push(bestR);
+    }
+
+    const silLoop = [];
+    for (let i = 0; i <= Nu; i += 2) silLoop.push(leftSil[i]);
+    silLoop.push(centers[Nu]);
+    for (let i = Nu; i >= 0; i -= 2) silLoop.push(rightSil[i]);
+    const silD = smoothPath2D(silLoop, true);
+    const palmClipPathEl = $("palmClipPath");
+    if (palmClipPathEl) palmClipPathEl.setAttribute("d", silD);
+
+    // Sync #forearmFadeGrad linearly along projected forearm orientation
     const fadeGrad = $("forearmFadeGrad");
     if (fadeGrad) {
-      const wStart = uc(0.6, 12, 0);
-      const wEnd = uc(1.4, 185, -30);
+      const wStartW = evalPalmPoint(0.26, Math.PI * 0.5);
+      const wEndW = evalPalmPoint(0.0, Math.PI * 0.5);
+      const wStart = project3D(wStartW.wx, wStartW.wy, wStartW.wz);
+      const wEnd = project3D(wEndW.wx, wEndW.wy, wEndW.wz);
       fadeGrad.setAttribute("x1", wStart.x.toFixed(1));
       fadeGrad.setAttribute("y1", wStart.y.toFixed(1));
       fadeGrad.setAttribute("x2", wEnd.x.toFixed(1));
       fadeGrad.setAttribute("y2", wEnd.y.toFixed(1));
     }
 
-    const gArm = svgEl("g", { mask: "url(#forearmFadeMask)" }, behindLayer);
-    svgEl("path", {
-      d: `M ${u0.x.toFixed(1)} ${u0.y.toFixed(1)} C ${u1.x.toFixed(1)} ${u1.y.toFixed(1)}, ${u2.x.toFixed(1)} ${u2.y.toFixed(1)}, ${u3.x.toFixed(1)} ${u3.y.toFixed(1)} Q ${((u3.x + u4.x) * 0.5).toFixed(1)} ${((u3.y + u4.y) * 0.5).toFixed(1)} ${u4.x.toFixed(1)} ${u4.y.toFixed(1)} L ${u5.x.toFixed(1)} ${u5.y.toFixed(1)} C ${u6.x.toFixed(1)} ${u6.y.toFixed(1)}, ${u7.x.toFixed(1)} ${u7.y.toFixed(1)}, ${u8.x.toFixed(1)} ${u8.y.toFixed(1)} Z`,
-      fill: "url(#coachBehind)", stroke: "rgba(147, 197, 253, 0.72)", "stroke-width": "1.15", opacity: "0.94"
-    }, gArm);
+    // Translucent Sky-Blue 2안 + 4안 Blinn-Phong + Fresnel + SSS + AO Shader
+    const baseCol = [56, 152, 224];
+    const shadowCol = [16, 48, 92];
+    const highlightCol = [196, 236, 255];
+    const sssCol = [56, 189, 248];
+    const rimCol = [224, 244, 255];
+    const L1 = vNorm([dirSign > 0 ? -0.48 : 0.48, -0.58, 0.66]);
+    const L2 = vNorm([dirSign > 0 ? 0.62 : -0.62, 0.35, 0.69]);
+    const H1 = vNorm([L1[0], L1[1], L1[2] + 1]);
 
-    const tc0 = uc(-1.08, 22, 4);
-    const tc1 = uc(-0.05, 30, 4);
-    svgEl("path", {
-      d: `M ${tc0.x.toFixed(1)} ${tc0.y.toFixed(1)} Q ${((tc0.x + tc1.x) * 0.5).toFixed(1)} ${((tc0.y + tc1.y) * 0.5 + 4).toFixed(1)} ${tc1.x.toFixed(1)} ${tc1.y.toFixed(1)}`,
-      fill: "none", stroke: "rgba(219, 234, 254, 0.65)", "stroke-width": "2.2", "stroke-linecap": "round", opacity: "0.28"
-    }, behindLayer);
+    const frontQuads = [], backQuads = [];
+    for (let i = 0; i < Nu; i++) {
+      for (let j = 0; j < Nv; j++) {
+        const jNext = (j + 1) % Nv;
+        const a = grid[i][j], b = grid[i + 1][j], c = grid[i + 1][jNext], d = grid[i][jNext];
+        const e1 = [c.pr.p3[0] - a.pr.p3[0], c.pr.p3[1] - a.pr.p3[1], c.pr.p3[2] - a.pr.p3[2]];
+        const e2 = [b.pr.p3[0] - d.pr.p3[0], b.pr.p3[1] - d.pr.p3[1], b.pr.p3[2] - d.pr.p3[2]];
+        const rawN = vCross(e1, e2);
+        const orientedN = dirSign < 0 ? [-rawN[0], -rawN[1], -rawN[2]] : rawN;
+        let n = vNorm(orientedN);
+        const isFront = n[2] >= 0;
+        if (n[2] < 0) n = [-n[0], -n[1], -n[2]];
+
+        const zAvg = (a.pr.zDepth + b.pr.zDepth + c.pr.zDepth + d.pr.zDepth) * 0.25;
+        const wyAvg = (a.wpt.wy + b.wpt.wy + c.wpt.wy + d.wpt.wy) * 0.25;
+        const wzAvg = (a.wpt.wz + b.wpt.wz + c.wpt.wz + d.wpt.wz) * 0.25;
+        const uAvg = (a.u + b.u) * 0.5;
+        const thAvg = a.theta;
+
+        const ndl1 = Math.max(0, vDot(n, L1));
+        const wrap1 = Math.max(0, (vDot(n, L1) + 0.45) / 1.45);
+        const ndl2 = Math.max(0, vDot(n, L2));
+        const spec = Math.pow(Math.max(0, vDot(n, H1)), 20);
+        const ndv = Math.max(0, Math.min(1, n[2]));
+        const fresnel = Math.pow(1 - ndv, 2.1);
+
+        const neckBandY = Math.exp(-Math.pow((wyAvg - 52) / 28, 2)) + Math.exp(-Math.pow((wyAvg + 54) / 22, 2)) * 0.8;
+        const neckBandZ = smoothstep(-36, -6, wzAvg) * (1 - smoothstep(4, 16, wzAvg));
+        const aoFactor = Math.max(0.48, 1.0 - 0.34 * Math.min(1, neckBandY) * neckBandZ);
+        const hollowShade = 0.24 * Math.exp(-Math.pow((uAvg - 0.56) / 0.16, 2)) * Math.exp(-Math.pow((Math.cos(thAvg) - 0.12) / 0.34, 2)) * Math.max(0, Math.sin(thAvg));
+
+        let col = mixCol(shadowCol, baseCol, 0.28 + 0.72 * wrap1);
+        col = mixCol(col, sssCol, 0.28 * Math.pow(wrap1, 1.4) * (1 - ndl1 * 0.35));
+        col = mixCol(col, highlightCol, Math.min(0.68, 0.36 * Math.pow(ndl1, 1.8) + 0.32 * spec));
+        col = mixCol(col, rimCol, fresnel * 0.48 + 0.14 * ndl2);
+        const mul = aoFactor * (1 - hollowShade);
+        col = [col[0] * mul, col[1] * mul, col[2] * mul];
+
+        const ptsAttr = `${a.pr.x.toFixed(1)},${a.pr.y.toFixed(1)} ${b.pr.x.toFixed(1)},${b.pr.y.toFixed(1)} ${c.pr.x.toFixed(1)},${c.pr.y.toFixed(1)} ${d.pr.x.toFixed(1)},${d.pr.y.toFixed(1)}`;
+        const item = { zAvg, ptsAttr, fillHex: rgbStr(col) };
+        if (isFront) frontQuads.push(item);
+        else backQuads.push(item);
+      }
+    }
+
+    const gPalmMasked = svgEl("g", { mask: "url(#forearmFadeMask)" }, behindLayer);
+    const gClipped = svgEl("g", { "clip-path": "url(#palmClip)", opacity: "0.78" }, gPalmMasked);
+    svgEl("path", { d: silD, fill: rgbStr(baseCol) }, gClipped);
+
+    const gSmoothedQuads = svgEl("g", { filter: "url(#palmSmoothFilter)" }, gClipped);
+    backQuads.sort((p, q) => p.zAvg - q.zAvg);
+    const gBack = svgEl("g", { opacity: "0.20" }, gSmoothedQuads);
+    for (const q of backQuads) {
+      svgEl("polygon", { points: q.ptsAttr, fill: q.fillHex, stroke: q.fillHex, "stroke-width": "1.2" }, gBack);
+    }
+    frontQuads.sort((p, q) => p.zAvg - q.zAvg);
+    for (const q of frontQuads) {
+      svgEl("polygon", { points: q.ptsAttr, fill: q.fillHex, stroke: q.fillHex, "stroke-width": "1.2", "stroke-linejoin": "round" }, gSmoothedQuads);
+    }
+
+    const drawSurfaceCurve = (uvSamples, strokeCol, sw, op) => {
+      const sPts = uvSamples.map(([u, th]) => {
+        const wpt = evalPalmPoint(u, th);
+        return project3D(wpt.wx, wpt.wy, wpt.wz + 0.8);
+      });
+      svgEl("path", { d: smoothPath2D(sPts, false), fill: "none", stroke: strokeCol, "stroke-width": sw, "stroke-linecap": "round", opacity: op }, gPalmMasked);
+    };
+
+    // 2안 Subtle U/V Sky-Cyan 3D Topology Contours
+    for (let u = 0.16; u <= 0.88; u += 0.14) {
+      const ringPts = [];
+      for (let k = 0; k <= 14; k++) ringPts.push([u, (k / 14) * Math.PI]);
+      drawSurfaceCurve(ringPts, "rgba(125, 211, 252, 0.34)", "0.85", "0.52");
+    }
+    [0.18, 0.36, 0.56, 0.76].forEach(thFrac => {
+      const longPts = [];
+      for (let k = 0; k <= 12; k++) longPts.push([0.10 + (k / 12) * 0.80, thFrac * Math.PI]);
+      drawSurfaceCurve(longPts, "rgba(125, 211, 252, 0.28)", "0.80", "0.42");
+    });
+
+    // 4안 Anatomical Palmar & Wrist Creases + Soft Thenar Specular Glow
+    const thenarCreasePts = [];
+    for (let k = 0; k <= 10; k++) {
+      const s = k / 10;
+      thenarCreasePts.push([0.68 - s * 0.28, (Math.PI * 0.66) - Math.sin(s * Math.PI * 0.75) * 0.40]);
+    }
+    drawSurfaceCurve(thenarCreasePts, "rgba(224, 242, 254, 0.40)", "1.6", "0.72");
+
+    const headCreasePts = [];
+    for (let k = 0; k <= 8; k++) {
+      const s = k / 8;
+      headCreasePts.push([0.62 - s * 0.08, (Math.PI * 0.22) + s * 0.88]);
+    }
+    drawSurfaceCurve(headCreasePts, "rgba(224, 242, 254, 0.34)", "1.2", "0.48");
+
+    [0.25, 0.29].forEach((uW, wi) => {
+      const wCrease = [];
+      for (let k = 0; k <= 10; k++) wCrease.push([uW, 0.24 * Math.PI + (k / 10) * (0.52 * Math.PI)]);
+      drawSurfaceCurve(wCrease, "rgba(224, 242, 254, 0.36)", wi === 0 ? "1.35" : "1.0", wi === 0 ? "0.52" : "0.34");
+    });
+
+    // Sky-Blue Fresnel Outer Rim
+    svgEl("path", { d: smoothPath2D(leftSil, false), fill: "none", stroke: "rgba(125, 211, 252, 0.78)", "stroke-width": "1.25", "stroke-linecap": "round" }, gPalmMasked);
+    svgEl("path", { d: smoothPath2D(rightSil, false), fill: "none", stroke: "rgba(125, 211, 252, 0.78)", "stroke-width": "1.25", "stroke-linecap": "round" }, gPalmMasked);
   }
 
   // 5. Build Finger & Thumb 3D Control Nodes (Top 4 fingers ①..④ curl DOWN from 1E; Bottom Thumb curls UP over 6E)
   const baseRadii = [0, 19.2, 19.6, 18.8, 15.8];
+  const fingerPlans = {};
+  const sameFretGroups = {};
+
+  // Pass 1: Resolve active fingers & subtly fan same-fret chord clusters (e.g. Open A Major 2F ①②③)
+  for (let fIdx = 1; fIdx <= 4; fIdx++) {
+    const activeTarget = activeByFinger[fIdx];
+    const isBarreF1 = (fIdx === 1 && !!barreInfo);
+    const isActive = isBarreF1 || !!(activeTarget && activeTarget.fret > 0);
+    if (isActive) {
+      if (isBarreF1) {
+        fingerPlans[fIdx] = {
+          id: fIdx,
+          isActive: true,
+          isBarreF1: true,
+          tipF: barreInfo.fret,
+          tipS: barreInfo.maxS,
+          knuckleF: barreInfo.fret + 0.10
+        };
+      } else {
+        const fKey = activeTarget.fret;
+        if (!sameFretGroups[fKey]) sameFretGroups[fKey] = [];
+        sameFretGroups[fKey].push({ id: fIdx, target: activeTarget });
+      }
+    } else {
+      fingerPlans[fIdx] = { id: fIdx, isActive: false, isBarreF1: false };
+    }
+  }
+
+  Object.keys(sameFretGroups).forEach(fKey => {
+    const grp = sameFretGroups[fKey].sort((a, b) => a.id - b.id);
+    const fretVal = Number(fKey);
+    if (grp.length >= 2) {
+      grp.forEach((item, idxInGrp) => {
+        const pos = idxInGrp - (grp.length - 1) * 0.5;
+        const spread = grp.length >= 3 ? 0.17 : 0.13;
+        fingerPlans[item.id] = {
+          id: item.id,
+          isActive: true,
+          isBarreF1: false,
+          tipF: Math.max(0.55, Math.min(frets, fretVal + pos * spread)),
+          tipS: item.target.s,
+          knuckleF: Math.max(0.50, Math.min(frets, fretVal + 0.14 + pos * 0.46))
+        };
+      });
+    } else {
+      const item = grp[0];
+      fingerPlans[item.id] = {
+        id: item.id,
+        isActive: true,
+        isBarreF1: false,
+        tipF: item.target.fret,
+        tipS: item.target.s,
+        knuckleF: Math.max(0.5, item.target.fret + 0.14)
+      };
+    }
+  });
+
+  // Pass 2: Position unused (!isActive) fingers naturally beside active neighbors, hovering lifted above the fretboard
+  const activeList = [1, 2, 3, 4].filter(id => fingerPlans[id].isActive).map(id => fingerPlans[id]);
+  for (let fIdx = 1; fIdx <= 4; fIdx++) {
+    const plan = fingerPlans[fIdx];
+    if (plan.isActive) continue;
+    const lo = activeList.filter(a => a.id < fIdx).pop() || null;
+    const hi = activeList.find(a => a.id > fIdx) || null;
+    if (lo && hi) {
+      const frac = (fIdx - lo.id) / (hi.id - lo.id);
+      plan.tipF = lo.tipF + (hi.tipF - lo.tipF) * frac;
+      plan.knuckleF = lo.knuckleF + (hi.knuckleF - lo.knuckleF) * frac;
+    } else if (lo) {
+      plan.tipF = Math.min(frets, lo.tipF + (fIdx - lo.id) * 0.84);
+      plan.knuckleF = Math.min(frets, Math.max(plan.tipF + 0.16, lo.knuckleF + (fIdx - lo.id) * 0.60));
+    } else if (hi) {
+      plan.tipF = Math.max(0.65, hi.tipF - (hi.id - fIdx) * 0.84);
+      plan.knuckleF = Math.max(0.55, Math.min(plan.tipF + 0.16, hi.knuckleF - (hi.id - fIdx) * 0.60));
+    } else {
+      plan.tipF = Math.min(frets, anchorF + (fIdx - 1) * 0.84);
+      plan.knuckleF = Math.min(frets, plan.tipF + 0.16);
+    }
+    plan.tipS = Math.min(numStrings - 1, 1.45);
+  }
+
   const fingerDefs = [];
   for (let fIdx = 4; fIdx >= 1; fIdx--) {
     const fColor = FINGER_COLORS[fIdx] || "#38bdf8";
-    const activeTarget = activeByFinger[fIdx];
-    const isActive = !!(activeTarget && activeTarget.fret > 0);
+    const plan = fingerPlans[fIdx];
+    const isActive = plan.isActive;
+    const isBarreF1 = plan.isBarreF1;
+    const tipF = plan.tipF;
+    const tipS = plan.tipS;
+    const knuckleF = plan.knuckleF;
     const rF = baseRadii[fIdx] * rScale;
-
-    let tipF, tipS, knuckleF;
-    if (isActive) {
-      tipF = activeTarget.fret;
-      tipS = activeTarget.s;
-      knuckleF = Math.max(0.5, tipF + 0.14);
-    } else {
-      // Relaxed standby fret column subtly gathered inward toward palm center
-      const rel = (fIdx - 1) * 0.88;
-      tipF = Math.min(frets, anchorF + rel);
-      tipS = Math.min(numStrings - 1, 2); // Hover gently arched over middle string 3G
-      knuckleF = tipF + 0.16;
-    }
-
-    // Barre chord overrides Finger 1 span cleanly across minS..maxS
-    const isBarreF1 = (fIdx === 1 && barreInfo);
-    if (isBarreF1) {
-      tipF = barreInfo.fret;
-      tipS = barreInfo.maxS;
-      knuckleF = barreInfo.fret + 0.10;
-    }
 
     const fcK = fretCoord(0, knuckleF);
     const fcMid1 = fretCoord(0, knuckleF - 0.05);
@@ -2374,26 +2708,40 @@ function renderFretboardHandOverlay(nowRel = 0) {
     const fcTip = fretCoord(tipS, tipF);
     const tK = Math.max(0, Math.min(1, fcK.t));
     const tM1 = Math.max(0, Math.min(1, fcMid1.t));
+    const tM2 = Math.max(0, Math.min(1, fcMid2.t));
+    const tTip = Math.max(0, Math.min(1, fcTip.t));
     const hwK = halfNeckAt(tK);
     const hwM1 = halfNeckAt(tM1);
 
-    let wy1, wy2, wy3, wz1, wz2, wz3;
+    let wy1, wy2, wy3, wz0, wz1, wz2, wz3, radArr;
     if (isBarreF1) {
       const midS = (barreInfo.minS + barreInfo.maxS) * 0.5;
       wy1 = -hwM1 * 0.65;
-      wy2 = strYWorld(midS, Math.max(0, Math.min(1, fcMid2.t)));
+      wy2 = strYWorld(midS, tM2);
       wy3 = fcTip.wy - 4;
-      wz1 = 15; wz2 = 12; wz3 = 7.5;
+      wz0 = 2; wz1 = 15; wz2 = 12; wz3 = 7.5;
+      radArr = [rF * 0.99, rF, rF * 0.92, rF * 0.85];
+    } else if (!isActive) {
+      // Lifted standby finger: hover noticeably above upper fretboard over 1E..2B without blocking lower strings
+      const s1 = Math.min(1, numStrings - 1);
+      const s2 = Math.min(2, numStrings - 1);
+      wy1 = -hwM1 - 9;
+      wy2 = strYWorld(0, tM2) + (strYWorld(s1, tM2) - strYWorld(0, tM2)) * 0.40;
+      wy3 = strYWorld(s1, tTip) + (strYWorld(s2, tTip) - strYWorld(s1, tTip)) * 0.45 - 6;
+      wz0 = 5.0; wz1 = 26.5; wz2 = 27.5; wz3 = 21.0;
+      radArr = [rF * 0.96, rF * 0.97, rF * 0.89, rF * 0.82];
     } else if (tipS === 0) {
       wy1 = -hwM1 - 6;
       wy2 = fcMid2.wy - 8;
       wy3 = fcTip.wy - 8;
-      wz1 = 19.5; wz2 = 16.5; wz3 = 5.4;
+      wz0 = 2; wz1 = 19.5; wz2 = 16.5; wz3 = 5.4;
+      radArr = [rF * 0.99, rF, rF * 0.92, rF * 0.85];
     } else {
       wy1 = tipS >= numStrings - 2 ? -hwM1 * 0.52 : -hwM1 - 4;
-      wy2 = strYWorld(Math.max(1, tipS - 1), Math.max(0, Math.min(1, fcMid2.t)));
+      wy2 = strYWorld(Math.max(1, tipS - 1), tM2);
       wy3 = fcTip.wy - 9;
-      wz1 = 19.5; wz2 = 16.0; wz3 = 5.2;
+      wz0 = 2; wz1 = 19.5; wz2 = 16.0; wz3 = 5.2;
+      radArr = [rF * 0.99, rF, rF * 0.92, rF * 0.85];
     }
 
     fingerDefs.push({
@@ -2401,45 +2749,64 @@ function renderFretboardHandOverlay(nowRel = 0) {
       color: fColor,
       isActive,
       isBarreF1,
+      tipF,
+      knuckleF,
       tipWx: fcTip.wx,
       tipWy: wy3,
       knuckleWx: fcK.wx,
       nodes: [
-        { wx: fcK.wx, wy: -hwK - 16, wz: 2, r: rF * 0.99 },
-        { wx: fcMid1.wx, wy: wy1, wz: wz1, r: rF },
-        { wx: fcMid2.wx, wy: wy2, wz: wz2, r: rF * 0.92 },
-        { wx: fcTip.wx, wy: wy3, wz: wz3, r: rF * 0.85 }
+        { wx: fcK.wx, wy: -hwK - 16, wz: wz0, r: radArr[0] },
+        { wx: fcMid1.wx, wy: wy1, wz: wz1, r: radArr[1] },
+        { wx: fcMid2.wx, wy: wy2, wz: wz2, r: radArr[2] },
+        { wx: fcTip.wx, wy: wy3, wz: wz3, r: radArr[3] }
       ]
     });
   }
 
-  // Bottom Left Thumb curling UP & RIGHT over bottom 6E binding toward ① 검지
-  const tBaseF = anchorF - 1.05;
-  const thC0 = fretCoord(numStrings - 1, tBaseF - 0.12);
-  const thC1 = fretCoord(numStrings - 1, tBaseF + 0.18);
-  const thC2 = fretCoord(numStrings - 1, tBaseF + 0.42);
-  const thC3 = fretCoord(Math.max(1, numStrings - 3), tBaseF + 0.62);
+  // Bottom Left Thumb rooted inside 3D Thenar dome curling UP & RIGHT over bottom 6E binding toward ① 검지
+  const tBaseF = anchorF - 0.85;
+  const thC0 = fretCoord(numStrings - 1, anchorF - 0.64);
+  const thC1 = fretCoord(numStrings - 1, anchorF - 0.82);
+  const thC2 = fretCoord(numStrings - 1, anchorF - 0.76);
+  const thC3 = fretCoord(numStrings - 1, anchorF - 0.62);
+  const thC4 = fretCoord(Math.max(1, numStrings - 3), anchorF - 0.48);
+  const thGrad = $("thumbBlendGrad");
+  if (thGrad) {
+    const thRootC = fretCoord(numStrings - 1, anchorF - 0.68);
+    const thNeckC = fretCoord(numStrings - 1, anchorF - 0.80);
+    const thRootP = project3D(thRootC.wx, halfNeckAt(Math.max(0, Math.min(1, thRootC.t))) + 36, 2);
+    const thNeckP = project3D(thNeckC.wx, halfNeckAt(Math.max(0, Math.min(1, thNeckC.t))) + 10, 14);
+    thGrad.setAttribute("x1", thRootP.x.toFixed(1));
+    thGrad.setAttribute("y1", thRootP.y.toFixed(1));
+    thGrad.setAttribute("x2", thNeckP.x.toFixed(1));
+    thGrad.setAttribute("y2", thNeckP.y.toFixed(1));
+  }
   const thumbNodes = [
-    { wx: thC0.wx, wy: halfNeckAt(Math.max(0, Math.min(1, thC0.t))) + 15, wz: 11, r: 21.8 * rScale },
-    { wx: thC1.wx, wy: halfNeckAt(Math.max(0, Math.min(1, thC1.t))) - 2, wz: 16.5, r: 22.2 * rScale },
-    { wx: thC2.wx, wy: thC2.wy - 11, wz: 15.5, r: 20.6 * rScale },
-    { wx: thC3.wx, wy: thC3.wy + 7, wz: 10.5, r: 18.8 * rScale }
+    { wx: thC0.wx, wy: halfNeckAt(Math.max(0, Math.min(1, thC0.t))) + 38, wz: 2, r: 22.5 * rScale },
+    { wx: thC1.wx, wy: halfNeckAt(Math.max(0, Math.min(1, thC1.t))) + 14, wz: 12.5, r: 21.8 * rScale },
+    { wx: thC2.wx, wy: halfNeckAt(Math.max(0, Math.min(1, thC2.t))) - 3, wz: 16.5, r: 21.4 * rScale },
+    { wx: thC3.wx, wy: thC3.wy - 10, wz: 15.2, r: 20.0 * rScale },
+    { wx: thC4.wx, wy: thC4.wy + 10, wz: 10.5, r: 18.4 * rScale }
   ];
 
   // 6. Cast Shadows on Fretboard (backLayer under note pucks)
-  const drawCastShadow = (wx, wy, rx, ry, rotDeg) => {
-    const p = project3D(wx + dirSign * 2, wy + 4, 2.1);
+  const drawCastShadow = (wx, wy, rx, ry, rotDeg, isLifted = false) => {
+    const dx = isLifted ? dirSign * 5 : dirSign * 2;
+    const dy = isLifted ? 11 : 4;
+    const scaleMul = isLifted ? 1.24 : 1.0;
+    const p = project3D(wx + dx, wy + dy, 2.1);
     svgEl("ellipse", {
       cx: p.x.toFixed(1), cy: p.y.toFixed(1),
-      rx: (rx * p.scale).toFixed(1), ry: (ry * p.scale).toFixed(1),
+      rx: (rx * scaleMul * p.scale).toFixed(1), ry: (ry * scaleMul * p.scale).toFixed(1),
       transform: `rotate(${rotDeg} ${p.x.toFixed(1)} ${p.y.toFixed(1)})`,
-      fill: "rgba(0, 0, 0, 0.34)", filter: "url(#glow3dSoft)"
+      fill: isLifted ? "rgba(0, 0, 0, 0.20)" : "rgba(0, 0, 0, 0.42)",
+      filter: "url(#glow3dSoft)"
     }, backLayer);
   };
-  drawCastShadow(thC2.wx, thC2.wy, 26 * rScale, 13 * rScale, dirSign * -18);
+  drawCastShadow(thC3.wx, thC3.wy - 8, 26 * rScale, 13 * rScale, dirSign * -18, false);
   fingerDefs.forEach(fg => {
     const tip = fg.nodes[fg.nodes.length - 1];
-    drawCastShadow(tip.wx, tip.wy, tip.r * 1.12, tip.r * 0.70, dirSign * -10);
+    drawCastShadow(tip.wx, tip.wy, tip.r * 1.12, tip.r * 0.70, dirSign * -10, !fg.isActive);
   });
 
   // 7. Render 4 Fingers (painter order ④ -> ①), Barre Capsule (if active), and Bottom Thumb (tipLayer)
@@ -2519,27 +2886,71 @@ function renderFretboardHandOverlay(nowRel = 0) {
   // 9. Coaching HUD Callouts (Top ①②③④ Badges, 👍 하단 6E 엄지, ARCH 74° OK, HAND POS Dock)
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-  // 9a. ①..④ Finger Badges cleanly ABOVE top 1E edge (below elevated Fret rail)
-  fingerRenderInfo.forEach(({ fg, pts }) => {
-    const kT = Math.max(0, Math.min(1, fretCoord(0, Math.max(0.5, anchorF + (fg.id - 1))).t));
-    const bp = project3D(fg.knuckleWx, -halfNeckAt(kT) - 56, 6);
-    const bx = clamp(bp.x, 16, W - 16);
-    const by = clamp(bp.y, 28, H - 16);
+  // 9a. ①..④ Finger Badges cleanly ABOVE top 1E edge with horizontal de-collision
+  const minBadgeX = 16, maxBadgeX = W - 16, minBadgeGap = 24;
+  const badgeItems = fingerRenderInfo.map(({ fg, pts }) => {
+    const kT = Math.max(0, Math.min(1, fretCoord(0, fg.knuckleF).t));
+    const bp = project3D(fg.knuckleWx, -halfNeckAt(kT) - 56, fg.isActive ? 6 : 12);
+    return {
+      fg,
+      pts,
+      bx: clamp(bp.x, minBadgeX, maxBadgeX),
+      by: clamp(bp.y, 28, H - 16)
+    };
+  }).sort((a, b) => (a.bx - b.bx) || (dirSign > 0 ? a.fg.id - b.fg.id : b.fg.id - a.fg.id));
+
+  for (let pass = 0; pass < 4; pass++) {
+    for (let i = 0; i < badgeItems.length - 1; i++) {
+      const diff = badgeItems[i + 1].bx - badgeItems[i].bx;
+      if (diff < minBadgeGap) {
+        const push = (minBadgeGap - diff) * 0.5;
+        badgeItems[i].bx -= push;
+        badgeItems[i + 1].bx += push;
+      }
+    }
+    badgeItems[0].bx = Math.max(minBadgeX, badgeItems[0].bx);
+    for (let i = 1; i < badgeItems.length; i++) {
+      badgeItems[i].bx = Math.max(badgeItems[i].bx, badgeItems[i - 1].bx + minBadgeGap);
+    }
+    badgeItems[badgeItems.length - 1].bx = Math.min(maxBadgeX, badgeItems[badgeItems.length - 1].bx);
+    for (let i = badgeItems.length - 2; i >= 0; i--) {
+      badgeItems[i].bx = Math.min(badgeItems[i].bx, badgeItems[i + 1].bx - minBadgeGap);
+    }
+  }
+
+  badgeItems.forEach(({ fg, pts, bx, by }) => {
     const kp = pts[Math.floor(pts.length * 0.16)];
-    svgEl("line", {
-      x1: bx.toFixed(1), y1: (by + 10).toFixed(1),
-      x2: kp.x.toFixed(1), y2: (kp.y - 6).toFixed(1),
-      stroke: fg.color, "stroke-width": "1.2", opacity: "0.68"
-    }, tipLayer);
-    svgEl("circle", {
-      cx: bx.toFixed(1), cy: by.toFixed(1), r: fg.isActive ? "11.2" : "10.0",
-      fill: fg.isActive ? fg.color : "#0f172a", stroke: fg.color, "stroke-width": fg.isActive ? "2.1" : "1.7"
-    }, tipLayer);
-    svgEl("text", {
-      x: bx.toFixed(1), y: (by + 3.8).toFixed(1),
-      "text-anchor": "middle", "font-size": "11.2", "font-weight": "800",
-      fill: fg.isActive ? "#090c10" : fg.color
-    }, tipLayer).textContent = String(fg.id);
+    if (fg.isActive) {
+      svgEl("line", {
+        x1: bx.toFixed(1), y1: (by + 10).toFixed(1),
+        x2: kp.x.toFixed(1), y2: (kp.y - 6).toFixed(1),
+        stroke: fg.color, "stroke-width": "1.2", opacity: "0.75"
+      }, tipLayer);
+      svgEl("circle", {
+        cx: bx.toFixed(1), cy: by.toFixed(1), r: "11.2",
+        fill: fg.color, stroke: fg.color, "stroke-width": "2.1"
+      }, tipLayer);
+      svgEl("text", {
+        x: bx.toFixed(1), y: (by + 3.8).toFixed(1),
+        "text-anchor": "middle", "font-size": "11.2", "font-weight": "800",
+        fill: "#090c10"
+      }, tipLayer).textContent = String(fg.id);
+    } else {
+      svgEl("line", {
+        x1: bx.toFixed(1), y1: (by + 9).toFixed(1),
+        x2: kp.x.toFixed(1), y2: (kp.y - 5).toFixed(1),
+        stroke: fg.color, "stroke-width": "1.1", "stroke-dasharray": "3 2", opacity: "0.42"
+      }, tipLayer);
+      svgEl("circle", {
+        cx: bx.toFixed(1), cy: by.toFixed(1), r: "9.2",
+        fill: "rgba(15, 23, 42, 0.85)", stroke: fg.color, "stroke-width": "1.4", opacity: "0.62"
+      }, tipLayer);
+      svgEl("text", {
+        x: bx.toFixed(1), y: (by + 3.5).toFixed(1),
+        "text-anchor": "middle", "font-size": "10.2", "font-weight": "800",
+        fill: fg.color, opacity: "0.75"
+      }, tipLayer).textContent = String(fg.id);
+    }
   });
 
   // 9b. Thumb Callout Pill safely on the Nut side of the Thumb below 6E
@@ -2571,7 +2982,11 @@ function renderFretboardHandOverlay(nowRel = 0) {
   // 9c. ARCH 74° OK Curve & Badge cleanly beside ④ 소지 (flips Left when anchorF > 9)
   const coachBodySide = anchorF <= 9;
   {
-    const fArcBase = coachBodySide ? anchorF + 3.15 : anchorF - 0.55;
+    const maxFingerF = Math.max(...fingerDefs.map(f => f.tipF));
+    const minFingerF = Math.min(...fingerDefs.map(f => f.tipF));
+    const fArcBase = coachBodySide
+      ? Math.min(frets - 0.6, maxFingerF + 0.60)
+      : Math.max(0.6, minFingerF - 0.55);
     const fcA0 = fretCoord(0, fArcBase);
     const fcA1 = fretCoord(0, fArcBase + (coachBodySide ? 0.30 : -0.30));
     const fcA2 = fretCoord(0, fArcBase + (coachBodySide ? 0.55 : -0.55));
@@ -2586,7 +3001,9 @@ function renderFretboardHandOverlay(nowRel = 0) {
       fill: "none", stroke: "#38bdf8", "stroke-width": "1.75", "stroke-dasharray": "4 3"
     }, tipLayer);
 
-    const bFret = coachBodySide ? anchorF + 5.75 : anchorF - 2.3;
+    const bFret = coachBodySide
+      ? Math.min(frets - 0.5, fArcBase + 2.35)
+      : Math.max(0.8, fArcBase - 1.95);
     const fcB = fretCoord(0, bFret);
     const badgeTop = project3D(fcB.wx, -halfNeckAt(Math.max(0, Math.min(1, fcB.t))) - 42, 6);
     const bW = 108;
