@@ -50,7 +50,7 @@ jobs:
           echo "zip_name=$zipName" >> $env:GITHUB_OUTPUT
 
       - name: Generate SLSA Build Provenance Attestation
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             ${{ steps.package.outputs.zip_name }}
