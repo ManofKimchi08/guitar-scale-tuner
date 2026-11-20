@@ -29,7 +29,7 @@ def build():
     # Remove intermediate build/ folder so users don't accidentally click the incomplete exe in build/
     if os.path.isdir("build"):
         shutil.rmtree("build", ignore_errors=True)
-    print("\n✅ Build complete! Executable generated at: dist/GuitarScaleTuner/GuitarScaleTuner.exe")
+    print("\n[OK] Build complete! Executable generated at: dist/GuitarScaleTuner/GuitarScaleTuner.exe")
 
 if __name__ == "__main__":
     build()
