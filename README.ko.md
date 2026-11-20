@@ -3,12 +3,12 @@
 **실제 일렉트릭 기타와 베이스 기타 소리를 실시간으로 듣고 반응하는 초저지연 지판 스케일 가이드, 리듬 게임 & 스마트 운지 트레이너**
 
 [![Live Web App](https://img.shields.io/badge/Live%20Web%20App-%EB%AC%B4%EC%84%A4%EC%B9%98%20%EC%9B%B9%20%EC%8B%A4%ED%96%89-38bdf8?style=flat&logo=googlechrome&logoColor=white)](https://manofkimchi08.github.io/guitar-scale-tuner/)
-[![Release](https://img.shields.io/badge/Release-v2.5.1-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
+[![Release](https://img.shields.io/badge/Release-v2.5.2-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Web%20%7C%20Windows-brightgreen.svg)](https://manofkimchi08.github.io/guitar-scale-tuner/)
 
 > 🌐 **웹에서 바로 실행 (설치 불필요)**: **[https://manofkimchi08.github.io/guitar-scale-tuner/](https://manofkimchi08.github.io/guitar-scale-tuner/)**  
-> 🗣️ **Language / 언어 / 言語**: **[🇺🇸 English](README.md)** | **[🇰🇷 한국어](README.ko.md)** | **[🇯🇵 日本語](README.ja.md)**
+> 🗣️ **Language / 언어 / 言語**: **[🇺🇸 English](README.md)** | **[🇰🇷 한국어](README.ko.md)** | **[🇯🇵 日本語](README.ja.md)** | **[🔒 보안 정책 (SECURITY.md)](SECURITY.md)**
 
 ---
 
@@ -32,7 +32,12 @@
 
 ---
 
-## 🌟 핵심 기능 소개 (v2.5.1)
+## 🌟 핵심 기능 소개 (v2.5.2)
+
+### 0-C. 🔒 외부 링크 변조 방지 가드, 다중 보안 방어 & 클라우드 빌드 출처 증명 (v2.5.2 신규)
+- **공식 외부 링크 유지 + 런타임 변조 차단 가드**: ASIO 팝오버의 공식 링크(`releases/latest`, `asio4all.org`)에 `rel="noopener noreferrer nofollow"`, `referrerpolicy="no-referrer"`, `guardVerifiedExternalLinks()` 클릭 검증 및 `#asioSecurityNote` 도메인·광고 주의 안내를 적용했습니다.
+- **엄격한 CSP, 동적 `innerHTML` 제거 & 로컬 서버 방어**: `object-src 'none'; base-uri 'self'; form-action 'none'` 및 `no-referrer` 적용, `src/main.js` 동적 HTML 삽입 제거, `run_https_server.py` 6종 보안 헤더, `asio_server.py` WebSocket 장치 검증·크기 제한(`16KB`)을 구축했습니다.
+- **자동 보안 감사 CI & SLSA 출처 증명 릴리즈**: `requirements.txt` 버전 고정, `scripts/security_audit.py` CI 검사, GitHub Actions `windows-latest` 자동 빌드 및 **`SHA256SUMS.txt` · SLSA Build Provenance** 증명([SECURITY.md](SECURITY.md))을 제공합니다.
 
 ### 0-B. 🖐️ 반투명 하늘색 3D 입체 손바닥, 미사용 손가락 부양 대기 자세 & 코드 겹침 해소 (v2.5.1 신규)
 - **3D 입체 파라메트릭 손바닥·손목 (`2+4 하이브리드` 반투명 하늘색)**: 평평한 2D 손바닥 실루엣을 `22×20` 3D 로프트 메시(`evalPalmPoint`)로 재구축하여 무지구(Thenar)·소지구(Hypothenar)·중앙 오목부 굴곡과 Blinn-Phong/Fresnel/SSS 셰이딩을 적용하고, `#thumbBlendMask`로 엄지 뿌리를 손바닥 안쪽에 자연스럽게 융합했습니다.
@@ -103,7 +108,7 @@
 3. **하이브리드 ASIO 브릿지 모드 (선택)**: 상단 입력 장치에서 **`⚡ ASIO`**를 선택하면 내 PC의 로컬 ASIO 브릿지 실행 여부를 자동 진단합니다. 미설치 시 스마트 안내 팝오버가 열려 초저지연 브릿지(`.exe`)를 설치하거나 원클릭으로 브라우저 마이크로 전환해 연주할 수 있습니다.
 
 ### 방법 A: Windows 로컬 패키지 실행
-1. [Releases 페이지](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)에서 최신 `GuitarScaleTuner-v2.5.1-windows-x64.zip` 파일을 다운로드하여 압축을 해제하거나 저장소를 클론합니다.
+1. [Releases 페이지](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)에서 최신 `GuitarScaleTuner-v2.5.2-windows-x64.zip`과 `SHA256SUMS.txt`를 다운로드해 해시 검증 후 압축을 해제하거나 저장소를 클론합니다. ([보안 검증 가이드](SECURITY.md))
 2. 폴더 안의 **`GuitarScaleTuner.exe`** (또는 `Run_GuitarScaleTuner.bat`)를 더블클릭하면 파이썬 설치 없이 즉시 실행됩니다.
 
 ### 방법 B: 파이썬 소스 코드로 실행

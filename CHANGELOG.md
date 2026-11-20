@@ -4,6 +4,33 @@
 
 ---
 
+## 🔒 [v2.5.2] - 외부 링크 변조 차단 가드, CSP·HTTP/WebSocket 보안 강화 & GitHub Actions 클라우드 자동 릴리즈/SLSA 출처 증명 (2026-11-20)
+
+### 📌 개요
+외부 공식 링크(`github.com/ManofKimchi08/guitar-scale-tuner/releases/latest`, `asio4all.org`)의 편의성은 그대로 유지하면서도, **런타임 링크 변조 차단 가드·엄격 CSP·로컬 HTTP/WebSocket 다중 방어·GitHub Actions 클라우드 자동 빌드 및 `SHA256SUMS.txt` / SLSA 빌드 출처 증명**을 전방위로 구축한 보안 강화 패치 릴리즈입니다.
+
+### 📸 주요 화면 미리보기
+| 🛡️ ASIO 스마트 팝오버 보안 확인 배너 & 공식 도메인 가드 |
+| :---: |
+| ![Hybrid ASIO Smart Popover with Security Banner](docs/screenshots/screenshot_asio_hybrid.png) |
+
+### 🛠️ 주요 변경사항
+* **🔗 외부 링크 유지 + 런타임 변조 차단 가드 & 안내 배너 (`index.html`, `src/style.css`, `src/main.js`)**:
+  - `VERIFIED_EXTERNAL_LINKS` 화이트리스트와 `guardVerifiedExternalLinks()` 캡처 단계 클릭 핸들러를 추가해, DOM 변조로 `href`가 공식 URL과 달라질 경우 즉시 이동을 차단하고 원래 URL을 복원합니다.
+  - `#btnDownloadAsioBridge`, `#btnOpenAsio4All`에 `rel="noopener noreferrer nofollow"` + `referrerpolicy="no-referrer"`를 적용하고, `#asioSecurityNote` 배너를 통해 공식 도메인·외부 광고 배너 클릭 주의·`SHA256SUMS.txt` 검증을 안내합니다.
+* **🛡️ 브라우저 CSP 고도화 & 동적 `innerHTML` 완전 제거 (`index.html`, `src/main.js`)**:
+  - `<meta http-equiv="Content-Security-Policy">`에 `object-src 'none'; base-uri 'self'; form-action 'none';` 및 `<meta name="referrer" content="no-referrer">`를 추가했습니다.
+  - `radarTxt.innerHTML` 및 `$("scanResults").innerHTML` 등 남아 있던 동적 HTML 삽입을 모두 `createElement` + `textContent` 순수 DOM 조작으로 교체했습니다.
+* **🌐 로컬 HTTP/WebSocket 서버 방어 강화 (`run_https_server.py`, `asio_server.py`)**:
+  - 로컬 HTTP 응답에 `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy` 6종 보안 헤더를 추가했습니다.
+  - WebSocket `select_asio_device` 핸들러에 장치 인덱스 범위 및 입력 채널(`max_input_channels > 0`) 검증과 `max_size=16384`, `max_queue=16` 제한을 적용했습니다.
+* **🏗️ 공급망 보안, 자동 보안 감사 CI & 클라우드 증명 릴리즈 (`requirements.txt`, `scripts/security_audit.py`, `.github/`, `SECURITY.md`)**:
+  - `requirements.txt` 의존성(`numpy==2.5.1`, `sounddevice==0.5.5`, `websockets==16.1`)을 고정하고 `.github/dependabot.yml` 주간 보안 점검을 설정했습니다.
+  - `.github/workflows/security-check.yml`과 `scripts/security_audit.py`로 허용 URL·CSP·동적 코드·HTTP/WebSocket 보안 규칙을 매 푸시/PR마다 자동 검사합니다.
+  - `.github/workflows/release.yml`에서 태그(`v*`) 푸시 시 `windows-latest` 클라우드 러너가 `GuitarScaleTuner.exe` `.zip` 패키지와 `SHA256SUMS.txt`를 빌드하고 **`actions/attest-build-provenance` SLSA 빌드 출처 증명서**를 생성합니다. (`SECURITY.md` 검증 가이드 포함)
+
+---
+
 ## 🖐️ [v2.5.1] - 3D 입체 반투명 하늘색 손바닥(2+4 하이브리드), 미사용 손가락 지판 위 부양 대기 자세 & 동일 프렛 코드 운지 분리 (2026-11-19)
 
 ### 📌 개요

@@ -452,10 +452,18 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
                     elif msg_type == "get_asio_devices":
                         await websocket.send(await get_device_payload())
                     elif msg_type == "select_asio_device":
-                        new_id = int(data.get("device_id"))
-                        logger.info(f"Switching active audio device to #{new_id}")
-                        current_device_id = new_id
-                        stream_restart_event.set()
+                        raw_id = data.get("device_id")
+                        if isinstance(raw_id, bool) or not isinstance(raw_id, (int, str)):
+                            logger.warning(f"Rejected invalid device_id type: {raw_id!r}")
+                            continue
+                        new_id = int(raw_id)
+                        all_devs = sd.query_devices()
+                        if 0 <= new_id < len(all_devs) and int(all_devs[new_id].get("max_input_channels", 0)) > 0:
+                            logger.info(f"Switching active audio device to #{new_id}")
+                            current_device_id = new_id
+                            stream_restart_event.set()
+                        else:
+                            logger.warning(f"Rejected out-of-range or non-input device_id: #{new_id}")
                     elif msg_type == "start_asio_recording":
                         is_asio_recording = True
                         recorded_audio_chunks = []
@@ -502,7 +510,14 @@ async def audio_broadcaster(device_idx, host, port, sample_rate, buffer_size, se
         re.compile(r"^(https?://(localhost|127\.0\.0\.1)(:\d+)?|https://manofkimchi08\.github\.io)$"),
         None
     ]
-    server = await websockets.serve(ws_handler, host, port, origins=allowed_origins)
+    server = await websockets.serve(
+        ws_handler,
+        host,
+        port,
+        origins=allowed_origins,
+        max_size=16384,
+        max_queue=16
+    )
     logger.info(f"WebSocket server started on ws://{host}:{port}")
 
     while True:

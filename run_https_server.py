@@ -35,6 +35,12 @@ class CustomHTTPRequestHandler(SimpleHTTPRequestHandler):
 
     def end_headers(self):
         self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('X-Frame-Options', 'DENY')
+        self.send_header('Referrer-Policy', 'no-referrer')
+        self.send_header('Permissions-Policy', 'camera=(), geolocation=(), payment=(), usb=(), microphone=(self)')
+        self.send_header('Cross-Origin-Opener-Policy', 'same-origin')
+        self.send_header('Cross-Origin-Resource-Policy', 'same-origin')
         super().end_headers()
 
 def create_server(start_port=8000, max_attempts=20, directory=None):

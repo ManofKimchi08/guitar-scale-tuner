@@ -2774,6 +2774,37 @@ body[data-neck-wood="cyber"] .fretboard-card .fb-svg-container {
   color: #ffffff;
 }
 
+/* Verified Domain & Download Safety Note */
+.asio-security-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  font-size: 10.4px;
+  line-height: 1.45;
+  color: #a7f3d0;
+}
+
+.asio-sec-icon {
+  flex-shrink: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.asio-sec-body code {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9.8px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+}
+
 /* Footer Quick-Switch Bar */
 .asio-footer-bar {
   border-top: 1px solid #222531;

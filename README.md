@@ -3,13 +3,13 @@
 A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic fingering trainer** in the browser and desktop that **listens to your real electric & bass guitar** in real-time.
 
 [![Live Web App](https://img.shields.io/badge/Live%20Web%20App-Try%20Without%20Install-38bdf8?style=flat&logo=googlechrome&logoColor=white)](https://manofkimchi08.github.io/guitar-scale-tuner/)
-[![Release](https://img.shields.io/badge/Release-v2.5.1-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
+[![Release](https://img.shields.io/badge/Release-v2.5.2-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Web%20%7C%20Windows-brightgreen.svg)](https://manofkimchi08.github.io/guitar-scale-tuner/)
 
 > 🌐 **Live Web App (No Install)**: **[https://manofkimchi08.github.io/guitar-scale-tuner/](https://manofkimchi08.github.io/guitar-scale-tuner/)**  
 > 🗣️ **Language / 언어 / 言語**: **[🇺🇸 English](README.md)** | **[🇰🇷 한국어 전문 (Korean)](README.ko.md)** | **[🇯🇵 日本語全文 (Japanese)](README.ja.md)**  
-> 🔽 **In-Page Quick Jump**: [🇺🇸 English](#-key-features-v251) · [🇰🇷 한국어 설명](#-한국어-설명-korean-overview) · [🇯🇵 日本語説明](#-日本語説明-japanese-overview)
+> 🔽 **In-Page Quick Jump**: [🇺🇸 English](#-key-features-v252) · [🇰🇷 한국어 설명](#-한국어-설명-korean-overview) · [🇯🇵 日本語説明](#-日本語説明-japanese-overview) · [🔒 Security](SECURITY.md)
 
 ---
 
@@ -33,7 +33,12 @@ A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic f
 
 ---
 
-## 🌟 Key Features (v2.5.1)
+## 🌟 Key Features (v2.5.2)
+
+### 0-C. 🔒 Defense-in-Depth Security Hardening, Link Guard & Attested Cloud Releases (New in v2.5.2)
+- **Verified External Link Guard & Domain Banner**: Keeps the official `github.com/ManofKimchi08/guitar-scale-tuner/releases/latest` and `asio4all.org` links protected with `rel="noopener noreferrer nofollow"`, `referrerpolicy="no-referrer"`, a frozen runtime click guard (`guardVerifiedExternalLinks()`), and an in-popover anti-malvertising domain check note (`#asioSecurityNote`).
+- **Hardened CSP, Zero Dynamic `innerHTML`, HTTP & WebSocket Defense**: Enforces `object-src 'none'; base-uri 'self'; form-action 'none'`, replaces remaining dynamic `innerHTML` usage with pure DOM nodes (`textContent`), adds 6 local HTTP security headers (`nosniff`, `X-Frame-Options: DENY`, COOP/CORP, `Permissions-Policy`), and bounds WebSocket messages (`16KB`) & audio device indices.
+- **Automated Security Audit CI & Attested Cloud Builds**: Adds `scripts/security_audit.py` CI gate, pinned dependencies in `requirements.txt`, Dependabot, and GitHub Actions `windows-latest` release packaging with **`SHA256SUMS.txt`** and **`actions/attest-build-provenance` SLSA attestation** (see [SECURITY.md](SECURITY.md)).
 
 ### 0-B. 🖐️ Translucent Sky-Blue 3D Sculpted Palm, Lifted Standby Fingers & Chord De-Collision (New in v2.5.1)
 - **Volumetric 3D Parametric Palm & Wrist (`2+4 Hybrid` Sky-Blue Silhouette)**: Replaces the flat 2D palm outline with a sculpted `22×20` 3D lofted surface featuring anatomical **thenar & hypothenar eminences**, central palmar hollow, smooth Blinn-Phong/Fresnel/SSS shading, and `#thumbBlendMask` seamless thumb root blending.
@@ -100,7 +105,10 @@ A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic f
 
 > 📄 **전체 한국어 문서는 [README.ko.md](README.ko.md)에서도 보실 수 있습니다.**
 
-**Scales, heard. (Guitar Scale Tuner v2.5.1)** 는 실제 일렉트릭 기타와 베이스 기타 소리를 실시간으로 인식하는 초저지연 **3D 지판 스케일 가이드, IK 아치 교정형 3D 왼손 운지 코치 & 리듬 게임 트레이너**입니다.
+**Scales, heard. (Guitar Scale Tuner v2.5.2)** 는 실제 일렉트릭 기타와 베이스 기타 소리를 실시간으로 인식하는 초저지연 **3D 지판 스케일 가이드, IK 아치 교정형 3D 왼손 운지 코치 & 리듬 게임 트레이너**입니다.
+
+### ✨ v2.5.2 핵심 업데이트
+1. **🔒 다운로드·외부 링크 변조 방지 & 클라우드 출처 증명 보안 강화**: 공식 외부 링크(`releases/latest`, `asio4all.org`) 유지 + 런타임 링크 변조 차단 가드(`guardVerifiedExternalLinks`), `#asioSecurityNote` 보안 배너, 강화된 CSP(`object-src 'none'`, `form-action 'none'`), 동적 `innerHTML` 제거, 로컬 HTTP 6종 보안 헤더·WebSocket 입력/크기 제한(`16KB`), 그리고 GitHub Actions 자동 빌드·**`SHA256SUMS.txt` · SLSA 출처 증명**([SECURITY.md](SECURITY.md))을 도입했습니다.
 
 ### ✨ v2.5.1 핵심 업데이트
 1. **🖐️ 반투명 하늘색 3D 입체 손바닥·손목 & 미사용 손가락 부양 대기 자세**: `2+4 하이브리드` 반투명 하늘색 파라메트릭 3D 손바닥(`evalPalmPoint`)을 적용하고, 안 쓰는 손가락은 지판(`1E..2B`) 위에 살짝 들어 올린 자세(`wz3 = 21.0`)와 공중 부양 그림자·아웃라인 뱃지로 구분했습니다. 오픈 `A Major` 등 동일 프렛 코드 손가락 부채꼴 분산 및 ①②③④ 뱃지 최소 `24px` 이격도 함께 적용했습니다.
@@ -135,7 +143,10 @@ A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic f
 
 > 📄 **日本語の完全なドキュメントは [README.ja.md](README.ja.md) でもご覧いただけます。**
 
-**Scales, heard. (Guitar Scale Tuner v2.5.1)** は、エレキギター＆ベースの実音をリアルタイムで聴き取る超低遅延の**3Dフレットボード・スケールガイド、3D IKアーチ運指コーチ＆リズムゲームトレーナー**です。
+**Scales, heard. (Guitar Scale Tuner v2.5.2)** は、エレキギター＆ベースの実音をリアルタイムで聴き取る超低遅延の**3Dフレットボード・スケールガイド、3D IKアーチ運指コーチ＆リズムゲームトレーナー**です。
+
+### ✨ v2.5.2 主なアップデート
+1. **🔒 外部リンク保護ガード・CSP/サーバー多層防御＆GitHubビルド来歴証明**: 公式外部リンク (`releases/latest`, `asio4all.org`) を維持したままランタイム改ざん遮断 (`guardVerifiedExternalLinks`)・セキュリティ案内バナー・厳格なCSP (`object-src 'none'`, `form-action 'none'`)・動的`innerHTML`排除・HTTP 6種セキュリティヘッダ・WebSocket `16KB` 制限を導入し、GitHub Actionsによる **`SHA256SUMS.txt` ＋ SLSAビルド証明 (`attest-build-provenance`)** を構築しました（[SECURITY.md](SECURITY.md)）。
 
 ### ✨ v2.5.1 主なアップデート
 1. **🖐️ 半透明スカイブルー3D立体手のひら・手首＆未使用指の浮遊待機ポーズ**: `2+4ハイブリッド` 半透明スカイブルーの3Dパラメトリック手のひら (`evalPalmPoint`) を導入し、使わない指は指板(`1E..2B`)の上に軽く浮かせて待機 (`wz3 = 21.0`) させ、薄い浮遊影と点線バッジで押弦指と一目で区別できるようにしました。同フレットコード(`A Major` 等)の指分散と ①②③④ バッジ重なり解消も実装しています。
@@ -174,7 +185,7 @@ A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic f
 3. **Optional Hybrid ASIO Bridge Mode**: Selecting **`⚡ ASIO`** in the top bar automatically probes for the local ASIO bridge (`ws://127.0.0.1:8765`). If not installed yet, a compact Smart ASIO Diagnostic Dock opens right below the selector so you can either download the helper `.exe` for ultra-low-latency polyphonic detection or switch right back to your browser microphone with one click.
 
 ### Option A: Windows One-Click Executable
-1. Download and extract the latest release archive (`GuitarScaleTuner-v2.5.1-windows-x64.zip`) from [Releases](https://github.com/ManofKimchi08/guitar-scale-tuner/releases), or clone the repository.
+1. Download and extract the latest release archive (`GuitarScaleTuner-v2.5.2-windows-x64.zip`) from [Releases](https://github.com/ManofKimchi08/guitar-scale-tuner/releases), verify `SHA256SUMS.txt`, or clone the repository.
 2. Double-click **`GuitarScaleTuner.exe`** (or `Run_GuitarScaleTuner.bat`) in the root folder. No Python installation required!
 
 ### Option B: Run from Source

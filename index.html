@@ -4,7 +4,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' ws://127.0.0.1:8765 ws://localhost:8765;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' ws://127.0.0.1:8765 ws://localhost:8765; object-src 'none'; base-uri 'self'; form-action 'none';">
+  <meta name="referrer" content="no-referrer">
   <title>Scales, heard. 🎸</title>
   <meta name="description" content="Fretboard scale guide with live guitar & bass pitch recognition.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -784,7 +785,7 @@
             </div>
             <p class="asio-install-desc">브라우저와 내 PC의 ASIO 오디오 장치를 연결해 주는 로컬 브릿지 도우미입니다.</p>
           </div>
-          <a id="btnDownloadAsioBridge" class="asio-btn-primary" href="https://github.com/ManofKimchi08/guitar-scale-tuner/releases/latest" target="_blank" rel="noopener noreferrer">
+          <a id="btnDownloadAsioBridge" class="asio-btn-primary" href="https://github.com/ManofKimchi08/guitar-scale-tuner/releases/latest" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer">
             📥 Bridge 도우미 다운로드 (.exe)
           </a>
         </div>
@@ -797,9 +798,17 @@
             </div>
             <p class="asio-install-desc">전용 드라이버(Focusrite 등)가 없다면 범용 ASIO4ALL을 함께 설치하세요.</p>
           </div>
-          <a id="btnOpenAsio4All" class="asio-btn-secondary" href="https://asio4all.org/" target="_blank" rel="noopener noreferrer">
+          <a id="btnOpenAsio4All" class="asio-btn-secondary" href="https://asio4all.org/" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer">
             🔧 ASIO4ALL 공식 사이트
           </a>
+        </div>
+      </div>
+
+      <!-- Verified Domain & Download Safety Check -->
+      <div class="asio-security-note" id="asioSecurityNote">
+        <span class="asio-sec-icon">🛡️</span>
+        <div class="asio-sec-body">
+          <strong>다운로드 보안 확인:</strong> 공식 도메인(<code>github.com/ManofKimchi08</code> · <code>asio4all.org</code>)만 연결되며, 외부 사이트 내 광고성 <strong>"Download" 배너</strong>를 누르지 마세요. <code>.exe</code> 실행 전 릴리즈의 <code>SHA256SUMS.txt</code> 해시 검증을 권장합니다.
         </div>
       </div>
 

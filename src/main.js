@@ -641,6 +641,15 @@ function refreshAsioDiagnosticView(bridgeOk) {
 
   const asioHwDevs = (currentAsioDevices || []).filter(d => d.is_asio);
 
+  const setRadarBannerMessage = (boldPrefix, bodyText) => {
+    if (!radarTxt) return;
+    radarTxt.textContent = "";
+    const strongEl = document.createElement("strong");
+    strongEl.textContent = boldPrefix;
+    radarTxt.appendChild(strongEl);
+    radarTxt.appendChild(document.createTextNode(" " + bodyText));
+  };
+
   if (bridgeOk) {
     if (card) card.classList.add("is-connected");
     if (diagBadge) {
@@ -659,10 +668,10 @@ function refreshAsioDiagnosticView(bridgeOk) {
         : "⚠ ASIO 드라이버 미감지 (2단계 확인)";
     }
     if (radarBanner) radarBanner.classList.add("is-ok");
-    if (radarTxt) {
-      radarTxt.innerHTML = asioHwDevs.length > 0
-        ? "<strong>연결 완료!</strong> ASIO 브릿지와 오디오 인터페이스가 정상 인식되었습니다."
-        : "<strong>ASIO Bridge 연결됨!</strong> 전용 ASIO 드라이버가 안 보이면 2단계 ASIO4ALL을 확인하세요.";
+    if (asioHwDevs.length > 0) {
+      setRadarBannerMessage("연결 완료!", "ASIO 브릿지와 오디오 인터페이스가 정상 인식되었습니다.");
+    } else {
+      setRadarBannerMessage("ASIO Bridge 연결됨!", "전용 ASIO 드라이버가 안 보이면 2단계 ASIO4ALL을 확인하세요.");
     }
   } else {
     if (card) card.classList.remove("is-connected");
@@ -678,9 +687,7 @@ function refreshAsioDiagnosticView(bridgeOk) {
     if (conn1Lbl) conn1Lbl.textContent = "대기";
     if (nodeDriverSub) nodeDriverSub.textContent = "ASIO 드라이버";
     if (radarBanner) radarBanner.classList.remove("is-ok");
-    if (radarTxt) {
-      radarTxt.innerHTML = "<strong>백그라운드 자동 감지 중...</strong> 프로그램을 설치·실행하면 창을 닫지 않아도 즉시 자동 연결됩니다.";
-    }
+    setRadarBannerMessage("백그라운드 자동 감지 중...", "프로그램을 설치·실행하면 창을 닫지 않아도 즉시 자동 연결됩니다.");
   }
 }
 
@@ -754,11 +761,41 @@ function positionAsioSmartPopover() {
   }
 }
 
+const VERIFIED_EXTERNAL_LINKS = Object.freeze({
+  btnDownloadAsioBridge: "https://github.com/ManofKimchi08/guitar-scale-tuner/releases/latest",
+  btnOpenAsio4All: "https://asio4all.org/"
+});
+
+function guardVerifiedExternalLinks() {
+  Object.entries(VERIFIED_EXTERNAL_LINKS).forEach(([id, expectedUrl]) => {
+    const el = $(id);
+    if (!el) return;
+    el.setAttribute("href", expectedUrl);
+    el.setAttribute("target", "_blank");
+    el.setAttribute("rel", "noopener noreferrer nofollow");
+    el.setAttribute("referrerpolicy", "no-referrer");
+    if (!el.dataset.linkGuarded) {
+      el.dataset.linkGuarded = "1";
+      el.addEventListener("click", (e) => {
+        if (el.getAttribute("href") !== expectedUrl) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          el.setAttribute("href", expectedUrl);
+          if ($("err")) {
+            $("err").textContent = "보안 경고: 검증되지 않은 외부 링크 변경이 차단되었습니다.";
+          }
+        }
+      }, true);
+    }
+  });
+}
+
 function openAsioSmartPopover() {
   const pop = $("asioSmartPopover");
   const sel = $("deviceSel");
   if (!pop) return;
 
+  guardVerifiedExternalLinks();
   asioPopoverOpen = true;
   pop.style.display = "block";
   if (sel) sel.classList.add("asio-alert-ring");
@@ -1229,7 +1266,7 @@ function renderStaticFretboard() {
       <stop offset="100%" stop-color="white" stop-opacity="0"/>
     </linearGradient>
     <mask id="forearmFadeMask">
-      <rect x="-1500" y="-1500" width="${W + 3000}" height="${H + 3000}" fill="url(#forearmFadeGrad)"/>
+      <rect id="forearmFadeMaskRect" x="-1500" y="-1500" width="4060" height="3430" fill="url(#forearmFadeGrad)"/>
     </mask>
     <linearGradient id="thumbBlendGrad" gradientUnits="userSpaceOnUse" x1="250" y1="260" x2="250" y2="220">
       <stop offset="0%" stop-color="white" stop-opacity="0"/>
@@ -1237,7 +1274,7 @@ function renderStaticFretboard() {
       <stop offset="100%" stop-color="white" stop-opacity="1"/>
     </linearGradient>
     <mask id="thumbBlendMask">
-      <rect x="-1500" y="-1500" width="${W + 3000}" height="${H + 3000}" fill="url(#thumbBlendGrad)"/>
+      <rect id="thumbBlendMaskRect" x="-1500" y="-1500" width="4060" height="3430" fill="url(#thumbBlendGrad)"/>
     </mask>
     <filter id="palmSmoothFilter" x="-15%" y="-15%" width="130%" height="130%">
       <feGaussianBlur stdDeviation="2.8"/>
@@ -1254,6 +1291,13 @@ function renderStaticFretboard() {
       <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
   `;
+  ["forearmFadeMaskRect", "thumbBlendMaskRect"].forEach(id => {
+    const rEl = defs.querySelector("#" + id);
+    if (rEl) {
+      rEl.setAttribute("width", String(W + 3000));
+      rEl.setAttribute("height", String(H + 3000));
+    }
+  });
   fb.appendChild(defs);
 
   const neckThemes = {
@@ -3794,11 +3838,21 @@ function startScan() {
   scanTimeElapsed = 0;
   scanChromaHistory = Array(12).fill(0);
 
+  const setScanMessage = (msg) => {
+    const resBox = $("scanResults");
+    if (!resBox) return;
+    resBox.textContent = "";
+    const div = document.createElement("div");
+    div.style.cssText = "text-align:center; padding:12px; color:var(--sub);";
+    div.textContent = msg;
+    resBox.appendChild(div);
+  };
+
   $("btnScanStart").style.display = "none";
   $("btnScanStop").style.display = "inline-block";
   $("scanProgress").style.display = "block";
   $("scanBar").style.width = "0%";
-  $("scanResults").innerHTML = `<div style="text-align:center; padding:12px; color:var(--sub);">${t("scanListening")}</div>`;
+  setScanMessage(t("scanListening"));
 
   scanInterval = setInterval(() => {
     scanTimeElapsed += 200;
@@ -3823,9 +3877,16 @@ function stopScan() {
 
 function finishScan() {
   stopScan();
+  const resBox = $("scanResults");
   const sumHist = scanChromaHistory.reduce((a, b) => a + b, 0);
   if (sumHist === 0) {
-    $("scanResults").innerHTML = `<div style="text-align:center; padding:12px; color:var(--sub);">${t("scanNoNotes")}</div>`;
+    if (resBox) {
+      resBox.textContent = "";
+      const div = document.createElement("div");
+      div.style.cssText = "text-align:center; padding:12px; color:var(--sub);";
+      div.textContent = t("scanNoNotes");
+      resBox.appendChild(div);
+    }
     return;
   }
 
@@ -3853,33 +3914,50 @@ function finishScan() {
   candidates.sort((a, b) => b.score - a.score);
   const topResults = candidates.slice(0, 5);
 
-  let html = `<div style="margin-bottom:8px; font-weight:bold; font-size:12px; color:var(--tone);">${t("scanTopMatches")}:</div>`;
+  if (!resBox) return;
+  resBox.textContent = "";
+  const hdr = document.createElement("div");
+  hdr.style.cssText = "margin-bottom:8px; font-weight:bold; font-size:12px; color:var(--tone);";
+  hdr.textContent = `${t("scanTopMatches")}:`;
+  resBox.appendChild(hdr);
+
   topResults.forEach((res, idx) => {
     const rootName = NOTE[res.rootPc];
     const scaleName = t("scale_" + res.scaleId);
     const scorePct = Math.round(res.score * 100);
-    html += `
-      <div class="scan-result-item" data-root="${res.rootPc}" data-scale="${res.scaleId}" style="display:flex; justify-content: space-between; align-items:center; padding:8px 12px; margin-bottom:6px; background:var(--bg); border:1px solid #334155; border-radius:6px; cursor:pointer;">
-        <div><span style="font-weight:bold; font-size:13px; color:#ffffff;">${idx + 1}. ${rootName} ${scaleName}</span></div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span style="font-size:12px; color:var(--ok); font-weight:bold;">${scorePct}%</span>
-          <span style="font-size:11px; padding:2px 6px; background:var(--tone); color:#0f172a; border-radius:4px; font-weight:bold;">${t("scanApply")}</span>
-        </div>
-      </div>
-    `;
-  });
 
-  $("scanResults").innerHTML = html;
+    const row = document.createElement("div");
+    row.className = "scan-result-item";
+    row.style.cssText = "display:flex; justify-content: space-between; align-items:center; padding:8px 12px; margin-bottom:6px; background:var(--bg); border:1px solid #334155; border-radius:6px; cursor:pointer;";
 
-  document.querySelectorAll(".scan-result-item").forEach(el => {
-    el.onclick = () => {
-      const r = parseInt(el.getAttribute("data-root"), 10);
-      const s = el.getAttribute("data-scale");
-      rootPc = r; scaleId = s;
-      $("keySel").value = r; $("scaleSel").value = s;
+    const left = document.createElement("div");
+    const titleSpan = document.createElement("span");
+    titleSpan.style.cssText = "font-weight:bold; font-size:13px; color:#ffffff;";
+    titleSpan.textContent = `${idx + 1}. ${rootName} ${scaleName}`;
+    left.appendChild(titleSpan);
+
+    const right = document.createElement("div");
+    right.style.cssText = "display:flex; align-items:center; gap:8px;";
+    const pctSpan = document.createElement("span");
+    pctSpan.style.cssText = "font-size:12px; color:var(--ok); font-weight:bold;";
+    pctSpan.textContent = `${scorePct}%`;
+    const applySpan = document.createElement("span");
+    applySpan.style.cssText = "font-size:11px; padding:2px 6px; background:var(--tone); color:#0f172a; border-radius:4px; font-weight:bold;";
+    applySpan.textContent = t("scanApply");
+    right.appendChild(pctSpan);
+    right.appendChild(applySpan);
+
+    row.appendChild(left);
+    row.appendChild(right);
+    row.addEventListener("click", () => {
+      rootPc = res.rootPc;
+      scaleId = res.scaleId;
+      $("keySel").value = res.rootPc;
+      $("scaleSel").value = res.scaleId;
       drawFB();
       if (quizMode) newQuiz();
-    };
+    });
+    resBox.appendChild(row);
   });
 }
 
@@ -6115,6 +6193,8 @@ function bindEvents() {
       }
     };
   }
+
+  guardVerifiedExternalLinks();
 
   if ($("asioStatusBadge")) {
     $("asioStatusBadge").onclick = () => toggleAsioSmartPopover();

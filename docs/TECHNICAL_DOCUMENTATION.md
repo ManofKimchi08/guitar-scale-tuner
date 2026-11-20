@@ -1,6 +1,6 @@
 # 📖 Guitar Scale Tuner - 기술 명세서 & 시스템 아키텍처 (Technical Documentation)
 
-본 문서는 **Guitar Scale Tuner (Scales, heard.) v2.5.1**의 전체 소프트웨어 구조, 오디오 신호 처리(DSP) 알고리즘, 적응형 샘플레이트 협상 시스템, 3-Tier 레코딩 엔진, 광각 3D 원근·줌/패닝 지판 엔진·3D 입체 손바닥 및 Catmull-Rom 튜브 기반 IK 왼손 아치 코치·하이브리드 ASIO 진단 아키텍처, 그리고 보안 및 패키징 기법을 기술적으로 상세히 서술한 엔지니어링 명세서입니다.
+본 문서는 **Guitar Scale Tuner (Scales, heard.) v2.5.2**의 전체 소프트웨어 구조, 오디오 신호 처리(DSP) 알고리즘, 적응형 샘플레이트 협상 시스템, 3-Tier 레코딩 엔진, 광각 3D 원근·줌/패닝 지판 엔진·3D 입체 손바닥 및 Catmull-Rom 튜브 기반 IK 왼손 아치 코치·하이브리드 ASIO 진단 아키텍처, 그리고 다중 보안 방어 및 공급망 패키징 기법을 기술적으로 상세히 서술한 엔지니어링 명세서입니다.
 
 ---
 
@@ -199,18 +199,22 @@ $$M = \left\lfloor \frac{1400}{\Delta f} \right\rfloor - \left\lfloor \frac{30}{
 ### 7.1 경로 탐색(Path Traversal) 및 심볼릭 링크 방어
 로컬 HTTP 서버(`run_https_server.py`)의 `translate_path()`에서 `os.path.realpath()`로 실제 경로를 정규화한 뒤 `os.path.commonpath()`로 루트 디렉터리(`base_dir`) 내부 포함 여부를 강제 검증합니다. 이를 통해 `..` 상위 경로 탈출, 심볼릭 링크 우회, `.git`, `.env`, `.pem`, `.key` 등 민감 파일 노출을 원천 차단하고 디렉터리 목록 조회(`list_directory`)는 `403 Forbidden`으로 거부합니다.
 
-### 7.2 WebSocket CSWSH Origin 화이트리스트, 입력 검증 및 CSP
-- **CSWSH(Cross-Site WebSocket Hijacking) 방어 (`asio_server.py`)**: 로컬 WebSocket 서버(`127.0.0.1:8765`)는 `allowed_origins` 정규식 화이트리스트를 통해 `localhost`, `127.0.0.1` 및 공식 배포 도메인(`https://manofkimchi08.github.io`)에서 온 연결만 수락하고, 임의의 외부 웹사이트가 로컬 마이크·녹음 제어에 접근하는 것을 HTTP 403으로 차단합니다.
-- **수치 입력 검증 (`math.isfinite`)**: WebSocket 제어 패킷(`set_ref_pitch`, `set_monitoring`, `set_sensitivity`)에 `NaN`/`Inf` 비정상 부동소수점이 유입되어 오디오 버퍼를 오염시키지 않도록 `math.isfinite()` 및 범위 클램핑을 적용했습니다.
-- **프론트엔드 XSS 방어 및 CSP (`index.html`, `src/main.js`)**: 오디오 장치명·오류 메시지·파일명 등 동적 텍스트 렌더링에 `textContent`를 일관 적용하고, `<meta http-equiv="Content-Security-Policy">` (`script-src 'self'`, `connect-src 'self' ws://127.0.0.1:8765 ws://localhost:8765`) 및 외부 링크 `rel="noopener noreferrer"` 속성을 강제했습니다.
+### 7.2 WebSocket CSWSH Origin 화이트리스트, 입력 검증, 외부 링크 가드 & CSP
+- **CSWSH(Cross-Site WebSocket Hijacking) 방어 (`asio_server.py`)**: 로컬 WebSocket 서버(`127.0.0.1:8765`)는 `allowed_origins` 정규식 화이트리스트를 통해 `localhost`, `127.0.0.1` 및 공식 배포 도메인(`https://manofkimchi08.github.io`)에서 온 연결만 수락하며, `max_size=16384` / `max_queue=16` 제한으로 과대 페이로드·큐 폭주를 차단합니다.
+- **수치·장치 입력 검증**: `set_ref_pitch`, `set_monitoring`, `set_sensitivity`에 `math.isfinite()` 및 범위 클램핑을 적용하고, `select_asio_device`는 `sd.query_devices()`를 기준으로 실제 범위와 입력 채널(`max_input_channels > 0`)을 검증합니다.
+- **프론트엔드 XSS 방어, HTTP 헤더 & 외부 링크 가드 (`index.html`, `src/main.js`, `run_https_server.py`)**: 동적 DOM을 모두 `createElement` + `textContent`로 처리하고 `<meta http-equiv="Content-Security-Policy">` (`script-src 'self'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'none'`), `<meta name="referrer" content="no-referrer">`, 6종 HTTP 보안 헤더(`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP), 그리고 `VERIFIED_EXTERNAL_LINKS` + `guardVerifiedExternalLinks()` 클릭 변조 차단을 적용했습니다.
 
-### 7.3 Windows 독립 실행 파일 빌드 (`build_exe.py`)
+### 7.3 공급망 무결성, CI 보안 감사 & GitHub Actions 증명 릴리즈
+- **정적·동적 보안 감사 게이트 (`scripts/security_audit.py`, `.github/workflows/security-check.yml`)**: `main` 푸시·PR마다 허용 도메인 화이트리스트, CSP, `noopener`/`noreferrer`, 동적 HTML/`eval`, Python 컴파일·루프백·보안 헤더를 자동 검증합니다.
+- **의존성 버전 고정 및 클라우드 SLSA 출처 증명 (`requirements.txt`, `.github/workflows/release.yml`, `SECURITY.md`)**: `requirements.txt` 정밀 버전 고정(`==`) 및 Dependabot 주간 점검을 적용하고, 태그(`v*`) 푸시 시 `windows-latest` 클라우드 러너가 `build_exe.py` 패키징, **`SHA256SUMS.txt`** 생성, **`actions/attest-build-provenance` SLSA 빌드 출처 증명**을 자동 첨부합니다.
+
+### 7.4 Windows 독립 실행 파일 빌드 (`build_exe.py`)
 - PyInstaller 플래그: `--onedir --windowed --name GuitarScaleTuner --icon favicon.ico`
 - 번들링 리소스: `index.html`, `src/` 디렉터리, `favicon.ico`, `favicon.png` 포함.
 - 다크 스튜디오 일렉트릭 블루 지판 및 픽 형상의 멀티 해상도(16x16 ~ 256x256) 아이콘을 EXE 실행 파일 바이너리 및 브라우저 탭에 일체형으로 내장.
 
 ---
 
-*문서 작성일: 2026년 11월 19일*  
-*소프트웨어 버전: Guitar Scale Tuner v2.5.1*  
+*문서 작성일: 2026년 11월 20일*  
+*소프트웨어 버전: Guitar Scale Tuner v2.5.2*  
 *작성자: Advanced Agentic Engineer (Antigravity)*

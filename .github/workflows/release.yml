@@ -1,0 +1,65 @@
+name: Build & Attest Windows Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install pinned dependencies & PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir -r requirements.txt pyinstaller==6.21.0
+
+      - name: Run automated security audit
+        run: python scripts/security_audit.py
+
+      - name: Build Windows One-Click Executable
+        run: python build_exe.py
+
+      - name: Package zip & generate SHA256SUMS.txt
+        id: package
+        shell: pwsh
+        run: |
+          $tag = if ($env:GITHUB_REF_NAME -like 'v*') { $env:GITHUB_REF_NAME } else { "dev-$($env:GITHUB_SHA.Substring(0,7))" }
+          $zipName = "GuitarScaleTuner-$tag-windows-x64.zip"
+          Compress-Archive -Path "dist\GuitarScaleTuner" -DestinationPath $zipName -Force
+          $zipHash = (Get-FileHash $zipName -Algorithm SHA256).Hash.ToLower()
+          $exeHash = (Get-FileHash "dist\GuitarScaleTuner\GuitarScaleTuner.exe" -Algorithm SHA256).Hash.ToLower()
+          @(
+            "$zipHash  $zipName"
+            "$exeHash  GuitarScaleTuner/GuitarScaleTuner.exe"
+          ) | Out-File -FilePath "SHA256SUMS.txt" -Encoding ascii
+          echo "zip_name=$zipName" >> $env:GITHUB_OUTPUT
+
+      - name: Generate SLSA Build Provenance Attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            ${{ steps.package.outputs.zip_name }}
+            SHA256SUMS.txt
+
+      - name: Upload assets to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.package.outputs.zip_name }}
+            SHA256SUMS.txt

@@ -3,12 +3,12 @@
 **エレキギター＆ベースの実音をリアルタイムで聴き取る、超低遅延フレットボード・スケールガイド、リズムゲーム＆スマート運指トレーナー**
 
 [![Live Web App](https://img.shields.io/badge/Live%20Web%20App-Try%20Without%20Install-38bdf8?style=flat&logo=googlechrome&logoColor=white)](https://manofkimchi08.github.io/guitar-scale-tuner/)
-[![Release](https://img.shields.io/badge/Release-v2.5.1-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
+[![Release](https://img.shields.io/badge/Release-v2.5.2-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Web%20%7C%20Windows-brightgreen.svg)](https://manofkimchi08.github.io/guitar-scale-tuner/)
 
 > 🌐 **ブラウザで今すぐ試す (インストール不要)**: **[https://manofkimchi08.github.io/guitar-scale-tuner/](https://manofkimchi08.github.io/guitar-scale-tuner/)**  
-> 🗣️ **Language / 언어 / 言語**: **[🇺🇸 English](README.md)** | **[🇰🇷 한국어](README.ko.md)** | **[🇯🇵 日本語](README.ja.md)**
+> 🗣️ **Language / 언어 / 言語**: **[🇺🇸 English](README.md)** | **[🇰🇷 한국어](README.ko.md)** | **[🇯🇵 日本語](README.ja.md)** | **[🔒 Security](SECURITY.md)**
 
 ---
 
@@ -32,9 +32,14 @@
 
 ---
 
-## 🌟 主な機能 (v2.5.1)
+## 🌟 主な機能 (v2.5.2)
 
-### 0-B. 🖐️ 半透明スカイブルー3D立体手のひら・未使用指の浮遊待機ポーズ＆コード分散 (v2.5.1 新機能)
+### 0-C. 🔒 外部リンク改ざん遮断ガード・多層防御＆GitHubビルド来歴証明 (v2.5.2 新機能)
+- **公式外部リンク維持＋ランタイム保護ガード**: ASIOポップオーバー内の公式リンク (`releases/latest`, `asio4all.org`) に `rel="noopener noreferrer nofollow"`・`referrerpolicy="no-referrer"`・クリック時検証 (`guardVerifiedExternalLinks()`)・セキュリティ注意バナー (`#asioSecurityNote`) を実装しました。
+- **厳格CSP・動的 `innerHTML` 排除＆ローカルサーバー防御**: `object-src 'none'; base-uri 'self'; form-action 'none'` の追加、動的HTML挿入の完全排除、`run_https_server.py` の6種HTTPセキュリティヘッダ、`asio_server.py` のWebSocketサイズ上限(`16KB`)とオーディオデバイス検証を導入しました。
+- **自動セキュリティ監査CI＆SLSA証明リリース**: `requirements.txt` のバージョン固定、`scripts/security_audit.py`、GitHub Actions による **`SHA256SUMS.txt` ＋ SLSAビルド来歴証明 (`attest-build-provenance`)** を提供します（[SECURITY.md](SECURITY.md)）。
+
+### 0-B. 🖐️ 半透明スカイブルー3D立体手のひら・未使用指の浮遊待機ポーズ＆コード分散 (v2.5.1)
 - **3D立体パラメトリック手のひら・手首 (`2+4ハイブリッド` 半透明スカイブルー)**: 平面的だった2D手のひらシルエットを `22×20` 3Dロフトメッシュ (`evalPalmPoint`) に刷新し、母指球(Thenar)・小指球(Hypothenar)・掌中央のくぼみ、Blinn-Phong/Fresnel/SSSシェーディング、および `#thumbBlendMask` による親指付け根の自然な接続を実現しました。
 - **未使用指の指板上浮遊待機ポーズ**: 使わない指を非表示にせず4本すべて残したまま `1E..2B` 上方 (`wz3 = 21.0`) へ軽く浮かせ、柔らかい透明度 (`opacity 0.58` vs 押弦 `0.95`)・破線アウトラインバッジ・広く薄い浮遊影 (`dx = ±5, dy = 11`) によって押弦指と待機指を立体的に区別できます。
 - **同一フレット・コード指分散＆バッジ重なり解消**: オープン `A Major` (`2F` ①②③) やバレー `E Shape` (`7F` ③④) のように同一フレットへ並ぶ指を扇状に分散し、未使用指を隣接する押弦指の横(`~3F`)へ自然に寄せ、上部 ①②③④ バッジを最小 `24px` 間隔で整理しました。
@@ -103,7 +108,7 @@
 3. **ハイブリッドASIOブリッジモード (任意)**: 上部ドロップダウンから **`⚡ ASIO`** を選ぶと、PC上のローカルASIOブリッジ(`127.0.0.1:8765`)を自動診断します。未導入の場合はスマート診断ポップオーバーが表示され、超低遅延ブリッジ(`.exe`)を導入するか、ワンクリックでブラウザ標準マイクへ切り替えてすぐ演奏できます。
 
 ### 方法 A: Windows ローカル実行ファイル
-1. [Releasesページ](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)から最新の `GuitarScaleTuner-v2.5.1-windows-x64.zip` をダウンロードして解凍するか、リポジトリをクローンします。
+1. [Releasesページ](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)から最新の `GuitarScaleTuner-v2.5.2-windows-x64.zip` と `SHA256SUMS.txt` をダウンロードし、ハッシュ確認後に解凍するか、リポジトリをクローンします。([セキュリティガイド](SECURITY.md))
 2. フォルダ内の **`GuitarScaleTuner.exe`** (または `Run_GuitarScaleTuner.bat`) をダブルクリックするだけで、Pythonのインストールなしで即座に起動します。
 
 ### 方法 B: ソースコードから実行
