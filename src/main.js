@@ -155,6 +155,7 @@ function setLang(l) {
     $("jamBarCounter").textContent = `${t("lblBar")} 1/${prog.length}`;
   }
   drawFB();
+  if (typeof updateMusicTheoryCoach === "function") updateMusicTheoryCoach(true);
 }
 
 // ---------- HMM 25-State Viterbi Chord Decoder ----------
@@ -527,6 +528,7 @@ let currentAsioDeviceId = null;
 let asioBridgeAvailable = false;
 let asioAutoDetectTimer = null;
 let asioPopoverOpen = false;
+let asioInstallExpanded = null;
 let currentAsioBadgeState = "warn";
 
 function getWebMicDefaultLabel() {
@@ -629,26 +631,19 @@ function refreshAsioDiagnosticView(bridgeOk) {
   if (!pop) return;
   const card = pop.querySelector(".asio-smart-popover-card");
   const diagBadge = $("asioDiagBadge");
-  const nodeBridge = $("asioNodeBridge");
-  const nodeBridgeSub = $("asioNodeBridgeSub");
-  const nodeDriverSub = $("asioNodeDriverSub");
-  const conn2Wrap = $("asioConn2Wrap");
-  const conn2Arrow = $("asioConn2Arrow");
-  const conn2Lbl = $("asioConn2Lbl");
-  const conn1Lbl = $("asioConn1Lbl");
-  const radarBanner = $("asioRadarBanner");
-  const radarTxt = $("asioRadarTxt");
+  const rowDriver = $("asioRowDriver");
+  const valDriver = $("asioValDriver");
+  const lblBridge = $("asioLblBridge");
+  const valBridge = $("asioValBridge");
+  const lblWeb = $("asioLblWeb");
+  const valWeb = $("asioValWeb");
+  const installSection = $("asioInstallSection");
+  const btnWebMic = $("btnAsioUseWebMic");
+  const autoFallbackWrap = $("asioAutoFallbackWrap");
+  const installToggle = $("btnAsioInstallToggle");
+  const installChevron = $("asioInstallChevron");
 
   const asioHwDevs = (currentAsioDevices || []).filter(d => d.is_asio);
-
-  const setRadarBannerMessage = (boldPrefix, bodyText) => {
-    if (!radarTxt) return;
-    radarTxt.textContent = "";
-    const strongEl = document.createElement("strong");
-    strongEl.textContent = boldPrefix;
-    radarTxt.appendChild(strongEl);
-    radarTxt.appendChild(document.createTextNode(" " + bodyText));
-  };
 
   if (bridgeOk) {
     if (card) card.classList.add("is-connected");
@@ -656,38 +651,57 @@ function refreshAsioDiagnosticView(bridgeOk) {
       diagBadge.className = "asio-diag-badge is-ok";
       diagBadge.textContent = "● 연결됨";
     }
-    if (nodeBridge) nodeBridge.className = "asio-flow-node ok";
-    if (nodeBridgeSub) nodeBridgeSub.textContent = "● 실행 중 (127.0.0.1:8765)";
-    if (conn2Wrap) conn2Wrap.className = "asio-flow-conn connected";
-    if (conn2Arrow) conn2Arrow.textContent = "➔";
-    if (conn2Lbl) conn2Lbl.textContent = "연결됨";
-    if (conn1Lbl) conn1Lbl.textContent = asioHwDevs.length > 0 ? "인식" : "확인";
-    if (nodeDriverSub) {
-      nodeDriverSub.textContent = asioHwDevs.length > 0
-        ? `● ${asioHwDevs.length}개 ASIO 장치 감지`
-        : "⚠ ASIO 드라이버 미감지 (2단계 확인)";
+    if (rowDriver) rowDriver.style.display = "flex";
+    if (valDriver) {
+      if (asioHwDevs.length > 0) {
+        valDriver.className = "asio-kv-v ok";
+        valDriver.textContent = `${asioHwDevs.length}개 ASIO 장치 감지`;
+      } else {
+        valDriver.className = "asio-kv-v warn";
+        valDriver.textContent = "ASIO 드라이버 미감지";
+      }
     }
-    if (radarBanner) radarBanner.classList.add("is-ok");
-    if (asioHwDevs.length > 0) {
-      setRadarBannerMessage("연결 완료!", "ASIO 브릿지와 오디오 인터페이스가 정상 인식되었습니다.");
-    } else {
-      setRadarBannerMessage("ASIO Bridge 연결됨!", "전용 ASIO 드라이버가 안 보이면 2단계 ASIO4ALL을 확인하세요.");
+    if (lblBridge) lblBridge.textContent = "로컬 브릿지 서버";
+    if (valBridge) {
+      valBridge.className = "asio-kv-v ok";
+      valBridge.textContent = "127.0.0.1:8765 실행 중";
     }
+    if (lblWeb) lblWeb.textContent = "웹 지판 연동";
+    if (valWeb) {
+      valWeb.className = "asio-kv-v info";
+      valWeb.textContent = "연결 준비됨";
+    }
+    if (btnWebMic) btnWebMic.textContent = "브라우저 기본 마이크로 전환";
+
+    const showInstall = asioInstallExpanded !== null ? asioInstallExpanded : (asioHwDevs.length === 0);
+    if (installSection) installSection.style.display = showInstall ? "block" : "none";
+    if (autoFallbackWrap) autoFallbackWrap.style.display = showInstall ? "inline-flex" : "none";
+    if (installToggle) {
+      installToggle.style.display = "flex";
+      installToggle.setAttribute("aria-expanded", showInstall ? "true" : "false");
+    }
+    if (installChevron) installChevron.textContent = showInstall ? "▴" : "▾";
   } else {
     if (card) card.classList.remove("is-connected");
     if (diagBadge) {
       diagBadge.className = "asio-diag-badge is-missing";
       diagBadge.textContent = "● 미감지";
     }
-    if (nodeBridge) nodeBridge.className = "asio-flow-node missing";
-    if (nodeBridgeSub) nodeBridgeSub.textContent = "● 미감지 (설치 필요)";
-    if (conn2Wrap) conn2Wrap.className = "asio-flow-conn broken";
-    if (conn2Arrow) conn2Arrow.textContent = "✕";
-    if (conn2Lbl) conn2Lbl.textContent = "단절";
-    if (conn1Lbl) conn1Lbl.textContent = "대기";
-    if (nodeDriverSub) nodeDriverSub.textContent = "ASIO 드라이버";
-    if (radarBanner) radarBanner.classList.remove("is-ok");
-    setRadarBannerMessage("백그라운드 자동 감지 중...", "프로그램을 설치·실행하면 창을 닫지 않아도 즉시 자동 연결됩니다.");
+    if (rowDriver) rowDriver.style.display = "none";
+    if (lblBridge) lblBridge.textContent = "로컬 브릿지";
+    if (valBridge) {
+      valBridge.className = "asio-kv-v warn";
+      valBridge.textContent = "미실행 (자동 감지 중)";
+    }
+    if (lblWeb) lblWeb.textContent = "웹 브라우저 마이크";
+    if (valWeb) {
+      valWeb.className = "asio-kv-v info";
+      valWeb.textContent = "즉시 사용 가능";
+    }
+    if (btnWebMic) btnWebMic.textContent = "브라우저 기본 마이크로 시작 →";
+    if (installSection) installSection.style.display = "block";
+    if (autoFallbackWrap) autoFallbackWrap.style.display = "inline-flex";
+    if (installToggle) installToggle.style.display = "none";
   }
 }
 
@@ -747,7 +761,7 @@ function positionAsioSmartPopover() {
   if (!pop || pop.style.display === "none" || !sel) return;
 
   const r = sel.getBoundingClientRect();
-  const popW = Math.min(560, window.innerWidth - 24);
+  const popW = Math.min(420, window.innerWidth - 24);
   pop.style.width = `${popW}px`;
   const selCenterX = r.left + r.width / 2;
   const left = Math.max(12, Math.min(window.innerWidth - popW - 12, selCenterX - popW * 0.56));
@@ -797,6 +811,8 @@ function openAsioSmartPopover() {
 
   guardVerifiedExternalLinks();
   asioPopoverOpen = true;
+  asioInstallExpanded = null;
+  if ($("btnAsioRescan")) $("btnAsioRescan").textContent = "다시 스캔";
   pop.style.display = "block";
   if (sel) sel.classList.add("asio-alert-ring");
   refreshAsioDiagnosticView(asioBridgeAvailable);
@@ -1086,6 +1102,17 @@ let fretboardNoteElements = [];
 let fretboardGeom = null;
 let hoveredFretNote = null;
 let handAnchorFretSmoothed = null;
+let theoryCalloutEnabled = true;
+let theoryDeepExpanded = false;
+try {
+  const savedCallout = localStorage.getItem("ehyo_theory_callout");
+  if (savedCallout !== null) theoryCalloutEnabled = savedCallout === "1";
+  const savedDeep = localStorage.getItem("ehyo_theory_deep");
+  if (savedDeep !== null) theoryDeepExpanded = savedDeep === "1";
+} catch (e) { }
+let selectedTheoryPc = null;
+let lastCoachActiveTarget = null;
+let lastTheoryRenderKey = "";
 let currentNeckWood = "ebony";
 const FB_TILT_MIN = -35, FB_TILT_MAX = 78;
 const FB_YAW_MIN = -80, FB_YAW_MAX = 80;
@@ -2021,7 +2048,10 @@ function renderFretboardHandOverlay(nowRel = 0) {
       el.style.fontWeight = "";
     });
   }
-  if (!shouldShowHand) return;
+  if (!shouldShowHand) {
+    lastCoachActiveTarget = null;
+    return;
+  }
 
   const {
     W = 1060, H = 430, frets, numStrings, dirSign = 1,
@@ -2091,6 +2121,27 @@ function renderFretboardHandOverlay(nowRel = 0) {
       if (hoveredFretNote.fret > 0 && hoveredFretNote.finger >= 1 && hoveredFretNote.finger <= 4) {
         activeByFinger[hoveredFretNote.finger] = hoveredFretNote;
       }
+    } else if (litPcs && litPcs.length > 0) {
+      const playedPc = litPcs[0];
+      for (let s = numStrings - 1; s >= 0; s--) {
+        const f = currentVoicing.frets[s];
+        if (f === null || f === undefined || f < 0) continue;
+        if (pc(strings[s] + f) === playedPc) {
+          const fNum = (currentVoicing.fingers && currentVoicing.fingers[s]) ? currentVoicing.fingers[s] : getRecommendedFinger(s, f);
+          primaryActive = { s, fret: f, finger: fNum, pc: playedPc };
+          break;
+        }
+      }
+    } else if (selectedTheoryPc !== null) {
+      for (let s = numStrings - 1; s >= 0; s--) {
+        const f = currentVoicing.frets[s];
+        if (f === null || f === undefined || f < 0) continue;
+        if (pc(strings[s] + f) === selectedTheoryPc) {
+          const fNum = (currentVoicing.fingers && currentVoicing.fingers[s]) ? currentVoicing.fingers[s] : getRecommendedFinger(s, f);
+          primaryActive = { s, fret: f, finger: fNum, pc: selectedTheoryPc };
+          break;
+        }
+      }
     }
   } else if (appMode === "rhythm") {
     const previewChart = getCachedRhythmPreviewChart();
@@ -2114,6 +2165,35 @@ function renderFretboardHandOverlay(nowRel = 0) {
       primaryActive = { s, fret, finger, pc: playedPc };
       if (fret === 0) openStringTarget = primaryActive;
       else if (finger >= 1 && finger <= 4) activeByFinger[finger] = primaryActive;
+    }
+  } else if (selectedTheoryPc !== null) {
+    const bStart = Math.max(1, boxMin === 0 ? 1 : boxMin);
+    const bEnd = Math.min(frets, Math.max(bStart + 3, boxMax));
+    const strPref = [2, 3, 1, 4, 5, 0].filter(s => s < numStrings);
+    let selCand = null;
+    for (const s of strPref) {
+      for (let f = bStart; f <= bEnd; f++) {
+        if (pc(strings[s] + f) === selectedTheoryPc) {
+          const recF = getRecommendedFinger(s, f, activeBoxId);
+          selCand = { s, fret: f, finger: (recF >= 1 && recF <= 4) ? recF : 1, pc: selectedTheoryPc };
+          break;
+        }
+      }
+      if (selCand) break;
+    }
+    if (!selCand) {
+      const matchDot = fretboardNoteElements.find(g => parseInt(g.getAttribute("data-pc"), 10) === selectedTheoryPc);
+      if (matchDot) {
+        const s = parseInt(matchDot.getAttribute("data-str"), 10);
+        const fret = parseInt(matchDot.getAttribute("data-fret"), 10);
+        const finger = parseInt(matchDot.getAttribute("data-finger"), 10);
+        selCand = { s, fret, finger, pc: selectedTheoryPc };
+      }
+    }
+    if (selCand) {
+      primaryActive = selCand;
+      if (selCand.fret === 0) openStringTarget = primaryActive;
+      else if (selCand.finger >= 1 && selCand.finger <= 4) activeByFinger[selCand.finger] = primaryActive;
     }
   }
 
@@ -2149,6 +2229,33 @@ function renderFretboardHandOverlay(nowRel = 0) {
         }
       }
     }
+  }
+
+  // Record resolved target for live Music Theory Coach
+  if (primaryActive) {
+    lastCoachActiveTarget = {
+      ...primaryActive,
+      midi: (strings[primaryActive.s] !== undefined && primaryActive.fret !== undefined)
+        ? (strings[primaryActive.s] + primaryActive.fret)
+        : primaryActive.midi
+    };
+  } else if (isChordVoicingActive) {
+    let chordCand = null;
+    for (const wantRoot of [true, false]) {
+      for (let s = numStrings - 1; s >= 0; s--) {
+        const f = currentVoicing.frets[s];
+        if (f === null || f === undefined || f < 0) continue;
+        const m = strings[s] + f;
+        if (wantRoot && pc(m) !== rootPc) continue;
+        const fNum = (currentVoicing.fingers && currentVoicing.fingers[s]) ? currentVoicing.fingers[s] : getRecommendedFinger(s, f);
+        chordCand = { s, fret: f, finger: fNum, pc: pc(m), midi: m };
+        break;
+      }
+      if (chordCand) break;
+    }
+    lastCoachActiveTarget = chordCand;
+  } else {
+    lastCoachActiveTarget = null;
   }
 
   // 2. Compute Target 4-Fret Hand Anchor (Fret of Index Finger ①)
@@ -3094,6 +3201,415 @@ function renderFretboardHandOverlay(nowRel = 0) {
   }
 }
 
+function selectTheoryPc(nextPc) {
+  selectedTheoryPc = (nextPc === null || nextPc === undefined) ? null : pc(nextPc);
+  hoveredFretNote = null;
+  updateFretboardLit();
+}
+
+function positionTheoryCallout(targetNote, noteInfo, theory) {
+  const card = $("theoryCalloutCard");
+  const svg = $("theoryCalloutSvg");
+  const wrap = $("fretboardWrap");
+  const fb = $("fb");
+  if (!card || !svg) return;
+
+  svg.textContent = "";
+  const shouldShowCallout = theoryCalloutEnabled && !isRhythmPlaying && appMode !== "quiz" && fretboardGeom && wrap && fb;
+  if (!shouldShowCallout) {
+    card.style.display = "none";
+    return;
+  }
+
+  let locTarget = (targetNote && typeof targetNote.s === "number" && typeof targetNote.fret === "number")
+    ? targetNote
+    : null;
+
+  if (!locTarget && fretboardNoteElements.length > 0) {
+    const match = fretboardNoteElements.find(g => parseInt(g.getAttribute("data-pc"), 10) === noteInfo.notePc)
+      || fretboardNoteElements.find(g => parseInt(g.getAttribute("data-pc"), 10) === rootPc)
+      || fretboardNoteElements[0];
+    if (match) {
+      locTarget = {
+        s: parseInt(match.getAttribute("data-str"), 10),
+        fret: parseInt(match.getAttribute("data-fret"), 10),
+        finger: parseInt(match.getAttribute("data-finger"), 10),
+        pc: parseInt(match.getAttribute("data-pc"), 10)
+      };
+    }
+  }
+
+  if (!locTarget) {
+    card.style.display = "none";
+    return;
+  }
+
+  const wrapRect = wrap.getBoundingClientRect();
+  const fbRect = fb.getBoundingClientRect();
+  if (wrapRect.width < 200 || fbRect.width < 200) {
+    card.style.display = "none";
+    return;
+  }
+
+  // Render card contents cleanly via pure DOM APIs
+  card.textContent = "";
+  const hdr = document.createElement("div");
+  hdr.className = "theory-hdr-row";
+  hdr.style.marginBottom = "4px";
+  const titleEl = document.createElement("div");
+  titleEl.className = "theory-card-title";
+  titleEl.style.color = "#fef08a";
+  titleEl.textContent = `${noteInfo.displayNote} · ${noteInfo.intervalTitle} (${noteInfo.deg})`;
+  hdr.appendChild(titleEl);
+
+  const badgeTxt = noteInfo.locLabel || noteInfo.role;
+  const locPill = document.createElement("span");
+  locPill.className = noteInfo.inContext ? "theory-pill active" : "theory-pill outside";
+  locPill.textContent = badgeTxt;
+  hdr.appendChild(locPill);
+  card.appendChild(hdr);
+
+  const bodyEl = document.createElement("p");
+  bodyEl.className = "theory-body-txt";
+  bodyEl.textContent = noteInfo.explanation;
+  card.appendChild(bodyEl);
+
+  if (noteInfo.nextMoves && noteInfo.nextMoves.length > 0) {
+    const nextRow = document.createElement("div");
+    nextRow.className = "theory-pills-row";
+    nextRow.style.marginTop = "6px";
+    noteInfo.nextMoves.forEach(mv => {
+      const sp = document.createElement("span");
+      sp.className = `theory-pill ${mv.cls}`;
+      sp.textContent = mv.label;
+      nextRow.appendChild(sp);
+    });
+    card.appendChild(nextRow);
+  }
+
+  card.style.display = "block";
+
+  const zTop = fretboardGeom.is3D ? 7.2 : 0;
+  const proj = fretboardGeom.projectNote(locTarget.s, locTarget.fret, zTop);
+  const offX = fbRect.left - wrapRect.left;
+  const offY = fbRect.top - wrapRect.top;
+  const ax = offX + (proj.cx / fretboardGeom.W) * fbRect.width;
+  const ay = offY + (proj.cy / fretboardGeom.H) * fbRect.height;
+
+  const cardRect = card.getBoundingClientRect();
+  const cardW = cardRect.width || 274;
+  const cardH = cardRect.height || 112;
+  const maxX = Math.max(12, wrapRect.width - cardW - 68);
+  const minLeftNut = isLeftHand ? 14 : Math.min(168, Math.max(12, wrapRect.width * 0.175));
+
+  let tx;
+  const placeLeft = ax >= wrapRect.width * 0.39;
+  if (placeLeft) {
+    tx = Math.max(minLeftNut, Math.min(maxX, ax - cardW - 36));
+  } else {
+    tx = Math.max(minLeftNut, Math.min(maxX, Math.max(ax + 145, wrapRect.width * 0.52)));
+  }
+  const ty = Math.max(2, Math.min(4, ay - cardH - 34));
+  card.style.left = `${tx.toFixed(0)}px`;
+  card.style.top = `${ty.toFixed(0)}px`;
+
+  // Re-read placed card rect for accurate curved pointer anchor
+  const cRect = card.getBoundingClientRect();
+  const onLeftSide = (cRect.left + cRect.width * 0.5) < ax;
+  const x1 = onLeftSide ? (cRect.right - wrapRect.left - 4) : (cRect.left - wrapRect.left + 4);
+  const y1 = Math.max(12, (cRect.bottom - wrapRect.top) - 20);
+  const ctrlX = (x1 + ax) * 0.5 + (onLeftSide ? 16 : -16);
+  const ctrlY = Math.min(y1, ay) - 18;
+
+  const ns = "http://www.w3.org/2000/svg";
+  svg.setAttribute("viewBox", `0 0 ${Math.round(wrapRect.width)} ${Math.round(wrapRect.height)}`);
+
+  const path = document.createElementNS(ns, "path");
+  path.setAttribute("d", `M ${x1.toFixed(1)} ${y1.toFixed(1)} Q ${ctrlX.toFixed(1)} ${ctrlY.toFixed(1)} ${ax.toFixed(1)} ${ay.toFixed(1)}`);
+  path.setAttribute("fill", "none");
+  path.setAttribute("stroke", noteInfo.inContext ? "#facc15" : "#fb7185");
+  path.setAttribute("stroke-width", "2");
+  path.setAttribute("stroke-dasharray", "5 3");
+  path.setAttribute("opacity", "0.92");
+  svg.appendChild(path);
+
+  const ring = document.createElementNS(ns, "circle");
+  ring.setAttribute("cx", ax.toFixed(1));
+  ring.setAttribute("cy", ay.toFixed(1));
+  ring.setAttribute("r", "4.5");
+  ring.setAttribute("fill", noteInfo.inContext ? "#facc15" : "#fb7185");
+  ring.setAttribute("stroke", "#090c10");
+  ring.setAttribute("stroke-width", "1.4");
+  svg.appendChild(ring);
+}
+
+function updateMusicTheoryCoach(force = false) {
+  const coach = globalThis.MusicTheoryCoach;
+  const section = $("theoryCoachSection");
+  if (!coach || !section) return;
+
+  const lang = (coach.UI_STRINGS && coach.UI_STRINGS[LANG]) ? LANG : "en";
+  const ui = coach.UI_STRINGS[lang];
+  const isChord = guideMode === "chord";
+  const activeVoicing = (isChord && voicingMode && currentVoicing && currentInstrument !== "bass") ? currentVoicing : null;
+
+  // Resolve priority target note: live audio -> hover -> user click -> hand coach preview -> root
+  let resolvedNotePc = rootPc;
+  let resolvedTarget = null;
+  if (litPcs && litPcs.length > 0) {
+    resolvedNotePc = litPcs[0];
+    resolvedTarget = (lastCoachActiveTarget && lastCoachActiveTarget.pc === resolvedNotePc)
+      ? lastCoachActiveTarget
+      : null;
+    if (!resolvedTarget && fretboardNoteElements.length > 0) {
+      const mDot = fretboardNoteElements.find(g => parseInt(g.getAttribute("data-pc"), 10) === resolvedNotePc);
+      if (mDot) {
+        resolvedTarget = {
+          s: parseInt(mDot.getAttribute("data-str"), 10),
+          fret: parseInt(mDot.getAttribute("data-fret"), 10),
+          finger: parseInt(mDot.getAttribute("data-finger"), 10),
+          pc: resolvedNotePc,
+          midi: parseInt(mDot.getAttribute("data-midi"), 10)
+        };
+      }
+    }
+  } else if (hoveredFretNote) {
+    resolvedTarget = {
+      ...hoveredFretNote,
+      midi: (strings[hoveredFretNote.s] !== undefined && hoveredFretNote.fret !== undefined)
+        ? (strings[hoveredFretNote.s] + hoveredFretNote.fret)
+        : hoveredFretNote.midi
+    };
+    resolvedNotePc = resolvedTarget.pc !== undefined ? resolvedTarget.pc : pc(strings[resolvedTarget.s] + resolvedTarget.fret);
+  } else if (selectedTheoryPc !== null) {
+    resolvedNotePc = selectedTheoryPc;
+    resolvedTarget = (lastCoachActiveTarget && lastCoachActiveTarget.pc === resolvedNotePc)
+      ? lastCoachActiveTarget
+      : null;
+  } else if (lastCoachActiveTarget) {
+    resolvedTarget = lastCoachActiveTarget;
+    resolvedNotePc = resolvedTarget.pc !== undefined ? resolvedTarget.pc : pc(strings[resolvedTarget.s] + resolvedTarget.fret);
+  }
+
+  const theory = isChord
+    ? coach.getChordTheory(rootPc, chordTypeVal, activeVoicing, lang)
+    : coach.getScaleTheory(rootPc, scaleId, lang);
+
+  const noteInfo = coach.analyzeNoteInContext({
+    rootPc,
+    scaleId,
+    guideMode,
+    chordTypeVal,
+    theory,
+    notePc: resolvedNotePc,
+    midi: resolvedTarget ? resolvedTarget.midi : undefined,
+    s: resolvedTarget ? resolvedTarget.s : undefined,
+    fret: resolvedTarget ? resolvedTarget.fret : undefined,
+    finger: resolvedTarget ? resolvedTarget.finger : undefined,
+    strings,
+    lang
+  });
+
+  // Button states
+  const btnCallout = $("btnTheoryCalloutToggle");
+  if (btnCallout) {
+    btnCallout.textContent = theoryCalloutEnabled ? ui.btnCalloutOn : ui.btnCalloutOff;
+    btnCallout.classList.toggle("is-active", theoryCalloutEnabled);
+    btnCallout.style.display = (appMode === "quiz" || isRhythmPlaying) ? "none" : "inline-flex";
+  }
+  const btnDeep = $("btnTheoryDeepToggle");
+  if (btnDeep) {
+    btnDeep.textContent = theoryDeepExpanded ? ui.btnDeepOpen : ui.btnDeepClosed;
+    btnDeep.classList.toggle("is-open", theoryDeepExpanded);
+    btnDeep.style.display = appMode === "quiz" ? "none" : "inline-flex";
+  }
+
+  const drawer = $("theoryDeepDrawer");
+  if (drawer) {
+    drawer.style.display = (theoryDeepExpanded && appMode !== "quiz") ? "grid" : "none";
+  }
+
+  const renderKey = [
+    lang, appMode, rootPc, scaleId, guideMode, chordTypeVal,
+    activeVoicing ? activeVoicing.name : "",
+    noteInfo.notePc, noteInfo.locLabel,
+    theoryCalloutEnabled ? 1 : 0, theoryDeepExpanded ? 1 : 0
+  ].join("|");
+
+  if (force || renderKey !== lastTheoryRenderKey) {
+    lastTheoryRenderKey = renderKey;
+
+    const rBadge = $("theoryRibbonBadge");
+    if (rBadge) rBadge.textContent = ui.badgeLive;
+
+    const rTitle = $("theoryRibbonTitle");
+    const rPills = $("theoryRibbonPills");
+    const rInsight = $("theoryRibbonInsight");
+
+    if (appMode === "quiz") {
+      if (rTitle) rTitle.textContent = "";
+      if (rPills) rPills.textContent = "";
+      if (rInsight) rInsight.textContent = ui.quizHidden;
+    } else {
+      const ctxTitle = isChord
+        ? `${NOTE[rootPc]} ${t("chord_" + chordTypeVal)}`
+        : `${NOTE[rootPc]} ${t("scale_" + scaleId)}`;
+      if (rTitle) rTitle.textContent = ctxTitle;
+
+      if (rPills) {
+        rPills.textContent = "";
+        theory.notes.forEach(n => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          let cls = "theory-pill is-clickable ";
+          if (n.pc === noteInfo.notePc) cls += "active";
+          else if (n.semi === 0) cls += "root";
+          else cls += "tone";
+          btn.className = cls;
+          btn.textContent = `${n.deg}(${n.name})`;
+          btn.addEventListener("click", () => selectTheoryPc(n.pc));
+          rPills.appendChild(btn);
+        });
+      }
+
+      if (rInsight) {
+        rInsight.textContent = `${noteInfo.displayNote} · ${noteInfo.intervalTitle}(${noteInfo.deg}) · ${noteInfo.role}`;
+      }
+
+      if (theoryDeepExpanded) {
+        // Card 1: Formula & 12-Tone Mini Piano
+        const c1 = $("theoryCardFormula");
+        if (c1) {
+          c1.textContent = "";
+          const h1 = document.createElement("div");
+          h1.className = "theory-hdr-row";
+          const t1 = document.createElement("div");
+          t1.className = "theory-card-title";
+          t1.textContent = ui.cardFormulaTitle;
+          h1.appendChild(t1);
+          const fBadge = document.createElement("span");
+          fBadge.className = "theory-badge-sm";
+          fBadge.textContent = theory.formulaStr;
+          h1.appendChild(fBadge);
+          c1.appendChild(h1);
+
+          c1.appendChild(coach.buildMiniPianoSvg(theory, noteInfo.semi, (clickedPc) => selectTheoryPc(clickedPc)));
+
+          const meta1 = document.createElement("div");
+          meta1.className = "theory-meta-txt";
+          meta1.textContent = `${theory.relativeBadge} (${theory.stepStr})\n${theory.expansion}`;
+          meta1.style.whiteSpace = "pre-line";
+          c1.appendChild(meta1);
+        }
+
+        // Card 2: Active Note Live Insight + Stability Meter
+        const c2 = $("theoryCardNote");
+        if (c2) {
+          c2.textContent = "";
+          const h2 = document.createElement("div");
+          h2.className = "theory-hdr-row";
+          const t2 = document.createElement("div");
+          t2.className = "theory-card-title";
+          t2.textContent = `${ui.cardNoteTitlePrefix}: ${noteInfo.displayNote} · ${noteInfo.intervalTitle}(${noteInfo.deg})`;
+          h2.appendChild(t2);
+          const sBadge = document.createElement("span");
+          sBadge.className = noteInfo.inContext ? "theory-pill active" : "theory-pill outside";
+          sBadge.textContent = noteInfo.role;
+          h2.appendChild(sBadge);
+          c2.appendChild(h2);
+
+          const mWrap = document.createElement("div");
+          mWrap.className = "theory-meter-wrap";
+          const mLbl = document.createElement("div");
+          mLbl.className = "theory-meter-lbl";
+          const l1 = document.createElement("span");
+          l1.textContent = ui.lblStability;
+          const l2 = document.createElement("strong");
+          l2.style.color = "#fde047";
+          l2.textContent = `${noteInfo.stabilityLabel} (${noteInfo.stabilityPct}%)`;
+          mLbl.appendChild(l1);
+          mLbl.appendChild(l2);
+          const track = document.createElement("div");
+          track.className = "theory-meter-track";
+          const fill = document.createElement("div");
+          fill.className = "theory-meter-fill";
+          fill.style.width = `${noteInfo.stabilityPct}%`;
+          track.appendChild(fill);
+          mWrap.appendChild(mLbl);
+          mWrap.appendChild(track);
+          c2.appendChild(mWrap);
+
+          const desc2 = document.createElement("p");
+          desc2.className = "theory-body-txt";
+          desc2.textContent = noteInfo.explanation;
+          c2.appendChild(desc2);
+
+          if (noteInfo.nextMoves && noteInfo.nextMoves.length > 0) {
+            const nxtRow = document.createElement("div");
+            nxtRow.className = "theory-pills-row";
+            const nLbl = document.createElement("span");
+            nLbl.className = "theory-meta-txt";
+            nLbl.textContent = ui.lblNext;
+            nxtRow.appendChild(nLbl);
+            noteInfo.nextMoves.forEach(mv => {
+              const btn = document.createElement("button");
+              btn.type = "button";
+              btn.className = `theory-pill is-clickable ${mv.cls}`;
+              btn.textContent = mv.label;
+              btn.addEventListener("click", () => selectTheoryPc(mv.pc));
+              nxtRow.appendChild(btn);
+            });
+            c2.appendChild(nxtRow);
+          }
+        }
+
+        // Card 3: Backing Chords, Progression & Phrasing Tips
+        const c3 = $("theoryCardChords");
+        if (c3) {
+          c3.textContent = "";
+          const h3 = document.createElement("div");
+          h3.className = "theory-hdr-row";
+          const t3 = document.createElement("div");
+          t3.className = "theory-card-title";
+          t3.textContent = ui.cardChordsTitle;
+          h3.appendChild(t3);
+          const pBadge = document.createElement("span");
+          pBadge.className = "theory-pill chord";
+          pBadge.textContent = `${ui.lblProgression}: ${theory.progression}`;
+          h3.appendChild(pBadge);
+          c3.appendChild(h3);
+
+          const cRow = document.createElement("div");
+          cRow.className = "theory-pills-row";
+          const tags = (isChord && theory.soloScales && theory.soloScales.length > 0)
+            ? theory.soloScales
+            : theory.backingChords;
+          tags.forEach(lbl => {
+            const sp = document.createElement("span");
+            sp.className = isChord ? "theory-pill tone" : "theory-pill chord";
+            sp.textContent = lbl;
+            cRow.appendChild(sp);
+          });
+          c3.appendChild(cRow);
+
+          const pSum = document.createElement("p");
+          pSum.className = "theory-body-txt";
+          pSum.textContent = theory.summary;
+          c3.appendChild(pSum);
+
+          const pTip = document.createElement("div");
+          pTip.className = "theory-meta-txt";
+          pTip.style.color = "#bae6fd";
+          pTip.textContent = theory.tip;
+          c3.appendChild(pTip);
+        }
+      }
+    }
+  }
+
+  positionTheoryCallout(resolvedTarget, noteInfo, theory);
+}
+
 function updateFretboardLit() {
   let rNow = null, rNext = null, rNext2 = null;
   if (appMode === "rhythm") {
@@ -3135,6 +3651,7 @@ function updateFretboardLit() {
   if (appMode === "rhythm") {
     drawRhythmHighway(nowRel);
   }
+  updateMusicTheoryCoach();
 }
 
 function drawFB() {
@@ -3345,6 +3862,7 @@ function updatePoly(data) {
   }
 
   if (activeNotes.length > 0) {
+    selectedTheoryPc = null;
     litPcs = activeNotes.map(n => pc(n.midi));
   } else {
     litPcs = [];
@@ -4511,6 +5029,7 @@ function initSlideToggles() {
   if (guideT) {
     updateToggleVisuals(guideT, guideMode === "chord", "toggleScale", "toggleChord");
     guideT.onclick = () => {
+      selectedTheoryPc = null;
       guideMode = (guideMode === "scale") ? "chord" : "scale";
       updateToggleVisuals(guideT, guideMode === "chord", "toggleScale", "toggleChord");
 
@@ -5928,6 +6447,7 @@ function bindEvents() {
   if ($("startBtn")) $("startBtn").onclick = () => running ? stop() : start();
   if ($("keySel")) {
     $("keySel").onchange = e => {
+      selectedTheoryPc = null;
       rootPc = parseInt(e.target.value, 10);
       rebuildVoicingSel();
       drawFB();
@@ -5938,6 +6458,7 @@ function bindEvents() {
   }
   if ($("scaleSel")) {
     $("scaleSel").onchange = e => {
+      selectedTheoryPc = null;
       scaleId = e.target.value;
       drawFB();
       if (quizMode) newQuiz();
@@ -6007,6 +6528,7 @@ function bindEvents() {
 
   if ($("voicingSel")) {
     $("voicingSel").onchange = e => {
+      selectedTheoryPc = null;
       const val = e.target.value;
       if (val === "all") {
         voicingMode = false;
@@ -6047,6 +6569,7 @@ function bindEvents() {
   }
   if ($("chordTypeSel")) {
     $("chordTypeSel").onchange = e => {
+      selectedTheoryPc = null;
       chordTypeVal = e.target.value;
       rebuildVoicingSel();
       if (voicingMode) updateVoicingGuide();
@@ -6208,19 +6731,35 @@ function bindEvents() {
   if ($("btnAsioRescan")) {
     $("btnAsioRescan").onclick = async () => {
       const btn = $("btnAsioRescan");
-      if (btn) btn.textContent = "🔄 스캔 중...";
+      if (btn) btn.textContent = "스캔 중...";
       const ok = await probeAsioBridgeSilent(800);
       refreshAsioDiagnosticView(ok);
       if (ok) {
         updateAsioStatusBadge("ok");
-        if (btn) btn.textContent = "✓ 연결 완료!";
+        if (btn) {
+          btn.textContent = "연결됨";
+          setTimeout(() => {
+            if ($("btnAsioRescan") && $("btnAsioRescan").textContent === "연결됨") {
+              $("btnAsioRescan").textContent = "다시 스캔";
+            }
+          }, 1500);
+        }
         if (running) {
           try { await connect($("deviceSel") ? $("deviceSel").value : "asio_ws"); } catch (e) { }
         }
       } else {
         updateAsioStatusBadge("warn");
-        if (btn) btn.textContent = "⚡ 다시 스캔";
+        if (btn) btn.textContent = "다시 스캔";
       }
+    };
+  }
+  if ($("btnAsioInstallToggle")) {
+    $("btnAsioInstallToggle").onclick = () => {
+      const sec = $("asioInstallSection");
+      const isCurrentlyShown = sec && sec.style.display !== "none";
+      asioInstallExpanded = !isCurrentlyShown;
+      refreshAsioDiagnosticView(asioBridgeAvailable);
+      requestAnimationFrame(positionAsioSmartPopover);
     };
   }
   if ($("chkAsioAutoFallback")) {
@@ -6228,7 +6767,24 @@ function bindEvents() {
       try { localStorage.setItem("asioAutoFallback", e.target.checked ? "1" : "0"); } catch (err) { }
     };
   }
-  window.addEventListener("resize", positionAsioSmartPopover);
+  if ($("btnTheoryCalloutToggle")) {
+    $("btnTheoryCalloutToggle").onclick = () => {
+      theoryCalloutEnabled = !theoryCalloutEnabled;
+      try { localStorage.setItem("ehyo_theory_callout", theoryCalloutEnabled ? "1" : "0"); } catch (e) { }
+      updateMusicTheoryCoach(true);
+    };
+  }
+  if ($("btnTheoryDeepToggle")) {
+    $("btnTheoryDeepToggle").onclick = () => {
+      theoryDeepExpanded = !theoryDeepExpanded;
+      try { localStorage.setItem("ehyo_theory_deep", theoryDeepExpanded ? "1" : "0"); } catch (e) { }
+      updateMusicTheoryCoach(true);
+    };
+  }
+  window.addEventListener("resize", () => {
+    positionAsioSmartPopover();
+    if (typeof updateMusicTheoryCoach === "function") updateMusicTheoryCoach(true);
+  });
   window.addEventListener("scroll", positionAsioSmartPopover, true);
   window.addEventListener("keydown", e => {
     if (e.key === "Escape" && asioPopoverOpen) closeAsioSmartPopover();
@@ -6331,18 +6887,28 @@ function bindEvents() {
         const finger = parseInt(dot.getAttribute("data-finger"), 10);
         const notePc = parseInt(dot.getAttribute("data-pc"), 10);
         if (!hoveredFretNote || hoveredFretNote.s !== s || hoveredFretNote.fret !== fret) {
+          selectedTheoryPc = null;
           hoveredFretNote = { s, fret, finger, pc: notePc };
-          if (!isRhythmPlaying) renderFretboardHandOverlay(0);
+          if (!isRhythmPlaying) {
+            renderFretboardHandOverlay(0);
+            updateMusicTheoryCoach();
+          }
         }
       } else if (hoveredFretNote !== null) {
         hoveredFretNote = null;
-        if (!isRhythmPlaying) renderFretboardHandOverlay(0);
+        if (!isRhythmPlaying) {
+          renderFretboardHandOverlay(0);
+          updateMusicTheoryCoach();
+        }
       }
     };
     $("fb").onmouseleave = () => {
       if (hoveredFretNote !== null) {
         hoveredFretNote = null;
-        if (!isRhythmPlaying) renderFretboardHandOverlay(0);
+        if (!isRhythmPlaying) {
+          renderFretboardHandOverlay(0);
+          updateMusicTheoryCoach();
+        }
       }
     };
   }
@@ -6539,6 +7105,10 @@ function handleHashRoute() {
   }
   if (hash.includes("asio")) {
     setTimeout(() => { openAsioSmartPopover(); }, 80);
+  }
+  if (hash.includes("theory")) {
+    theoryDeepExpanded = true;
+    updateMusicTheoryCoach(true);
   }
   if (hash.includes("drawer") || hash.includes("rec") || hash.includes("recording")) {
     const drawer = $("sideDrawer");

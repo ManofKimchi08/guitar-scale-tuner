@@ -3,25 +3,25 @@
 A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic fingering trainer** in the browser and desktop that **listens to your real electric & bass guitar** in real-time.
 
 [![Live Web App](https://img.shields.io/badge/Live%20Web%20App-Try%20Without%20Install-38bdf8?style=flat&logo=googlechrome&logoColor=white)](https://manofkimchi08.github.io/guitar-scale-tuner/)
-[![Release](https://img.shields.io/badge/Release-v2.5.2-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
+[![Release](https://img.shields.io/badge/Release-v2.6.0-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Web%20%7C%20Windows-brightgreen.svg)](https://manofkimchi08.github.io/guitar-scale-tuner/)
 
 > 🌐 **Live Web App (No Install)**: **[https://manofkimchi08.github.io/guitar-scale-tuner/](https://manofkimchi08.github.io/guitar-scale-tuner/)**  
 > 🗣️ **Language / 언어 / 言語**: **[🇺🇸 English](README.md)** | **[🇰🇷 한국어 전문 (Korean)](README.ko.md)** | **[🇯🇵 日本語全文 (Japanese)](README.ja.md)**  
-> 🔽 **In-Page Quick Jump**: [🇺🇸 English](#-key-features-v252) · [🇰🇷 한국어 설명](#-한국어-설명-korean-overview) · [🇯🇵 日本語説明](#-日本語説明-japanese-overview) · [🔒 Security](SECURITY.md)
+> 🔽 **In-Page Quick Jump**: [🇺🇸 English](#-key-features-v260) · [🇰🇷 한국어 설명](#-한국어-설명-korean-overview) · [🇯🇵 日本語説明](#-日本語説明-japanese-overview) · [🔒 Security](SECURITY.md)
 
 ---
 
 ## 📸 Screenshots & UI Tour
 
-| 🖐️ 3D Sculpted Sky-Blue Hand & Lifted Standby Fingers (`38° · 100%`) | 🎼 Open `A Major` Fanned Chord & Lifted Pinky (`38° · 125%`) |
+| 🎓 Live Music Theory Coach (Translucent Callout) & 3D Sky-Blue Hand | ⚡ Compact Studio Inspector ASIO Popover & Translucent Theory Callout |
 | :---: | :---: |
-| ![3D Sculpted Translucent Sky-Blue Hand](docs/screenshots/screenshot_main.png) | ![A Major Fanned Chord and Lifted Pinky](docs/screenshots/screenshot_3d_chord_lifted.png) |
+| ![3D Sculpted Translucent Sky-Blue Hand](docs/screenshots/screenshot_main.png) | ![Compact Studio ASIO Inspector](docs/screenshots/screenshot_asio_hybrid.png) |
 
-| 🎥 Wide-Angle 3D Orbit & 140% Zoom (`PITCH 64° · YAW -50° · 140%`) | ⚡ Hybrid 2+4 Smart ASIO Diagnostic & 3D Hand Preview |
+| 🎼 Open `A Major` Fanned Chord & Lifted Pinky (`38° · 125%`) | 🎥 Wide-Angle 3D Orbit & 140% Zoom (`PITCH 64° · YAW -50° · 140%`) |
 | :---: | :---: |
-| ![Wide Orbit and 140% Zoom](docs/screenshots/screenshot_3d_zoom_orbit.png) | ![Hybrid ASIO Smart Popover](docs/screenshots/screenshot_asio_hybrid.png) |
+| ![A Major Fanned Chord and Lifted Pinky](docs/screenshots/screenshot_3d_chord_lifted.png) | ![Wide Orbit and 140% Zoom](docs/screenshots/screenshot_3d_zoom_orbit.png) |
 
 | 🎮 Rhythm & Fretboard Trainer (`3D Laser Highway` + 3D Arched Hand) | 🖐️ 6/8 Time Signature + CAGED Barre Chord (`BARRE 5F`) 3D Hand |
 | :---: | :---: |
@@ -33,9 +33,14 @@ A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic f
 
 ---
 
-## 🌟 Key Features (v2.5.2)
+## 🌟 Key Features (v2.6.0)
 
-### 0-C. 🔒 Defense-in-Depth Security Hardening, Link Guard & Attested Cloud Releases (New in v2.5.2)
+### 0-D. 🎓 Live Music Theory Coach (Translucent Callout + Deep-Dive Drawer) & Compact Studio ASIO Inspector (New in v2.6.0)
+- **Live Music Theory Coach (`src/theory.js` · Ribbon + Translucent Callout + Deep-Dive Drawer)**: Covers **12 keys × 11 scales × 5 chord types × CAGED voicings** across **`ko / en / ja`** with zero dynamic `innerHTML`. Shows a compact scale-degree ribbon directly below the fretboard with an interactive deep-dive drawer (clickable degree pills, **pure SVG 12-key mini piano**, harmonic context, and tension meter).
+- **Semi-Transparent Fretboard Callout (`rgba(11, 15, 24, 0.42)` + `blur(2.5px)`)**: Toggleable floating callout card (`💬 말풍선 ON/OFF`) anchored to the active/hovered fret with crisp `text-shadow` contrast so fretboard strings, frets, and scale dots stay visible underneath across both dark (`Carbon`) and light (`Maple`) necks.
+- **Compact Studio Inspector ASIO Popover (`420px`)**: Replaces nested diagnostic boxes with clean hairline Key-Value status rows (`오디오 인터페이스`, `로컬 브릿지 서버`, `웹 지판 연동`), collapsible driver download & domain safety rows (`드라이버 다운로드 · 보안 안내 ▾`) when connected, and full preservation of external link tamper protection (`guardVerifiedExternalLinks()`).
+
+### 0-C. 🔒 Defense-in-Depth Security Hardening, Link Guard & Attested Cloud Releases (v2.5.2)
 - **Verified External Link Guard & Domain Banner**: Keeps the official `github.com/ManofKimchi08/guitar-scale-tuner/releases/latest` and `asio4all.org` links protected with `rel="noopener noreferrer nofollow"`, `referrerpolicy="no-referrer"`, a frozen runtime click guard (`guardVerifiedExternalLinks()`), and an in-popover anti-malvertising domain check note (`#asioSecurityNote`).
 - **Hardened CSP, Zero Dynamic `innerHTML`, HTTP & WebSocket Defense**: Enforces `object-src 'none'; base-uri 'self'; form-action 'none'`, replaces remaining dynamic `innerHTML` usage with pure DOM nodes (`textContent`), adds 6 local HTTP security headers (`nosniff`, `X-Frame-Options: DENY`, COOP/CORP, `Permissions-Policy`), and bounds WebSocket messages (`16KB`) & audio device indices.
 - **Automated Security Audit CI & Attested Cloud Builds**: Adds `scripts/security_audit.py` CI gate, pinned dependencies in `requirements.txt`, Dependabot, and GitHub Actions `windows-latest` release packaging with **`SHA256SUMS.txt`** and **`actions/attest-build-provenance` SLSA attestation** (see [SECURITY.md](SECURITY.md)).
@@ -105,7 +110,11 @@ A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic f
 
 > 📄 **전체 한국어 문서는 [README.ko.md](README.ko.md)에서도 보실 수 있습니다.**
 
-**Scales, heard. (Guitar Scale Tuner v2.5.2)** 는 실제 일렉트릭 기타와 베이스 기타 소리를 실시간으로 인식하는 초저지연 **3D 지판 스케일 가이드, IK 아치 교정형 3D 왼손 운지 코치 & 리듬 게임 트레이너**입니다.
+**Scales, heard. (Guitar Scale Tuner v2.6.0)** 는 실제 일렉트릭 기타와 베이스 기타 소리를 실시간으로 인식하는 초저지연 **3D 지판 스케일 가이드, 실시간 음악 이론 코치, IK 아치 교정형 3D 왼손 운지 코치 & 리듬 게임 트레이너**입니다.
+
+### ✨ v2.6.0 핵심 업데이트
+1. **🎓 실시간 음악 이론 코치(반투명 말풍선 + 심화 드로어)**: `src/theory.js` 기반으로 12키 × 11스케일 × 5코드 × CAGED 보이싱(`ko/en/ja`)을 지판 하단 리본, **12건반 미니 피아노 SVG** 심화 드로어, 그리고 지판·스케일 노트가 그대로 비쳐 보이는 **반투명 말풍선 토글**(`rgba(11, 15, 24, 0.42)` + `blur(2.5px)`)로 제공합니다.
+2. **⚡ 콤팩트 스튜디오 인스펙터 ASIO 팝오버 (`420px`)**: 중첩 카드 박스를 제거하고 1px 구분선 기반 Key-Value 진단 표와 연결 완료 시 자동 접히는 드라이버·보안 토글을 적용했으며, 외부 링크 변조 방지 가드를 그대로 유지합니다.
 
 ### ✨ v2.5.2 핵심 업데이트
 1. **🔒 다운로드·외부 링크 변조 방지 & 클라우드 출처 증명 보안 강화**: 공식 외부 링크(`releases/latest`, `asio4all.org`) 유지 + 런타임 링크 변조 차단 가드(`guardVerifiedExternalLinks`), `#asioSecurityNote` 보안 배너, 강화된 CSP(`object-src 'none'`, `form-action 'none'`), 동적 `innerHTML` 제거, 로컬 HTTP 6종 보안 헤더·WebSocket 입력/크기 제한(`16KB`), 그리고 GitHub Actions 자동 빌드·**`SHA256SUMS.txt` · SLSA 출처 증명**([SECURITY.md](SECURITY.md))을 도입했습니다.
@@ -143,7 +152,11 @@ A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic f
 
 > 📄 **日本語の完全なドキュメントは [README.ja.md](README.ja.md) でもご覧いただけます。**
 
-**Scales, heard. (Guitar Scale Tuner v2.5.2)** は、エレキギター＆ベースの実音をリアルタイムで聴き取る超低遅延の**3Dフレットボード・スケールガイド、3D IKアーチ運指コーチ＆リズムゲームトレーナー**です。
+**Scales, heard. (Guitar Scale Tuner v2.6.0)** は、エレキギター＆ベースの実音をリアルタイムで聴き取る超低遅延の**3Dフレットボード・スケールガイド、ライブ音楽理論コーチ、3D IKアーチ運指コーチ＆リズムゲームトレーナー**です。
+
+### ✨ v2.6.0 主なアップデート
+1. **🎓 リアルタイム音楽理論コーチ（半透明吹き出し＋詳細ドロワー）**: `src/theory.js` により 12キー×11スケール×5コード×CAGEDフォーム（`ko/en/ja`）を下部リボン、**純粋SVG 12鍵ミニピアノ**付きドロワー、さらに背景の弦・フレット・音名マーカーが透ける **半透明吹き出しトグル**（`rgba(11, 15, 24, 0.42)` + `blur(2.5px)`）で可視化します。
+2. **⚡ コンパクトスタジオ ASIO インスペクター (`420px`)**: 二重カードを撤廃し、ヘアライン区切りのKey-Value診断行と接続時に自動で折りたためるドライバ・セキュリティ案内トグルを導入しました（外部リンク改ざん遮断ガード維持）。
 
 ### ✨ v2.5.2 主なアップデート
 1. **🔒 外部リンク保護ガード・CSP/サーバー多層防御＆GitHubビルド来歴証明**: 公式外部リンク (`releases/latest`, `asio4all.org`) を維持したままランタイム改ざん遮断 (`guardVerifiedExternalLinks`)・セキュリティ案内バナー・厳格なCSP (`object-src 'none'`, `form-action 'none'`)・動的`innerHTML`排除・HTTP 6種セキュリティヘッダ・WebSocket `16KB` 制限を導入し、GitHub Actionsによる **`SHA256SUMS.txt` ＋ SLSAビルド証明 (`attest-build-provenance`)** を構築しました（[SECURITY.md](SECURITY.md)）。
@@ -185,7 +198,7 @@ A powerful, ultra low-latency fretboard **scale guide, rhythm game & ergonomic f
 3. **Optional Hybrid ASIO Bridge Mode**: Selecting **`⚡ ASIO`** in the top bar automatically probes for the local ASIO bridge (`ws://127.0.0.1:8765`). If not installed yet, a compact Smart ASIO Diagnostic Dock opens right below the selector so you can either download the helper `.exe` for ultra-low-latency polyphonic detection or switch right back to your browser microphone with one click.
 
 ### Option A: Windows One-Click Executable
-1. Download and extract the latest release archive (`GuitarScaleTuner-v2.5.2-windows-x64.zip`) from [Releases](https://github.com/ManofKimchi08/guitar-scale-tuner/releases), verify `SHA256SUMS.txt`, or clone the repository.
+1. Download and extract the latest release archive (`GuitarScaleTuner-v2.6.0-windows-x64.zip`) from [Releases](https://github.com/ManofKimchi08/guitar-scale-tuner/releases), verify `SHA256SUMS.txt`, or clone the repository.
 2. Double-click **`GuitarScaleTuner.exe`** (or `Run_GuitarScaleTuner.bat`) in the root folder. No Python installation required!
 
 ### Option B: Run from Source

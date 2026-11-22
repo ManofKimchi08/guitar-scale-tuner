@@ -3,7 +3,7 @@
 **エレキギター＆ベースの実音をリアルタイムで聴き取る、超低遅延フレットボード・スケールガイド、リズムゲーム＆スマート運指トレーナー**
 
 [![Live Web App](https://img.shields.io/badge/Live%20Web%20App-Try%20Without%20Install-38bdf8?style=flat&logo=googlechrome&logoColor=white)](https://manofkimchi08.github.io/guitar-scale-tuner/)
-[![Release](https://img.shields.io/badge/Release-v2.5.2-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
+[![Release](https://img.shields.io/badge/Release-v2.6.0-blue.svg)](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Web%20%7C%20Windows-brightgreen.svg)](https://manofkimchi08.github.io/guitar-scale-tuner/)
 
@@ -14,13 +14,13 @@
 
 ## 📸 スクリーンショット & UIツアー (Screenshots)
 
-| 🖐️ 半透明スカイブルー3D左手・未使用指の浮遊待機 (`38° · 100%`) | 🎼 オープン `A Major` ①②③分散＆④小指浮遊ポーズ (`38° · 125%`) |
+| 🎓 リアルタイム音楽理論コーチ (半透明吹き出し) & 3D左手ビュー | ⚡ コンパクトスタジオ ASIO インスペクター & 半透明理論吹き出し |
 | :---: | :---: |
-| ![3D Sculpted Translucent Sky-Blue Hand](docs/screenshots/screenshot_main.png) | ![A Major Fanned Chord and Lifted Pinky](docs/screenshots/screenshot_3d_chord_lifted.png) |
+| ![3D Sculpted Translucent Sky-Blue Hand](docs/screenshots/screenshot_main.png) | ![Compact Studio ASIO Inspector](docs/screenshots/screenshot_asio_hybrid.png) |
 
-| 🎥 広角3D回転 & 140%拡大 (`PITCH 64° · YAW -50° · 140%`) | ⚡ ハイブリッド 2+4 スマート ASIO 診断ドック |
+| 🎼 オープン `A Major` ①②③分散＆④小指浮遊ポーズ (`38° · 125%`) | 🎥 広角3D回転 & 140%拡大 (`PITCH 64° · YAW -50° · 140%`) |
 | :---: | :---: |
-| ![Wide Orbit and 140% Zoom](docs/screenshots/screenshot_3d_zoom_orbit.png) | ![Hybrid ASIO Smart Popover](docs/screenshots/screenshot_asio_hybrid.png) |
+| ![A Major Fanned Chord and Lifted Pinky](docs/screenshots/screenshot_3d_chord_lifted.png) | ![Wide Orbit and 140% Zoom](docs/screenshots/screenshot_3d_zoom_orbit.png) |
 
 | 🎮 リズム＆指板・運指トレーナー (`3Dレーザーハイウェイ` + 左手モデル) | 🖐️ `6/8拍子` 複合拍子ハイウェイ + CAGEDバレーコード(`BARRE 5F`) ガイド |
 | :---: | :---: |
@@ -32,9 +32,14 @@
 
 ---
 
-## 🌟 主な機能 (v2.5.2)
+## 🌟 主な機能 (v2.6.0)
 
-### 0-C. 🔒 外部リンク改ざん遮断ガード・多層防御＆GitHubビルド来歴証明 (v2.5.2 新機能)
+### 0-D. 🎓 リアルタイム音楽理論コーチ（半透明吹き出し＋詳細ドロワー）＆コンパクトスタジオASIOインスペクター (v2.6.0 新機能)
+- **ライブ音楽理論コーチ (`src/theory.js` · リボン + トグル吹き出し + 詳細ドロワー)**: **12キー × 11スケール × 5コード × CAGEDフォーム** (`ko/en/ja`) を動的 `innerHTML` ゼロの純粋DOMと **純粋SVG 12鍵ミニピアノ** でリアルタイム解説します。指板下のリボンで度数ピルをクリックして音程を確認したり、詳細ドロワーを展開してコード構成音・解決進行・テンションゲージをチェックできます。
+- **指板が透ける半透明吹き出し (`rgba(11, 15, 24, 0.42)` + `blur(2.5px)`)**: 押弦・ホバー位置に連動する理論吹き出し（`ON/OFF` 切替可）を半透明化し、背後の弦・フレット・音名マーカーを見やすく保持しつつ、`text-shadow` により `Carbon` から明るい `Maple` 材まで文字の視認性を確保しました。
+- **コンパクトスタジオ ASIO インスペクター (`420px`)**: 二重枠やボックスを廃し、ヘアライン区切りの Key-Value 行（`オーディオインターフェース` / `ローカルブリッジ` / `Web連携`）と接続時に折りたためるドライバ導入・セキュリティトグルを搭載。外部リンク改ざん保護 (`guardVerifiedExternalLinks()`) もそのまま維持しています。
+
+### 0-C. 🔒 外部リンク改ざん遮断ガード・多層防御＆GitHubビルド来歴証明 (v2.5.2)
 - **公式外部リンク維持＋ランタイム保護ガード**: ASIOポップオーバー内の公式リンク (`releases/latest`, `asio4all.org`) に `rel="noopener noreferrer nofollow"`・`referrerpolicy="no-referrer"`・クリック時検証 (`guardVerifiedExternalLinks()`)・セキュリティ注意バナー (`#asioSecurityNote`) を実装しました。
 - **厳格CSP・動的 `innerHTML` 排除＆ローカルサーバー防御**: `object-src 'none'; base-uri 'self'; form-action 'none'` の追加、動的HTML挿入の完全排除、`run_https_server.py` の6種HTTPセキュリティヘッダ、`asio_server.py` のWebSocketサイズ上限(`16KB`)とオーディオデバイス検証を導入しました。
 - **自動セキュリティ監査CI＆SLSA証明リリース**: `requirements.txt` のバージョン固定、`scripts/security_audit.py`、GitHub Actions による **`SHA256SUMS.txt` ＋ SLSAビルド来歴証明 (`attest-build-provenance`)** を提供します（[SECURITY.md](SECURITY.md)）。
@@ -108,7 +113,7 @@
 3. **ハイブリッドASIOブリッジモード (任意)**: 上部ドロップダウンから **`⚡ ASIO`** を選ぶと、PC上のローカルASIOブリッジ(`127.0.0.1:8765`)を自動診断します。未導入の場合はスマート診断ポップオーバーが表示され、超低遅延ブリッジ(`.exe`)を導入するか、ワンクリックでブラウザ標準マイクへ切り替えてすぐ演奏できます。
 
 ### 方法 A: Windows ローカル実行ファイル
-1. [Releasesページ](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)から最新の `GuitarScaleTuner-v2.5.2-windows-x64.zip` と `SHA256SUMS.txt` をダウンロードし、ハッシュ確認後に解凍するか、リポジトリをクローンします。([セキュリティガイド](SECURITY.md))
+1. [Releasesページ](https://github.com/ManofKimchi08/guitar-scale-tuner/releases)から最新の `GuitarScaleTuner-v2.6.0-windows-x64.zip` と `SHA256SUMS.txt` をダウンロードし、ハッシュ確認後に解凍するか、リポジトリをクローンします。([セキュリティガイド](SECURITY.md))
 2. フォルダ内の **`GuitarScaleTuner.exe`** (または `Run_GuitarScaleTuner.bat`) をダブルクリックするだけで、Pythonのインストールなしで即座に起動します。
 
 ### 方法 B: ソースコードから実行

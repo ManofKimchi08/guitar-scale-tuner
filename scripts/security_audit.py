@@ -141,6 +141,19 @@ def check_main_js() -> None:
         ok("External link allowlist guard verified in src/main.js")
 
 
+def check_theory_js() -> None:
+    th_path = REPO_ROOT / "src" / "theory.js"
+    if not th_path.exists():
+        fail("Missing src/theory.js")
+        return
+    text = th_path.read_text(encoding="utf-8")
+    check_allowed_urls(th_path, text)
+    for forbidden in ("eval(", "new Function(", "document.write(", ".innerHTML"):
+        if forbidden in text:
+            fail(f"Forbidden pattern `{forbidden}` found in src/theory.js")
+    ok("src/theory.js passed URL, dynamic code, and zero-innerHTML checks")
+
+
 def check_python_backend() -> None:
     py_files = [
         REPO_ROOT / "GuitarScaleTuner.py",
@@ -187,6 +200,7 @@ def check_pinned_requirements() -> None:
 def main() -> int:
     check_index_html()
     check_main_js()
+    check_theory_js()
     check_python_backend()
     check_pinned_requirements()
     if failures:

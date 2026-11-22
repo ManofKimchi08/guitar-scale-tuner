@@ -366,6 +366,8 @@
 
         <div class="fretboard-wrap" id="fretboardWrap">
           <svg id="fb" viewBox="0 0 1060 430" preserveAspectRatio="xMidYMid meet"></svg>
+          <svg id="theoryCalloutSvg" class="theory-callout-svg" aria-hidden="true"></svg>
+          <div id="theoryCalloutCard" class="theory-callout-card" style="display: none;"></div>
         </div>
         
         <!-- Legend Bar -->
@@ -374,6 +376,27 @@
           <span><i class="d-tone"></i><span data-i18n="legendTone">Scale tone</span></span>
           <span><i class="d-hit"></i><span data-i18n="legendPlayed">Played note</span></span>
         </div>
+
+        <!-- Hybrid Live Theory Coach Ribbon & 3-Card Deep-Dive Drawer (4안 + 2안 Toggle) -->
+        <section id="theoryCoachSection" class="theory-coach-section" aria-label="Music Theory Coach">
+          <div id="theoryLiveRibbon" class="theory-live-ribbon">
+            <div class="theory-ribbon-main">
+              <span class="theory-badge-sm" id="theoryRibbonBadge">🎓 LIVE 이론 코치</span>
+              <strong class="theory-ribbon-title" id="theoryRibbonTitle">A Minor Pentatonic</strong>
+              <div class="theory-pills-row inline" id="theoryRibbonPills"></div>
+              <span class="theory-ribbon-insight" id="theoryRibbonInsight"></span>
+            </div>
+            <div class="theory-ribbon-actions">
+              <button type="button" id="btnTheoryCalloutToggle" class="theory-ctrl-btn is-active">💬 말풍선 ON</button>
+              <button type="button" id="btnTheoryDeepToggle" class="theory-ctrl-btn primary">📖 이론 자세히 보기 ▾</button>
+            </div>
+          </div>
+          <div id="theoryDeepDrawer" class="theory-deep-drawer" style="display: none;">
+            <div class="theory-card" id="theoryCardFormula"></div>
+            <div class="theory-card is-highlight" id="theoryCardNote"></div>
+            <div class="theory-card" id="theoryCardChords"></div>
+          </div>
+        </section>
       </div>
     </main>
 
@@ -728,110 +751,75 @@
     </div>
   </div>
 
-  <!-- Hybrid 2+4 Smart ASIO Driver Check & Bridge Setup Popover -->
+  <!-- Compact Studio Inspector ASIO Diagnostic & Setup Popover -->
   <div id="asioSmartPopover" class="asio-smart-popover-wrap" style="display: none;" role="dialog" aria-labelledby="asioPopoverTitle">
     <div class="asio-popover-arrow" id="asioPopoverArrow"></div>
     <div class="asio-smart-popover-card">
-      <div class="asio-card-top-glow"></div>
-
       <div class="asio-popover-header">
         <div class="asio-popover-title-row">
-          <span id="asioPopoverTitle" class="asio-popover-title">⚡ 스마트 ASIO 드라이버 진단 &amp; 연결 도우미</span>
+          <span id="asioPopoverTitle" class="asio-popover-title">ASIO 진단</span>
           <span id="asioDiagBadge" class="asio-diag-badge is-missing">● 미감지</span>
         </div>
         <button type="button" id="btnCloseAsioPopover" class="asio-close-btn" title="닫기">✕</button>
       </div>
 
-      <!-- 3-Node Visual Signal Flow Diagram -->
-      <div class="asio-signal-flow">
-        <div class="asio-flow-node ok" id="asioNodeDriver">
-          <div class="asio-flow-icon">🎸</div>
-          <div class="asio-flow-name">오디오 인터페이스</div>
-          <div class="asio-flow-sub" id="asioNodeDriverSub">ASIO 드라이버</div>
+      <!-- Key-Value Inspector Rows -->
+      <div id="asioKvList" class="asio-kv-list">
+        <div id="asioRowDriver" class="asio-kv-row" style="display: none;">
+          <span class="asio-kv-k">오디오 인터페이스</span>
+          <span id="asioValDriver" class="asio-kv-v ok">0개 ASIO 장치 감지</span>
         </div>
-        <div class="asio-flow-conn">
-          <span class="asio-conn-arrow" id="asioConn1Arrow">➔</span>
-          <span class="asio-conn-lbl" id="asioConn1Lbl">대기</span>
+        <div id="asioRowBridge" class="asio-kv-row">
+          <span id="asioLblBridge" class="asio-kv-k">로컬 브릿지</span>
+          <span id="asioValBridge" class="asio-kv-v warn">미실행 (자동 감지 중)</span>
         </div>
-        <div class="asio-flow-node missing" id="asioNodeBridge">
-          <div class="asio-flow-icon">⚡</div>
-          <div class="asio-flow-name">ASIO Bridge 도우미</div>
-          <div class="asio-flow-sub" id="asioNodeBridgeSub">● 미감지 (설치 필요)</div>
-        </div>
-        <div class="asio-flow-conn broken" id="asioConn2Wrap">
-          <span class="asio-conn-arrow" id="asioConn2Arrow">✕</span>
-          <span class="asio-conn-lbl" id="asioConn2Lbl">단절</span>
-        </div>
-        <div class="asio-flow-node ready">
-          <div class="asio-flow-icon">🌐</div>
-          <div class="asio-flow-name">웹 브라우저 3D 지판</div>
-          <div class="asio-flow-sub">● 연결 준비됨</div>
+        <div id="asioRowWeb" class="asio-kv-row">
+          <span id="asioLblWeb" class="asio-kv-k">웹 브라우저 마이크</span>
+          <span id="asioValWeb" class="asio-kv-v info">즉시 사용 가능</span>
         </div>
       </div>
 
-      <!-- Live Background Auto-Detect Radar Strip -->
-      <div class="asio-radar-strip" id="asioRadarBanner">
-        <span class="asio-radar-icon">🔄</span>
-        <span id="asioRadarTxt"><strong>백그라운드 자동 감지 중...</strong> 프로그램을 설치·실행하면 창을 닫지 않아도 즉시 자동 연결됩니다.</span>
-      </div>
-
-      <!-- 2-Step Install Cards -->
-      <div class="asio-install-grid">
-        <div class="asio-install-box">
-          <div>
-            <div class="asio-install-head">
-              <span class="asio-install-title">1단계: ASIO Bridge 미니 런처</span>
-              <span class="asio-tag-req">필수 · 1회</span>
-            </div>
-            <p class="asio-install-desc">브라우저와 내 PC의 ASIO 오디오 장치를 연결해 주는 로컬 브릿지 도우미입니다.</p>
+      <!-- Collapsible Driver Download & Security Guidance Section -->
+      <div id="asioInstallSection" class="asio-install-section">
+        <div class="asio-link-row">
+          <div class="asio-link-meta">
+            <span class="asio-link-title">1. ASIO Bridge 도우미</span>
+            <span class="asio-link-sub">실행 시 자동 연결</span>
           </div>
-          <a id="btnDownloadAsioBridge" class="asio-btn-primary" href="https://github.com/ManofKimchi08/guitar-scale-tuner/releases/latest" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer">
-            📥 Bridge 도우미 다운로드 (.exe)
-          </a>
+          <a id="btnDownloadAsioBridge" class="asio-btn-primary" href="https://github.com/ManofKimchi08/guitar-scale-tuner/releases/latest" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer">다운로드 (.exe)</a>
         </div>
-
-        <div class="asio-install-box">
-          <div>
-            <div class="asio-install-head">
-              <span class="asio-install-title">2단계: ASIO 드라이버 (없을 경우)</span>
-              <span class="asio-tag-opt">선택</span>
-            </div>
-            <p class="asio-install-desc">전용 드라이버(Focusrite 등)가 없다면 범용 ASIO4ALL을 함께 설치하세요.</p>
+        <div class="asio-link-row">
+          <div class="asio-link-meta">
+            <span class="asio-link-title">2. ASIO4ALL 드라이버</span>
+            <span class="asio-link-sub">전용 드라이버 없을 시(선택)</span>
           </div>
-          <a id="btnOpenAsio4All" class="asio-btn-secondary" href="https://asio4all.org/" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer">
-            🔧 ASIO4ALL 공식 사이트
-          </a>
+          <a id="btnOpenAsio4All" class="asio-btn-secondary" href="https://asio4all.org/" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer">공식 사이트</a>
+        </div>
+        <div class="asio-sec-caption" id="asioSecurityNote">
+          공식 도메인(github.com/ManofKimchi08 · asio4all.org)만 연결 · 외부 광고 주의 및 SHA256SUMS.txt 확인 권장
         </div>
       </div>
 
-      <!-- Verified Domain & Download Safety Check -->
-      <div class="asio-security-note" id="asioSecurityNote">
-        <span class="asio-sec-icon">🛡️</span>
-        <div class="asio-sec-body">
-          <strong>다운로드 보안 확인:</strong> 공식 도메인(<code>github.com/ManofKimchi08</code> · <code>asio4all.org</code>)만 연결되며, 외부 사이트 내 광고성 <strong>"Download" 배너</strong>를 누르지 마세요. <code>.exe</code> 실행 전 릴리즈의 <code>SHA256SUMS.txt</code> 해시 검증을 권장합니다.
-        </div>
-      </div>
-
-      <!-- Footer Quick-Switch & Auto Fallback -->
+      <!-- Footer Quick-Switch & Disclosure Bar -->
       <div class="asio-footer-bar">
         <div class="asio-footer-actions">
-          <button type="button" id="btnAsioUseWebMic" class="asio-btn-webmic">
-            <span>🎙️ 설치 없이 브라우저 기본 마이크로 즉시 전환</span>
-            <span>→</span>
-          </button>
-          <button type="button" id="btnAsioRescan" class="asio-btn-rescan">
-            ⚡ 다시 스캔
-          </button>
+          <button type="button" id="btnAsioUseWebMic" class="asio-btn-webmic">브라우저 기본 마이크로 시작 →</button>
+          <button type="button" id="btnAsioRescan" class="asio-btn-rescan">다시 스캔</button>
         </div>
-        <label class="asio-auto-fallback-chk">
+        <label id="asioAutoFallbackWrap" class="asio-auto-fallback-chk">
           <input type="checkbox" id="chkAsioAutoFallback">
-          <span>다음부터 ASIO 미연결 시 묻지 않고 브라우저 마이크로 자동 시작</span>
+          <span>다음부터 미연결 시 브라우저 마이크로 자동 시작</span>
         </label>
+        <button type="button" id="btnAsioInstallToggle" class="asio-install-toggle" style="display: none;" aria-expanded="false">
+          <span>드라이버 다운로드 · 보안 안내</span>
+          <span id="asioInstallChevron" class="asio-install-chevron">▾</span>
+        </button>
       </div>
     </div>
   </div>
 
   <script src="src/i18n.js"></script>
+  <script src="src/theory.js"></script>
   <script src="src/main.js"></script>
 </body>
 
